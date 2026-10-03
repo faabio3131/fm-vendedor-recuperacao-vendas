@@ -21,6 +21,7 @@ from fm_seller.errors import AppError
 from fm_seller.events.ingest import EventHandler
 from fm_seller.logging_setup import setup_logging
 from fm_seller.providers.testers import ConnectionTester, build_tester
+from fm_seller.recovery.engine import handle_event
 from fm_seller.security.crypto import SecretBox
 from fm_seller.services import ConnectionService
 
@@ -60,7 +61,7 @@ def create_app(
     app.state.verifier = google
     app.state.connections = ConnectionService(database, cfg, secret_box, conn_tester)
     app.state.box = secret_box
-    app.state.event_handler = event_handler or (lambda conn, tenant_id, event: None)
+    app.state.event_handler = event_handler or handle_event
 
     app.add_middleware(
         CORSMiddleware,

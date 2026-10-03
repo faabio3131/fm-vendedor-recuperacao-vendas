@@ -102,6 +102,7 @@ CREATE TABLE recovery_steps (
   template_key         text NOT NULL,
   scheduled_at         timestamptz NOT NULL,
   first_scheduled_at   timestamptz NOT NULL,
+  claimed_at           timestamptz,
   -- 'sending' é gravado antes do envio: um passo nunca é enviado duas vezes (no máximo uma).
   status               text NOT NULL DEFAULT 'scheduled'
                        CHECK (status IN ('scheduled', 'sending', 'sent', 'skipped', 'canceled', 'failed')),

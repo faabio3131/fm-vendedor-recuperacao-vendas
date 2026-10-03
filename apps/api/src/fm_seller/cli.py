@@ -6,13 +6,20 @@ A criação manual serve até o recebimento de compras (Cakto/Hotmart) entrar em
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
+import time
 from datetime import UTC, datetime, timedelta
 
 import psycopg
 
 from fm_seller.config import get_settings
+from fm_seller.db import Database
+from fm_seller.events.ingest import reprocess_failed
+from fm_seller.logging_setup import setup_logging
 from fm_seller.migrate import apply_migrations
+from fm_seller.recovery.engine import handle_event, run_due_steps
+from fm_seller.recovery.senders import build_sender
 from fm_seller.security.crypto import SecretBox
 
 
@@ -42,6 +49,27 @@ def create_tenant(admin_url: str, name: str, email: str, plan: str, role: str = 
     return str(tenant_id)
 
 
+def run_worker(interval: int, once: bool) -> None:
+    """Repassa eventos que falharam e envia os passos de recuperação devidos."""
+    settings = get_settings()
+    setup_logging()
+    log = logging.getLogger("fm_seller.worker")
+    db = Database(settings.database_url)
+    db.open()
+    box = SecretBox(settings.secrets_keys)
+    sender = build_sender(settings.env)
+    try:
+        while True:
+            redone = reprocess_failed(db, box, handle_event)
+            stats = run_due_steps(db, box, sender)
+            log.info("ciclo", extra={"ctx": {"reprocessados": redone, **stats.__dict__}})
+            if once:
+                return
+            time.sleep(interval)
+    finally:
+        db.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fm-seller")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -51,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     ct.add_argument("--name", required=True)
     ct.add_argument("--email", required=True)
     ct.add_argument("--plan", default="fase-1")
+    wk = sub.add_parser("worker", help="Envia passos de recuperação devidos e reprocessa falhas")
+    wk.add_argument("--interval", type=int, default=30, help="segundos entre ciclos")
+    wk.add_argument("--once", action="store_true", help="roda um ciclo e sai")
     args = parser.parse_args(argv)
 
     settings = get_settings()
@@ -62,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "create-tenant":
         tenant_id = create_tenant(settings.database_admin_url, args.name, args.email, args.plan)
         print("Cliente criado:", tenant_id)
+    elif args.cmd == "worker":
+        run_worker(args.interval, args.once)
     return 0
 
 
