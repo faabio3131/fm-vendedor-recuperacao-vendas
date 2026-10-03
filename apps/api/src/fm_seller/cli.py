@@ -13,6 +13,9 @@ from datetime import UTC, datetime, timedelta
 
 import psycopg
 
+from fm_seller.ai.model import build_ai_model
+from fm_seller.ai.seller import run_ai_replies
+from fm_seller.channels.outbox import flush_outbox
 from fm_seller.config import get_settings
 from fm_seller.db import Database
 from fm_seller.events.ingest import reprocess_failed
@@ -71,15 +74,24 @@ def run_worker(interval: int, once: bool) -> None:
     db.open()
     box = SecretBox(settings.secrets_keys)
     sender = build_sender(settings.env)
+    model = build_ai_model(settings.env)
     try:
         while True:
             redone = reprocess_failed(db, box, handle_event)
             redone_platform = reprocess_platform(db, box)
             stats = run_due_steps(db, box, sender)
+            seller = run_ai_replies(db, model)
+            outbox = flush_outbox(db, box, sender)
             log.info(
                 "ciclo",
                 extra={
-                    "ctx": {"reprocessados": redone, "compras": redone_platform, **stats.__dict__}
+                    "ctx": {
+                        "reprocessados": redone,
+                        "compras": redone_platform,
+                        "recuperacao": stats.__dict__,
+                        "vendedor": seller.__dict__,
+                        "saida": outbox.__dict__,
+                    }
                 },
             )
             if once:

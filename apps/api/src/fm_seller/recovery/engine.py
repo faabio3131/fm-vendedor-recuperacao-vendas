@@ -24,6 +24,7 @@ from fm_seller.channels.whatsapp import upsert_conversation
 from fm_seller.db import Conn, Database
 from fm_seller.events import normalize as n
 from fm_seller.events.normalize import CheckoutEvent
+from fm_seller.money import format_brl
 from fm_seller.recovery.defaults import default_steps
 from fm_seller.recovery.senders import MessageSender, OutboundMessage, SendError
 from fm_seller.recovery.timing import (
@@ -256,11 +257,6 @@ class _Step:
     template_key: str
 
 
-def _format_brl(cents: int) -> str:
-    reais, rest = divmod(cents, 100)
-    return f"R$ {reais:,}".replace(",", ".") + f",{rest:02d}"
-
-
 _VAR = re.compile(r"\{(nome|produto|valor|link)\}")
 
 
@@ -268,7 +264,7 @@ def render(body: str, *, name: str, product: str, cents: int, link: str | None) 
     values = {
         "nome": (name.split()[:1] or ["cliente"])[0].title(),
         "produto": product or "sua compra",
-        "valor": _format_brl(cents),
+        "valor": format_brl(cents),
         "link": link or "",
     }
     return _VAR.sub(lambda m: values[m.group(1)], body).strip()
