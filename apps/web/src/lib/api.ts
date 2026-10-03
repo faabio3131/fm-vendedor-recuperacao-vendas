@@ -23,6 +23,7 @@ export type Provider = {
   phase: number;
   description: string;
   webhook: boolean;
+  generates_secret: boolean;
   enabled: boolean;
   fields: ProviderField[];
 };
@@ -79,3 +80,61 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   return data as T;
 }
+
+export type RecoverySummary = {
+  days: number;
+  cases_total: number;
+  cases_by_status: Record<"open" | "recovered" | "purchased" | "stopped" | "exhausted", number>;
+  recovered_cents: number;
+  messages_sent: number;
+  skipped_reasons: { reason: string; count: number }[];
+  readiness: {
+    whatsapp_connected: boolean;
+    checkout_connected: boolean;
+    approved_templates: number;
+    consent_declared: boolean;
+    recovery_enabled: boolean;
+  };
+};
+
+export type RecoverySettings = {
+  timezone: string;
+  quiet_start: number;
+  quiet_end: number;
+  daily_cap: number;
+  max_contacts_per_case: number;
+  recovery_enabled: boolean;
+  consent_declared: boolean;
+};
+
+export type RecoverySequence = {
+  trigger: string;
+  enabled: boolean;
+  steps: { delay_minutes: number; template_key: string }[];
+  is_default: boolean;
+};
+
+export type RecoveryTemplate = {
+  key: string;
+  body: string;
+  meta_status: "draft" | "submitted" | "approved" | "rejected";
+  saved: boolean;
+};
+
+export type RecoveryCase = {
+  id: string;
+  trigger: string;
+  product: string;
+  amount_cents: number;
+  status: string;
+  closed_reason: string | null;
+  recovered_cents: number | null;
+  opened_at: string;
+  contact: { name: string; phone: string; email: string };
+  messages_sent: number;
+};
+
+export type Suppression = { id: string; identity: string; reason: string; created_at: string };
+
+export const brl = (cents: number): string =>
+  (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

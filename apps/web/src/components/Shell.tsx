@@ -15,6 +15,7 @@ export function useMe(): Me {
 
 const NAV = [
   { href: "/", label: "Visão geral" },
+  { href: "/recovery", label: "Recuperação" },
   { href: "/connections", label: "Conexões" },
 ];
 

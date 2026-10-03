@@ -5,7 +5,7 @@ cobrança e anúncios em fases. Produto comercial da F&M Tecnologia, **Web First
 
 ## Estado
 
-Bloco 1 (fundação) concluído. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
+Blocos 1 (fundação) e 2 (eventos e recuperação, contra simuladores) concluídos. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
 
 | Peça | Estado |
 |---|---|
@@ -14,7 +14,11 @@ Bloco 1 (fundação) concluído. Ver `docs/00_GATE_WEB_FIRST.md` para o que est�
 | Credenciais de clientes cifradas (AES-256-GCM, com rotação de chave) | Feito e testado |
 | Painel web (Next.js): login, visão geral, conexões | Feito; testado em celular, tablet e desktop |
 | Integrações reais (Meta, Cakto, Hotmart, IA) | **Não feito.** Próximos blocos, primeiro contra simuladores |
-| Recuperação de vendas, vendedor IA | **Não feito.** Bloco 2 em diante |
+| Recebimento de eventos Cakto/Hotmart (segredo, dedupe, reprocesso) | Feito e testado com payloads **sintéticos**; formato real a confirmar |
+| Motor de recuperação (carrinho, PIX, boleto, recusa), worker, opt-out, janela de silêncio, limite diário | Feito e testado; **envio real pelo WhatsApp não existe** (só simulador em dev/teste) |
+| Compra do próprio SaaS cria cliente, plano e convite | Feito e testado com payloads sintéticos |
+| Tela "Recuperação" (ajustes com consentimento, sequências, templates, bloqueios, casos) | Feito; testado em celular, tablet e desktop |
+| Vendedor IA (conversa), canais Messenger/Instagram | **Não feito.** Bloco 3 em diante |
 
 ## Estrutura
 

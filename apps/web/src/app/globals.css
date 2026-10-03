@@ -58,6 +58,18 @@ input, select { font: inherit; width: 100%; padding: 9px 10px; border-radius: 8p
 .alert { border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 8px; padding: 10px 12px; margin: 12px 0; background: var(--surface); }
 .alert.bad { border-left-color: var(--bad); }
 .alert.ok { border-left-color: var(--ok); }
+textarea { font: inherit; width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-height: 90px; resize: vertical; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; }
+.check input { width: 20px; min-height: 20px; margin-top: 3px; flex: none; }
+.num { font-size: 1.6rem; font-weight: 700; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.badge.recovered, .badge.approved { color: var(--ok); border-color: var(--ok); }
+.badge.stopped, .badge.rejected { color: var(--bad); border-color: var(--bad); }
+.badge.open, .badge.submitted, .badge.draft { color: var(--warn); border-color: var(--warn); }
+.step { display: grid; gap: 8px; grid-template-columns: 120px 1fr auto; align-items: end; margin-top: 8px; }
+@media (max-width: 520px) { .step { grid-template-columns: 1fr; } }
 code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; word-break: break-all; }
 .center { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .login { width: min(420px, 100%); }

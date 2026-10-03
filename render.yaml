@@ -23,6 +23,26 @@ services:
       - { key: FM_GOOGLE_CLIENT_ID, sync: false }
       - { key: FM_WEB_ORIGIN, sync: false }
       - { key: FM_PUBLIC_BASE_URL, sync: false }
+      - { key: FM_PLATFORM_CAKTO_SECRET, sync: false }
+      - { key: FM_PLATFORM_HOTMART_HOTTOK, sync: false }
+
+  # Worker de recuperação. RASCUNHO: o envio real do WhatsApp ainda não existe, então em staging
+  # ele só reprocessa eventos e não envia nada.
+  - type: worker
+    name: fm-seller-worker
+    runtime: docker
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: apps/api
+    dockerCommand: python -m fm_seller.cli worker --interval 30
+    envVars:
+      - { key: FM_ENV, value: staging }
+      - { key: FM_COOKIE_SECURE, value: "true" }
+      - { key: FM_DATABASE_URL, sync: false }
+      - { key: FM_DATABASE_ADMIN_URL, sync: false }
+      - { key: FM_SECRETS_KEYS, sync: false }
+      - { key: FM_GOOGLE_CLIENT_ID, sync: false }
+      - { key: FM_WEB_ORIGIN, sync: false }
+      - { key: FM_PUBLIC_BASE_URL, sync: false }
 
   - type: web
     name: fm-seller-web
