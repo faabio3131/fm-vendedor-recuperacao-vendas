@@ -5,7 +5,7 @@ cobrança e anúncios em fases. Produto comercial da F&M Tecnologia, **Web First
 
 ## Estado
 
-Blocos 1 (fundação), 2 (eventos e recuperação) e 3 (conversas e vendedor IA) concluídos, tudo contra simuladores. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
+Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA) e 4 (oportunidades próprias) concluídos, tudo contra simuladores. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
 
 | Peça | Estado |
 |---|---|
@@ -21,6 +21,7 @@ Blocos 1 (fundação), 2 (eventos e recuperação) e 3 (conversas e vendedor IA)
 | Entrada do WhatsApp (assinatura, mensagens, status de entrega, "SAIR"), fila de saída, conversas | Feito e testado com payloads sintéticos no formato documentado pela Meta; **não testado com conta real** |
 | Vendedor IA: ofertas do cliente, porta de modelo, limites (preço/link só do cadastro), transferência para pessoa | Feito e testado com **simulador**; **não existe adaptador de modelo real** |
 | Telas Conversas e Vendedor IA | Feito; testado em celular, tablet e desktop |
+| Oportunidades próprias para comércio local: conversa que esfriou, registro avulso, planilha CSV, "vendido/perdi" | Feito e testado; sem integração externa (o dado já está no sistema) |
 | Messenger/Instagram, cobrança própria, anúncios | **Não feito.** Próximos blocos |
 
 ## Estrutura

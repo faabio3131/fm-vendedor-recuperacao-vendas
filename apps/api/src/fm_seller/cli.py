@@ -22,6 +22,7 @@ from fm_seller.events.ingest import reprocess_failed
 from fm_seller.logging_setup import setup_logging
 from fm_seller.migrate import apply_migrations
 from fm_seller.provisioning.platform import reprocess_platform
+from fm_seller.recovery.cold import detect_cold_conversations
 from fm_seller.recovery.engine import handle_event, run_due_steps
 from fm_seller.recovery.senders import build_sender
 from fm_seller.security.crypto import SecretBox
@@ -79,6 +80,7 @@ def run_worker(interval: int, once: bool) -> None:
         while True:
             redone = reprocess_failed(db, box, handle_event)
             redone_platform = reprocess_platform(db, box)
+            cold = detect_cold_conversations(db)
             stats = run_due_steps(db, box, sender)
             seller = run_ai_replies(db, model)
             outbox = flush_outbox(db, box, sender)
@@ -88,6 +90,7 @@ def run_worker(interval: int, once: bool) -> None:
                     "ctx": {
                         "reprocessados": redone,
                         "compras": redone_platform,
+                        "conversas_frias": cold,
                         "recuperacao": stats.__dict__,
                         "vendedor": seller.__dict__,
                         "saida": outbox.__dict__,

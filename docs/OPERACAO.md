@@ -65,6 +65,15 @@ silêncio (21h–8h no fuso do cliente), limite diário por contato, máximo por
 conectado. Compra aprovada em até 7 dias após o fim da sequência ainda conta como recuperada
 (janela de atribuição: decisão de produto a confirmar).
 
+## Oportunidades (comércio local)
+
+Sem integração: em **Recuperação** o lojista registra uma oportunidade (orçamento, pedido pendente), importa
+um CSV (colunas `telefone` obrigatória; `nome`, `produto`, `valor`, `link`, `observacao`; `;`, `,` ou tab; até
+200 linhas) ou liga "Recuperar conversas que esfriaram" (padrão desligado; 3 h sem resposta). Cada registro exige
+confirmar que o cliente autorizou contato. Reimportar o mesmo telefone+produto+valor não duplica. O worker
+precisa estar rodando (a detecção de conversas faz parte do ciclo). Templates `orcamento_1..3` e `conversa_1..2`
+também precisam estar aprovados na Meta antes de qualquer envio.
+
 ## Rotação da chave de cifragem
 
 Adicionar a nova chave **na frente** em `FM_SECRETS_KEYS` (`novo:base64,antigo:base64`). Valores novos

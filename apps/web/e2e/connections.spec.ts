@@ -115,3 +115,51 @@ test("vendedor IA: oferta com link https, ajustes e caixa de conversas sem rolag
   const overflow2 = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflow2).toBe(false);
 });
+
+test("oportunidades: registro exige autorização, aparece na lista e pode ser marcado como perdido", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Login de desenvolvimento (e-mail)").fill(EMAIL);
+  await page.getByRole("button", { name: "Entrar (simulado)" }).click();
+  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Recuperação" }).click();
+  await expect(page.getByRole("heading", { name: "Recuperação de vendas" })).toBeVisible();
+
+  const consent = page.getByRole("checkbox", { name: /Declaro que meus contatos autorizaram/ });
+  const enable = page.getByRole("checkbox", { name: "Recuperação de vendas ligada" });
+  await expect(consent).toBeVisible();
+  if (!(await consent.isChecked())) {
+    await consent.check();
+    await expect(page.getByText("Ajustes salvos.")).toBeVisible();
+  }
+  if (!(await enable.isChecked())) {
+    await enable.check();
+    await expect(page.getByText("Ajustes salvos.")).toBeVisible();
+  }
+
+  const form = page.locator("#oportunidades");
+  const product = `Sofá E2E ${Date.now()}`;
+  await form.getByLabel("Nome", { exact: true }).fill("Cliente E2E");
+  await form.getByLabel("WhatsApp (com DDD)").fill("(11) 98888-7777");
+  await form.getByLabel("Produto ou serviço").fill(product);
+  await form.getByLabel("Valor (R$)").fill("1.500,00");
+  await form.getByRole("button", { name: "Registrar" }).click();
+  await expect(form.getByRole("status")).toContainText("Confirme que o cliente autorizou");
+
+  await form.getByRole("checkbox", { name: "Este cliente autorizou receber mensagens por WhatsApp." }).check();
+  await form.getByRole("button", { name: "Registrar" }).click();
+  await expect(form.getByRole("status")).toContainText("Oportunidade registrada");
+
+  const row = page.locator("tr", { hasText: product });
+  await expect(row.getByText("Registro manual")).toBeVisible();
+  await expect(row.getByText("R$ 1.500,00")).toBeVisible();
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(overflow).toBe(false);
+  await page.screenshot({ path: `test-results/opportunities-${test.info().project.name}.png`, fullPage: true });
+
+  await row.getByRole("button", { name: "Perdi" }).click();
+  await expect(page.locator("tr", { hasText: product }).getByText("Interrompida")).toBeVisible();
+
+  // limpeza para o teste poder repetir
+  await consent.uncheck();
+  await expect(enable).toBeDisabled();
+});

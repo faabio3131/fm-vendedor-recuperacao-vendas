@@ -27,7 +27,12 @@ SUBSCRIPTION_LATE = "subscription_late"
 SUBSCRIPTION_RECOVERED = "subscription_recovered"
 SUBSCRIPTION_CANCELED = "subscription_canceled"
 
-RECOVERY_TRIGGERS = (ABANDONED_CART, PIX_PENDING, BOLETO_PENDING, PURCHASE_REFUSED)
+# Oportunidades que nascem dentro do próprio produto (não vêm de checkout).
+QUOTE_PENDING = "quote_pending"  # orçamento/pedido em aberto (manual ou planilha)
+CONVERSATION_COLD = "conversation_cold"  # conversa que esfriou
+
+CHECKOUT_TRIGGERS = (ABANDONED_CART, PIX_PENDING, BOLETO_PENDING, PURCHASE_REFUSED)
+RECOVERY_TRIGGERS = (*CHECKOUT_TRIGGERS, QUOTE_PENDING, CONVERSATION_COLD)
 
 CAKTO_EVENTS: dict[str, str] = {
     "checkout_abandonment": ABANDONED_CART,

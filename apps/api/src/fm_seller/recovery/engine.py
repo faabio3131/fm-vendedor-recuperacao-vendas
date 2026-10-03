@@ -25,6 +25,7 @@ from fm_seller.db import Conn, Database
 from fm_seller.events import normalize as n
 from fm_seller.events.normalize import CheckoutEvent
 from fm_seller.money import format_brl
+from fm_seller.recovery.cases import close_case as _close_case
 from fm_seller.recovery.defaults import default_steps
 from fm_seller.recovery.senders import MessageSender, OutboundMessage, SendError
 from fm_seller.recovery.timing import (
@@ -97,79 +98,98 @@ def _is_suppressed(conn: Conn, tenant_id: uuid.UUID, phone: str | None, email: s
     return row is not None
 
 
-def _upsert_contact(conn: Conn, tenant_id: uuid.UUID, ev: CheckoutEvent) -> uuid.UUID:
+def _upsert_contact(
+    conn: Conn, tenant_id: uuid.UUID, name: str, phone: str | None, email: str | None
+) -> uuid.UUID:
     found = conn.execute(
         "SELECT id FROM contacts WHERE tenant_id = %s AND "
         "(phone = %s OR (%s::text IS NOT NULL AND lower(email) = %s))",
-        (tenant_id, ev.phone, ev.email, ev.email),
+        (tenant_id, phone, email, email),
     ).fetchone()
     if found is None:
         conn.execute(
             "INSERT INTO contacts (tenant_id, name, phone, email) VALUES (%s, %s, %s, %s) "
             "ON CONFLICT DO NOTHING",
-            (tenant_id, ev.name[:200], ev.phone, ev.email),
+            (tenant_id, name[:200], phone, email),
         )
         found = conn.execute(
             "SELECT id FROM contacts WHERE tenant_id = %s AND "
             "(phone = %s OR (%s::text IS NOT NULL AND lower(email) = %s))",
-            (tenant_id, ev.phone, ev.email, ev.email),
+            (tenant_id, phone, email, email),
         ).fetchone()
     assert found is not None
     contact_id: uuid.UUID = found["id"]
-    if ev.name:
+    if name:
         conn.execute(
-            "UPDATE contacts SET name = %s WHERE id = %s AND name = ''", (ev.name[:200], contact_id)
+            "UPDATE contacts SET name = %s WHERE id = %s AND name = ''", (name[:200], contact_id)
         )
     return contact_id
 
 
-def handle_event(
-    conn: Conn, tenant_id: uuid.UUID, event: CheckoutEvent, *, now: datetime | None = None
-) -> None:
-    """Tratador de eventos de checkout (roda dentro da transação do cliente)."""
+@dataclass(frozen=True)
+class Opportunity:
+    """Uma venda a recuperar, venha de onde vier (checkout, conversa, registro, planilha)."""
+
+    kind: str  # gatilho: define a sequência (ver `normalize.RECOVERY_TRIGGERS`)
+    source: str  # checkout | conversa | manual | importacao
+    external_ref: str  # identifica a oportunidade; repetida, não abre outro caso
+    name: str
+    phone: str | None
+    email: str | None = None
+    product_name: str = ""
+    amount_cents: int = 0
+    payment_url: str | None = None
+    note: str = ""
+
+
+# Por que uma oportunidade não virou caso (o painel traduz para o lojista).
+NOT_OPENED = ("recovery_off", "no_phone", "suppressed", "no_sequence", "duplicate")
+
+
+def open_opportunity(
+    conn: Conn, tenant_id: uuid.UUID, opp: Opportunity, *, now: datetime | None = None
+) -> tuple[uuid.UUID | None, str | None]:
+    """Abre o caso e agenda os passos. Devolve (id do caso, None) ou (None, motivo)."""
     now = now or datetime.now(UTC)
-    if event.kind == n.PURCHASE_APPROVED:
-        _close_on_purchase(conn, tenant_id, event, now)
-        return
-    if event.kind not in n.RECOVERY_TRIGGERS:
-        return
     settings = load_settings(conn, tenant_id)
     if not settings.may_send:
-        return
-    if not event.phone:  # fase 1: o canal é WhatsApp; sem telefone não há como contatar
-        return
-    if _is_suppressed(conn, tenant_id, event.phone, event.email):
-        return
-    steps = _sequence(conn, tenant_id, event.kind)[: settings.max_contacts_per_case]
+        return None, "recovery_off"
+    if not opp.phone:  # fase 1: o canal é WhatsApp; sem telefone não há como contatar
+        return None, "no_phone"
+    if _is_suppressed(conn, tenant_id, opp.phone, opp.email):
+        return None, "suppressed"
+    steps = _sequence(conn, tenant_id, opp.kind)[: settings.max_contacts_per_case]
     if not steps:
-        return
+        return None, "no_sequence"
 
-    contact_id = _upsert_contact(conn, tenant_id, event)
+    contact_id = _upsert_contact(conn, tenant_id, opp.name, opp.phone, opp.email)
     case = conn.execute(
         "INSERT INTO recovery_cases (tenant_id, contact_id, trigger_kind, external_ref, "
-        "product_name, amount_cents, payment_url, opened_at) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+        "product_name, amount_cents, payment_url, opened_at, source, note) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON CONFLICT (tenant_id, trigger_kind, external_ref) DO NOTHING RETURNING id",
         (
             tenant_id,
             contact_id,
-            event.kind,
-            event.external_ref,
-            event.product_name[:200],
-            event.amount_cents,
-            event.payment_url,
+            opp.kind,
+            opp.external_ref,
+            opp.product_name[:200],
+            opp.amount_cents,
+            opp.payment_url,
             now,
+            opp.source,
+            opp.note[:300],
         ),
     ).fetchone()
-    if case is None:  # o mesmo caso já existe: evento repetido
-        return
+    if case is None:  # a mesma oportunidade já existe: evento ou linha repetida
+        return None, "duplicate"
     case_id: uuid.UUID = case["id"]
 
     # Um caso novo do mesmo contato e produto substitui o anterior (ex.: carrinho → PIX gerado).
     older = conn.execute(
         "SELECT id FROM recovery_cases WHERE tenant_id = %s AND contact_id = %s AND id <> %s "
         "AND status = 'open' AND lower(product_name) = lower(%s)",
-        (tenant_id, contact_id, case_id, event.product_name[:200]),
+        (tenant_id, contact_id, case_id, opp.product_name[:200]),
     ).fetchall()
     for row in older:
         _close_case(conn, row["id"], "stopped", "superseded", now)
@@ -182,25 +202,34 @@ def handle_event(
             "scheduled_at, first_scheduled_at) VALUES (%s, %s, %s, %s, %s, %s)",
             (tenant_id, case_id, number, step["template_key"], when, raw),
         )
+    return case_id, None
 
 
-def _close_case(
-    conn: Conn,
-    case_id: uuid.UUID,
-    status: str,
-    reason: str,
-    now: datetime,
-    recovered_amount: int | None = None,
+def handle_event(
+    conn: Conn, tenant_id: uuid.UUID, event: CheckoutEvent, *, now: datetime | None = None
 ) -> None:
-    conn.execute(
-        "UPDATE recovery_cases SET status = %s, closed_reason = %s, "
-        "closed_at = COALESCE(closed_at, %s), recovered_amount_cents = %s WHERE id = %s",
-        (status, reason, now, recovered_amount, case_id),
-    )
-    conn.execute(
-        "UPDATE recovery_steps SET status = 'canceled', detail = %s "
-        "WHERE case_id = %s AND status = 'scheduled'",
-        (reason, case_id),
+    """Tratador de eventos de checkout (roda dentro da transação do cliente)."""
+    now = now or datetime.now(UTC)
+    if event.kind == n.PURCHASE_APPROVED:
+        _close_on_purchase(conn, tenant_id, event, now)
+        return
+    if event.kind not in n.CHECKOUT_TRIGGERS:
+        return
+    open_opportunity(
+        conn,
+        tenant_id,
+        Opportunity(
+            kind=event.kind,
+            source="checkout",
+            external_ref=event.external_ref,
+            name=event.name,
+            phone=event.phone,
+            email=event.email,
+            product_name=event.product_name,
+            amount_cents=event.amount_cents,
+            payment_url=event.payment_url,
+        ),
+        now=now,
     )
 
 

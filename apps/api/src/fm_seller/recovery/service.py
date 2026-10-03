@@ -84,7 +84,7 @@ class RecoveryService:
             "days": days,
             "cases_total": sum(status.values()),
             "cases_by_status": {s: status.get(s, 0) for s in CASE_STATUSES},
-            "recovered_cents": sum(r["cents"] for r in cases),
+            "recovered_cents": sum(int(r["cents"]) for r in cases),
             "messages_sent": sent["c"],
             "skipped_reasons": [{"reason": r["detail"], "count": r["c"]} for r in skipped],
             "readiness": {
@@ -104,7 +104,8 @@ class RecoveryService:
         with self._tx(p) as conn:
             rows = conn.execute(
                 "SELECT c.id, c.trigger_kind, c.product_name, c.amount_cents, c.status, "
-                "c.closed_reason, c.recovered_amount_cents, c.opened_at, ct.name, ct.phone, "
+                "c.closed_reason, c.recovered_amount_cents, c.opened_at, c.source, c.note, "
+                "ct.name, ct.phone, "
                 "ct.email, (SELECT count(*) FROM recovery_steps s WHERE s.case_id = c.id "
                 "AND s.status = 'sent') AS sent_count "
                 "FROM recovery_cases c JOIN contacts ct ON ct.id = c.contact_id "
@@ -115,6 +116,8 @@ class RecoveryService:
             {
                 "id": str(r["id"]),
                 "trigger": r["trigger_kind"],
+                "source": r["source"],
+                "note": r["note"],
                 "product": r["product_name"],
                 "amount_cents": r["amount_cents"],
                 "status": r["status"],
@@ -138,7 +141,8 @@ class RecoveryService:
         with self._tx(p) as conn:
             row = conn.execute(
                 "SELECT timezone, quiet_start, quiet_end, daily_cap, max_contacts_per_case, "
-                "recovery_enabled, consent_declared_at FROM tenant_settings"
+                "recovery_enabled, consent_declared_at, cold_enabled, cold_after_hours "
+                "FROM tenant_settings"
             ).fetchone()
         r = row or {}
         return {
@@ -150,6 +154,10 @@ class RecoveryService:
             "recovery_enabled": r.get("recovery_enabled", False),
             "consent_declared": r.get("consent_declared_at") is not None,
             "consent_declared_at": r.get("consent_declared_at"),
+            "cold_enabled": r.get("cold_enabled", False),
+            "cold_after_hours": r.get("cold_after_hours", 3),
+            "can_send": bool(r.get("recovery_enabled", False))
+            and r.get("consent_declared_at") is not None,
         }
 
     def put_settings(self, p: Principal, changes: dict[str, Any]) -> dict[str, Any]:
@@ -173,9 +181,10 @@ class RecoveryService:
             conn.execute(
                 "INSERT INTO tenant_settings (tenant_id, timezone, quiet_start, quiet_end, "
                 "daily_cap, max_contacts_per_case, recovery_enabled, consent_declared_at, "
-                "consent_declared_by) VALUES (%s, %s, %s, %s, %s, %s, %s, "
+                "consent_declared_by, cold_enabled, cold_after_hours) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, "
                 "CASE WHEN %s THEN COALESCE(%s::timestamptz, now()) END, "
-                "CASE WHEN %s THEN %s::uuid END) "
+                "CASE WHEN %s THEN %s::uuid END, %s, %s) "
                 "ON CONFLICT (tenant_id) DO UPDATE SET timezone = EXCLUDED.timezone, "
                 "quiet_start = EXCLUDED.quiet_start, quiet_end = EXCLUDED.quiet_end, "
                 "daily_cap = EXCLUDED.daily_cap, "
@@ -184,7 +193,8 @@ class RecoveryService:
                 "consent_declared_at = EXCLUDED.consent_declared_at, "
                 "consent_declared_by = CASE WHEN EXCLUDED.consent_declared_at IS NULL THEN NULL "
                 "ELSE COALESCE(tenant_settings.consent_declared_by, EXCLUDED.consent_declared_by) "
-                "END, updated_at = now()",
+                "END, cold_enabled = EXCLUDED.cold_enabled, "
+                "cold_after_hours = EXCLUDED.cold_after_hours, updated_at = now()",
                 (
                     p.tenant_id,
                     merged["timezone"],
@@ -197,6 +207,8 @@ class RecoveryService:
                     current["consent_declared_at"],
                     merged["consent_declared"],
                     p.user_id,
+                    merged["cold_enabled"],
+                    merged["cold_after_hours"],
                 ),
             )
             audit(
@@ -211,6 +223,8 @@ class RecoveryService:
                         "consent_declared",
                         "daily_cap",
                         "max_contacts_per_case",
+                        "cold_enabled",
+                        "cold_after_hours",
                     )
                 },
             )
