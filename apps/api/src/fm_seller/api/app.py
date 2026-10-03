@@ -20,6 +20,7 @@ from fm_seller.api.routes import (
     me,
     platform,
     recovery,
+    seller,
     webhooks,
     whatsapp,
 )
@@ -127,4 +128,5 @@ def create_app(
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(platform.router, prefix="/v1")
     app.include_router(recovery.router, prefix="/v1")
+    app.include_router(seller.router, prefix="/v1")
     return app
