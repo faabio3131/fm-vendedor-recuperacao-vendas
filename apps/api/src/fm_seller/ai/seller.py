@@ -175,7 +175,15 @@ def _handle_conversation(
             for h in reversed(history)
         ),
     )
-    reply = model.reply(ctx)
+    try:
+        reply = model.reply(ctx)
+    except Exception as exc:
+        # Sem isto a transação voltaria e a mesma mensagem seria tentada para sempre, sem resposta.
+        log.warning(
+            "modelo falhou", extra={"ctx": {"erro": type(exc).__name__, "motivo": str(exc)[:120]}}
+        )
+        _handoff(conn, tenant_id, conv_id, "erro_do_modelo", notify=True)
+        return "handoffs"
     if reply.handoff:
         _handoff(conn, tenant_id, conv_id, reply.handoff_reason or "modelo_pediu", notify=True)
         return "handoffs"

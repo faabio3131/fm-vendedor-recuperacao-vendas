@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from fm_seller.config import Settings
 from fm_seller.recovery.optout import normalize
 
 
@@ -80,5 +81,18 @@ class UnavailableAiModel:
         raise RuntimeError("Nenhum modelo de IA real está habilitado nesta instalação.")
 
 
-def build_ai_model(env: str) -> AiModel:
-    return SimulatedAiModel() if env in ("dev", "test") else UnavailableAiModel()
+def build_ai_model(settings: Settings) -> AiModel:
+    """Gemini se houver chave (exceto em teste); senão simulador em dev/teste e nada em produção."""
+    key = settings.ai_api_key.get_secret_value()
+    if key and settings.env != "test":
+        from fm_seller.ai.gemini import GeminiModel  # import tardio: evita ciclo com este módulo
+
+        return GeminiModel(
+            key,
+            model=settings.ai_model,
+            base_url=settings.ai_base_url,
+            timeout=settings.ai_timeout_seconds,
+        )
+    if settings.env in ("dev", "test"):
+        return SimulatedAiModel()
+    return UnavailableAiModel()

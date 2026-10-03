@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     # Segredos dos webhooks das compras do PRÓPRIO SaaS (Cakto/Hotmart da F&M). Vazio = desligado.
     platform_cakto_secret: str = ""
     platform_hotmart_hottok: str = ""
+
+    # Modelo de IA do vendedor (chave da plataforma). Vazio: dev usa simulador; staging/prod
+    # deixam as conversas com uma pessoa. Em `test` o simulador é sempre usado.
+    ai_api_key: SecretStr = SecretStr("")
+    ai_model: str = "gemini-3.8-flash"
+    ai_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    ai_timeout_seconds: float = Field(default=20.0, ge=1, le=60)
 
     session_ttl_hours: int = Field(default=24 * 14, ge=1)
     cookie_secure: bool = False
