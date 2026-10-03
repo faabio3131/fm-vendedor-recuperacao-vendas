@@ -39,6 +39,7 @@ class SettingsIn(BaseModel):
     consent_declared: bool | None = None
     cold_enabled: bool | None = None
     cold_after_hours: int | None = Field(default=None, ge=1, le=48)
+    number_daily_limit: int | None = Field(default=None, ge=1, le=100_000)
 
 
 class SequenceIn(BaseModel):

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Shell, useMe } from "@/components/Shell";
-import { api, brl, type Offer, type SellerSettings } from "@/lib/api";
+import { api, brl, type AiUsage, type Offer, type SellerSettings } from "@/lib/api";
 
 type Draft = { name: string; description: string; price: string; payment_url: string };
 const EMPTY: Draft = { name: "", description: "", price: "", payment_url: "https://" };
@@ -16,12 +16,14 @@ function Seller() {
   const canEdit = me.tenant.role === "owner" || me.tenant.role === "admin";
   const [offers, setOffers] = useState<Offer[]>([]);
   const [settings, setSettings] = useState<SellerSettings | null>(null);
+  const [usage, setUsage] = useState<AiUsage | null>(null);
   const [persona, setPersona] = useState("");
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [note, setNote] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
 
   const load = useCallback(() => {
     api<Offer[]>("/v1/seller/offers").then(setOffers).catch(() => undefined);
+    api<AiUsage>("/v1/seller/usage").then(setUsage).catch(() => undefined);
     api<SellerSettings>("/v1/seller/settings")
       .then((s) => {
         setSettings(s);
@@ -98,6 +100,16 @@ function Seller() {
           />
           <span>Vendedor IA responde as mensagens recebidas</span>
         </label>
+        {usage && (
+          <p className="muted" aria-label="Uso da IA no mês">
+            Respostas da IA neste mês: <strong>{usage.replies}</strong>
+            {usage.limit !== null ? ` de ${usage.limit} do seu plano (${usage.percent}%)` : " (sem limite no seu plano)"}.
+            {usage.limit !== null && usage.replies >= usage.limit &&
+              " O limite foi atingido: as novas conversas vão para uma pessoa até o próximo mês."}
+            {usage.limit !== null && usage.replies < usage.limit && (usage.percent ?? 0) >= 80 &&
+              " Está perto do limite."}
+          </p>
+        )}
         {settings && settings.ai_enabled && settings.active_offers === 0 && (
           <div className="alert">Sem oferta ativa, toda conversa vai para uma pessoa. Cadastre uma abaixo.</div>
         )}

@@ -17,6 +17,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from fm_seller.ai import usage
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
 from fm_seller.channels.whatsapp import enqueue_text
 from fm_seller.db import Conn, Database
@@ -125,7 +126,8 @@ def _handle_conversation(
         return "ignored"
 
     settings = conn.execute(
-        "SELECT ai_enabled, ai_persona FROM tenant_settings WHERE tenant_id = %s", (tenant_id,)
+        "SELECT ai_enabled, ai_persona, timezone FROM tenant_settings WHERE tenant_id = %s",
+        (tenant_id,),
     ).fetchone()
     if settings is None or not settings["ai_enabled"]:
         _handoff(conn, tenant_id, conv_id, "ia_desligada", notify=False)
@@ -144,6 +146,12 @@ def _handle_conversation(
     assert recent is not None
     if recent["c"] >= MAX_BOT_REPLIES_PER_HOUR:
         _handoff(conn, tenant_id, conv_id, "limite_de_respostas", notify=False)
+        return "handoffs"
+
+    tz = settings["timezone"]
+    limit = usage.monthly_limit(conn, tenant_id)
+    if limit is not None and usage.month_usage(conn, tenant_id, tz)["calls"] >= limit:
+        _handoff(conn, tenant_id, conv_id, "limite_do_plano", notify=True)
         return "handoffs"
 
     offer_rows = conn.execute(
@@ -182,8 +190,12 @@ def _handle_conversation(
         log.warning(
             "modelo falhou", extra={"ctx": {"erro": type(exc).__name__, "motivo": str(exc)[:120]}}
         )
+        usage.record(conn, tenant_id, tz, ok=False)
         _handoff(conn, tenant_id, conv_id, "erro_do_modelo", notify=True)
         return "handoffs"
+    usage.record(
+        conn, tenant_id, tz, ok=True, tokens_in=reply.tokens_in, tokens_out=reply.tokens_out
+    )
     if reply.handoff:
         _handoff(conn, tenant_id, conv_id, reply.handoff_reason or "modelo_pediu", notify=True)
         return "handoffs"

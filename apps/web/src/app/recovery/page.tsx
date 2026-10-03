@@ -49,6 +49,8 @@ const SKIP: Record<string, string> = {
   nao_contatar: "Pediu para não ser contatado",
   maximo_de_contatos: "Máximo de contatos atingido",
   sem_telefone: "Sem telefone",
+  limite_do_numero: "Limite diário do número (adiado para o dia seguinte)",
+  limite_diario: "Limite diário por contato (adiado)",
 };
 
 function useNote() {
@@ -188,6 +190,10 @@ function Settings({ canEdit, onSaved }: { canEdit: boolean; onSaved: () => void 
           <div>
             <label htmlFor="ch">Conversa esfria depois de (horas sem resposta)</label>
             <input id="ch" type="number" min={1} max={48} disabled={!canEdit} value={s.cold_after_hours} onChange={(e) => num("cold_after_hours", e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="nl">Contatos novos por dia no seu número (limite da Meta)</label>
+            <input id="nl" type="number" min={1} max={100000} disabled={!canEdit} value={s.number_daily_limit} onChange={(e) => num("number_daily_limit", e.target.value)} />
           </div>
           <div>
             <label htmlFor="qs">Não enviar a partir das (hora)</label>

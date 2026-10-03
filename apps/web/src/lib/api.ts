@@ -107,6 +107,7 @@ export type RecoverySettings = {
   consent_declared: boolean;
   cold_enabled: boolean;
   cold_after_hours: number;
+  number_daily_limit: number;
 };
 
 export type RecoverySequence = {
@@ -165,6 +166,15 @@ export type SellerSettings = {
   ai_persona: string;
   active_offers: number;
   ai_available: boolean;
+};
+
+export type AiUsage = {
+  replies: number;
+  failures: number;
+  tokens_in: number;
+  tokens_out: number;
+  limit: number | null;
+  percent: number | null;
 };
 
 export type ConversationRow = {

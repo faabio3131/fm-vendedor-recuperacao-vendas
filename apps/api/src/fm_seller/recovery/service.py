@@ -141,7 +141,8 @@ class RecoveryService:
         with self._tx(p) as conn:
             row = conn.execute(
                 "SELECT timezone, quiet_start, quiet_end, daily_cap, max_contacts_per_case, "
-                "recovery_enabled, consent_declared_at, cold_enabled, cold_after_hours "
+                "number_daily_limit, recovery_enabled, consent_declared_at, cold_enabled, "
+                "cold_after_hours "
                 "FROM tenant_settings"
             ).fetchone()
         r = row or {}
@@ -151,6 +152,7 @@ class RecoveryService:
             "quiet_end": r.get("quiet_end", 8),
             "daily_cap": r.get("daily_cap", 1),
             "max_contacts_per_case": r.get("max_contacts_per_case", 4),
+            "number_daily_limit": r.get("number_daily_limit", 200),
             "recovery_enabled": r.get("recovery_enabled", False),
             "consent_declared": r.get("consent_declared_at") is not None,
             "consent_declared_at": r.get("consent_declared_at"),
@@ -181,10 +183,10 @@ class RecoveryService:
             conn.execute(
                 "INSERT INTO tenant_settings (tenant_id, timezone, quiet_start, quiet_end, "
                 "daily_cap, max_contacts_per_case, recovery_enabled, consent_declared_at, "
-                "consent_declared_by, cold_enabled, cold_after_hours) "
+                "consent_declared_by, cold_enabled, cold_after_hours, number_daily_limit) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, "
                 "CASE WHEN %s THEN COALESCE(%s::timestamptz, now()) END, "
-                "CASE WHEN %s THEN %s::uuid END, %s, %s) "
+                "CASE WHEN %s THEN %s::uuid END, %s, %s, %s) "
                 "ON CONFLICT (tenant_id) DO UPDATE SET timezone = EXCLUDED.timezone, "
                 "quiet_start = EXCLUDED.quiet_start, quiet_end = EXCLUDED.quiet_end, "
                 "daily_cap = EXCLUDED.daily_cap, "
@@ -194,7 +196,8 @@ class RecoveryService:
                 "consent_declared_by = CASE WHEN EXCLUDED.consent_declared_at IS NULL THEN NULL "
                 "ELSE COALESCE(tenant_settings.consent_declared_by, EXCLUDED.consent_declared_by) "
                 "END, cold_enabled = EXCLUDED.cold_enabled, "
-                "cold_after_hours = EXCLUDED.cold_after_hours, updated_at = now()",
+                "cold_after_hours = EXCLUDED.cold_after_hours, "
+                "number_daily_limit = EXCLUDED.number_daily_limit, updated_at = now()",
                 (
                     p.tenant_id,
                     merged["timezone"],
@@ -209,6 +212,7 @@ class RecoveryService:
                     p.user_id,
                     merged["cold_enabled"],
                     merged["cold_after_hours"],
+                    merged["number_daily_limit"],
                 ),
             )
             audit(
@@ -225,6 +229,7 @@ class RecoveryService:
                         "max_contacts_per_case",
                         "cold_enabled",
                         "cold_after_hours",
+                        "number_daily_limit",
                     )
                 },
             )

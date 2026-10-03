@@ -39,6 +39,8 @@ class AiReply:
     offer_id: str | None = None
     handoff: bool = False
     handoff_reason: str | None = None
+    tokens_in: int = 0  # uso informado pelo provedor (medição de custo); 0 se não informado
+    tokens_out: int = 0
 
 
 class AiModel(Protocol):
