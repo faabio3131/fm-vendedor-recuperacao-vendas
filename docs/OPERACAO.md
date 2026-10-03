@@ -33,6 +33,26 @@ pelo worker depois do `map-product`. Eventos sem e-mail não são provisionados 
 `platform_events`. **Os caminhos dos campos e os nomes de evento da Hotmart são palpites tolerantes: capture
 um evento real de cada plataforma antes de vender.**
 
+## WhatsApp: ligar o recebimento
+
+1. Em Conexões → WhatsApp oficial, informe ID do número, ID da conta, token e o **segredo do app Meta**
+   (sem ele, nenhuma mensagem recebida é aceita).
+2. Cole no painel da Meta a URL de webhook exibida e o segredo do webhook como **token de verificação**
+   (aparece uma vez, ao salvar). Assine o campo `messages`.
+3. A conexão só vira "conectada" depois do teste ou do primeiro evento assinado válido.
+
+Mensagem "SAIR", "PARAR" etc. bloqueia o contato, encerra a recuperação dele e enfileira uma confirmação.
+Estado de entrega (enviada/entregue/lida/falhou) vem do WhatsApp. Texto livre só sai dentro de 24 h da última
+mensagem do cliente; fora disso só template aprovado.
+
+## Vendedor IA
+
+Desligado por padrão (Vendedor IA → Ajustes). Preço, nome e link de pagamento vêm só das ofertas cadastradas;
+resposta do modelo com URL ou valor em reais é recusada e a conversa vai para uma pessoa. Sem oferta ativa, IA
+desligada ou modelo indisponível, a conversa também vai para uma pessoa. **Ainda não há adaptador de modelo
+real**: em staging/produção, toda conversa nova cai na fila "Aguardando pessoa". O worker (`cli worker`) roda
+o vendedor, a fila de saída e a recuperação no mesmo ciclo.
+
 ## Worker de recuperação
 
 `python -m fm_seller.cli worker [--interval 30] [--once]` envia os passos devidos e reprocessa eventos que

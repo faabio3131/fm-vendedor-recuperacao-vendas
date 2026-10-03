@@ -74,7 +74,8 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 .center { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .login { width: min(420px, 100%); }
 @media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .nav a { white-space: nowrap; }
   .side { border-right: 0; border-bottom: 1px solid var(--line); padding: 12px; }
   .nav { display: flex; gap: 6px; overflow-x: auto; }
   .brand { margin-bottom: 8px; }

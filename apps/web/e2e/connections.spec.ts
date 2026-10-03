@@ -82,3 +82,36 @@ test("recuperação: ajustes exigem consentimento, template e sem rolagem horizo
   await consent.uncheck();
   await expect(enable).toBeDisabled();
 });
+
+test("vendedor IA: oferta com link https, ajustes e caixa de conversas sem rolagem horizontal", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Login de desenvolvimento (e-mail)").fill(EMAIL);
+  await page.getByRole("button", { name: "Entrar (simulado)" }).click();
+  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Vendedor IA" }).click();
+  await expect(page.getByRole("heading", { name: "Vendedor IA" })).toBeVisible();
+
+  const name = `Curso E2E ${Date.now()}`;
+  await page.getByLabel("Nome", { exact: true }).fill(name);
+  await page.getByLabel("Preço (R$)").fill("197,00");
+  await page.getByLabel("Link de pagamento (https)").fill("http://inseguro.example");
+  await page.getByRole("button", { name: "Cadastrar oferta" }).click();
+  await expect(page.getByRole("status")).toContainText("https://"); // link inseguro é recusado
+
+  await page.getByLabel("Link de pagamento (https)").fill("https://pay.example.test/e2e");
+  await page.getByRole("button", { name: "Cadastrar oferta" }).click();
+  const card = page.locator(".card", { hasText: name });
+  await expect(card.getByText("R$ 197,00")).toBeVisible();
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(overflow).toBe(false);
+  await page.screenshot({ path: `test-results/seller-${test.info().project.name}.png`, fullPage: true });
+
+  page.once("dialog", (d) => void d.accept());
+  await card.getByRole("button", { name: "Remover" }).click();
+  await expect(page.getByText(name)).toHaveCount(0);
+
+  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Conversas" }).click();
+  await expect(page.getByRole("heading", { name: "Conversas" })).toBeVisible();
+  const overflow2 = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(overflow2).toBe(false);
+});

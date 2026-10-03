@@ -20,9 +20,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from fm_seller.channels.whatsapp import upsert_conversation
 from fm_seller.db import Conn, Database
 from fm_seller.events import normalize as n
 from fm_seller.events.normalize import CheckoutEvent
+from fm_seller.money import format_brl
 from fm_seller.recovery.defaults import default_steps
 from fm_seller.recovery.senders import MessageSender, OutboundMessage, SendError
 from fm_seller.recovery.timing import (
@@ -255,11 +257,6 @@ class _Step:
     template_key: str
 
 
-def _format_brl(cents: int) -> str:
-    reais, rest = divmod(cents, 100)
-    return f"R$ {reais:,}".replace(",", ".") + f",{rest:02d}"
-
-
 _VAR = re.compile(r"\{(nome|produto|valor|link)\}")
 
 
@@ -267,7 +264,7 @@ def render(body: str, *, name: str, product: str, cents: int, link: str | None) 
     values = {
         "nome": (name.split()[:1] or ["cliente"])[0].title(),
         "produto": product or "sua compra",
-        "valor": _format_brl(cents),
+        "valor": format_brl(cents),
         "link": link or "",
     }
     return _VAR.sub(lambda m: values[m.group(1)], body).strip()
@@ -387,6 +384,17 @@ def _process(
             "sent_at = CASE WHEN %s = 'sent' THEN %s ELSE NULL END WHERE id = %s",
             (status, detail, provider_id, status, now, step.id),
         )
+        if status == "sent":  # a conversa passa a mostrar o que foi enviado ao cliente
+            _, conv_id = upsert_conversation(conn, step.tenant_id, message.to_phone, "")
+            conn.execute(
+                "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, "
+                "status, provider_message_id) VALUES (%s, %s, 'out', 'recovery', %s, 'sent', %s) "
+                "ON CONFLICT DO NOTHING",
+                (step.tenant_id, conv_id, message.body, provider_id),
+            )
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
         _finish_if_done(conn, step.case_id, now)
     return outcome
 

@@ -124,7 +124,7 @@ export function ProviderCard({ provider, connection, canEdit, onChange }: Props)
                 </div>
               ) : secretOnce ? (
                 <div>
-                  Segredo do webhook (aparece só agora, guarde): <code>{secretOnce}</code>
+                  Segredo do webhook, também usado como token de verificação (aparece só agora, guarde): <code>{secretOnce}</code>
                 </div>
               ) : (
                 <div className="muted">O segredo do webhook já foi gerado e não é exibido de novo.</div>

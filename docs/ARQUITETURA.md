@@ -40,7 +40,13 @@ falha de tratamento deixa o evento `failed` para reprocesso. O worker usa o modo
 (rotina de plataforma), nunca em rota de usuário. Compras do próprio SaaS entram por rota separada
 (`/v1/platform/webhooks/*`) e criam cliente/plano/convite de forma idempotente (lock por e-mail).
 
+## Conversas e vendedor IA (Bloco 3)
+
+`WhatsApp (assinado) → conversa/mensagem (dedupe pelo id do provedor) → worker: vendedor IA → fila de saída →
+MessageSender.send_text`. O vendedor responde numa transação que também marca a mensagem como tratada, e a
+saída segue a regra de no máximo uma vez. O modelo recebe só persona, ofertas e histórico; nunca credenciais.
+
 ## Portas (para os próximos blocos)
 
-`GoogleVerifier`, `ConnectionTester`, `MessageSender` e, a seguir, canais de mensagem, IA, checkout e pagamento.
+`GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.
 Cada porta tem versão simulada para dev/teste e adaptador real separado.
