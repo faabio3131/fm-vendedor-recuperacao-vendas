@@ -18,7 +18,7 @@ test("login de desenvolvimento, conexão do WhatsApp e ausência de segredo na t
   await card().getByLabel("ID da conta do WhatsApp Business").fill("2077770002");
   await card().getByLabel("Token de acesso").fill(SECRET);
   await card().getByRole("button", { name: "Salvar" }).click();
-  await expect(card().getByText("Salvo.")).toBeVisible();
+  await expect(card().getByRole("status")).toContainText("Salvo.");
   await expect(card().getByText(/\/v1\/webhooks\/whatsapp_cloud\//)).toBeVisible();
 
   await card().getByRole("button", { name: "Testar conexão" }).click();
