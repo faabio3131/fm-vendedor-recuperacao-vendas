@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     web_origin: str = "http://localhost:3000"
     public_base_url: str = "http://localhost:8000"
 
+    # Segredos dos webhooks das compras do PRÓPRIO SaaS (Cakto/Hotmart da F&M). Vazio = desligado.
+    platform_cakto_secret: str = ""
+    platform_hotmart_hottok: str = ""
+
     session_ttl_hours: int = Field(default=24 * 14, ge=1)
     cookie_secure: bool = False
 

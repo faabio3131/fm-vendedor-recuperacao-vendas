@@ -39,6 +39,7 @@ def providers(
             "phase": prov.phase,
             "description": prov.description,
             "webhook": prov.webhook,
+            "generates_secret": prov.generates_secret,
             "enabled": prov.feature in features,
             "fields": [
                 {

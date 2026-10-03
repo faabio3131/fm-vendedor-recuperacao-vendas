@@ -43,3 +43,42 @@ test("login de desenvolvimento, conexão do WhatsApp e ausência de segredo na t
   await card().getByRole("button", { name: "Remover" }).click();
   await expect(card().getByText("Não configurada")).toBeVisible();
 });
+
+test("recuperação: ajustes exigem consentimento, template e sem rolagem horizontal", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Login de desenvolvimento (e-mail)").fill(EMAIL);
+  await page.getByRole("button", { name: "Entrar (simulado)" }).click();
+  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Recuperação" }).click();
+  await expect(page.getByRole("heading", { name: "Recuperação de vendas" })).toBeVisible();
+
+  // começa de um estado conhecido, mesmo se uma execução anterior parou no meio
+  const enable = page.getByRole("checkbox", { name: "Recuperação de vendas ligada" });
+  const consent = page.getByRole("checkbox", { name: /Declaro que meus contatos autorizaram/ });
+  await expect(consent).toBeVisible();
+  if (await consent.isChecked()) {
+    await consent.uncheck();
+    await expect(page.getByText("Ajustes salvos.")).toBeVisible();
+  }
+
+  // a recuperação só liga depois do consentimento declarado
+  await expect(enable).toBeDisabled();
+  await consent.check();
+  await expect(page.getByText("Ajustes salvos.")).toBeVisible();
+  await expect(enable).toBeEnabled();
+
+  // template: salvar o texto não o aprova sozinho
+  const tpl = page.locator(".card", { hasText: "carrinho_1" }).first();
+  await tpl.getByLabel("Texto").fill(`Oi, {nome}! Teste ${Date.now()} {link}`);
+  await tpl.getByRole("button", { name: "Salvar texto" }).click();
+  await expect(tpl.getByText("Rascunho")).toBeVisible(); // texto novo sempre volta a rascunho
+  await tpl.getByRole("button", { name: "Marcar: Aprovado" }).click();
+  await expect(tpl.getByText("Aprovado").first()).toBeVisible();
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(overflow).toBe(false);
+  await page.screenshot({ path: `test-results/recovery-${test.info().project.name}.png`, fullPage: true });
+
+  // limpeza para o teste poder repetir
+  await consent.uncheck();
+  await expect(enable).toBeDisabled();
+});

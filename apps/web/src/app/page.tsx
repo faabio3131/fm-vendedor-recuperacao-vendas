@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Shell, useMe } from "@/components/Shell";
-import { api, type Connection } from "@/lib/api";
+import { api, brl, type Connection, type RecoverySummary } from "@/lib/api";
 
 const STATUS: Record<Connection["status"], string> = {
   pending: "Aguardando teste",
@@ -15,8 +15,10 @@ const STATUS: Record<Connection["status"], string> = {
 function Overview() {
   const me = useMe();
   const [connections, setConnections] = useState<Connection[] | null>(null);
+  const [recovery, setRecovery] = useState<RecoverySummary | null>(null);
 
   useEffect(() => {
+    api<RecoverySummary>("/v1/recovery/summary").then(setRecovery).catch(() => setRecovery(null));
     api<Connection[]>("/v1/connections").then(setConnections).catch(() => setConnections([]));
   }, []);
 
@@ -33,6 +35,15 @@ function Overview() {
           <strong>{planName}</strong>
           <div className="muted">{me.plan.status === "active" ? "Ativo" : me.plan.status}</div>
         </div>
+        {recovery && (
+          <div className="card">
+            <div className="muted">Recuperado (30 dias)</div>
+            <strong>{brl(recovery.recovered_cents)}</strong>
+            <div className="muted">
+              <Link href="/recovery">{recovery.cases_by_status.recovered} vendas recuperadas</Link>
+            </div>
+          </div>
+        )}
         <div className="card">
           <div className="muted">Conexões</div>
           <strong>{connections === null ? "…" : connections.length}</strong>

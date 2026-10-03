@@ -118,7 +118,11 @@ export function ProviderCard({ provider, connection, canEdit, onChange }: Props)
               <div>
                 <code>{connection.webhook_url}</code>
               </div>
-              {secretOnce ? (
+              {!provider.generates_secret ? (
+                <div className="muted">
+                  Use na plataforma o mesmo segredo que você informou acima. Ele só é conferido aqui, nunca exibido.
+                </div>
+              ) : secretOnce ? (
                 <div>
                   Segredo do webhook (aparece só agora, guarde): <code>{secretOnce}</code>
                 </div>

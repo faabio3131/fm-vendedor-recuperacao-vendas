@@ -32,7 +32,15 @@ Chaves em `FM_SECRETS_KEYS` (`id:base64`, a primeira é a ativa; as outras só d
 provedores exige um recurso por provedor. Plano cancelado não libera nada. Subir de fase é
 trocar o plano do cliente.
 
+## Eventos e recuperação (Bloco 2)
+
+`webhook → ingest (segredo, dedupe, payload cifrado) → normalize → handle_event → caso + passos agendados →
+worker (checagens na hora do envio) → MessageSender`. O evento bruto é gravado antes de qualquer decisão;
+falha de tratamento deixa o evento `failed` para reprocesso. O worker usa o modo `system` do banco
+(rotina de plataforma), nunca em rota de usuário. Compras do próprio SaaS entram por rota separada
+(`/v1/platform/webhooks/*`) e criam cliente/plano/convite de forma idempotente (lock por e-mail).
+
 ## Portas (para os próximos blocos)
 
-`GoogleVerifier`, `ConnectionTester` e, a seguir, canais de mensagem, IA, checkout e pagamento.
+`GoogleVerifier`, `ConnectionTester`, `MessageSender` e, a seguir, canais de mensagem, IA, checkout e pagamento.
 Cada porta tem versão simulada para dev/teste e adaptador real separado.
