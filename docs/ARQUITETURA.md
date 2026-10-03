@@ -46,6 +46,15 @@ falha de tratamento deixa o evento `failed` para reprocesso. O worker usa o modo
 MessageSender.send_text`. O vendedor responde numa transação que também marca a mensagem como tratada, e a
 saída segue a regra de no máximo uma vez. O modelo recebe só persona, ofertas e histórico; nunca credenciais.
 
+## Modelo de IA (Bloco 5)
+
+`ai/gemini.py` implementa `AiModel` com saída JSON estruturada. O prompt de sistema traz regras fixas, as
+ofertas (id, nome, descrição; **sem preço nem link**) e a persona do cliente como mero tom de voz; as
+falas do cliente entram só como turnos de usuário. A resposta é validada (campos, tipos, `finishReason`) e
+ainda passa por `render_reply`, que recusa URL, valor em reais e marcador sem oferta. Qualquer falha vira
+transferência para pessoa. A chave é da plataforma (custo entra no preço do plano); uso por cliente ainda
+não é medido.
+
 ## Oportunidades próprias (Bloco 4)
 
 O motor não depende de checkout. `Opportunity` (gatilho, origem, referência, contato, produto, valor) é a

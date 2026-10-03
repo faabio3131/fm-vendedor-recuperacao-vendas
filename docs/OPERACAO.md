@@ -49,9 +49,19 @@ mensagem do cliente; fora disso só template aprovado.
 
 Desligado por padrão (Vendedor IA → Ajustes). Preço, nome e link de pagamento vêm só das ofertas cadastradas;
 resposta do modelo com URL ou valor em reais é recusada e a conversa vai para uma pessoa. Sem oferta ativa, IA
-desligada ou modelo indisponível, a conversa também vai para uma pessoa. **Ainda não há adaptador de modelo
-real**: em staging/produção, toda conversa nova cai na fila "Aguardando pessoa". O worker (`cli worker`) roda
+desligada ou modelo indisponível, a conversa também vai para uma pessoa. O worker (`cli worker`) roda
 o vendedor, a fila de saída e a recuperação no mesmo ciclo.
+
+**Modelo (Gemini, chave da plataforma).** Defina `FM_AI_API_KEY` na API **e no worker** (nunca no
+repositório); `FM_AI_MODEL` (padrão `gemini-3.8-flash`), `FM_AI_BASE_URL` e `FM_AI_TIMEOUT_SECONDS` são
+opcionais. Sem chave: dev usa simulador e staging/produção deixam toda conversa na fila "Aguardando pessoa".
+Em `FM_ENV=test` o simulador é sempre usado. **Antes de ligar para clientes rode
+`python -m fm_seller.cli ai-check`**: faz duas chamadas reais (pergunta de preço e tentativa de burlar as
+regras), mostra o texto bruto e o final e termina com `RESULTADO: OK` ou `FALHOU`. O nome do modelo, o
+formato de resposta e o preço por mensagem **ainda não foram confirmados contra a API real**.
+Falha do modelo (rede, cota, bloqueio, formato inválido) passa a conversa para uma pessoa
+(`erro_do_modelo`) e avisa o cliente; não há nova tentativa infinita. O corpo das conversas e a chave
+não vão para o log; só modelo, tempo e contagem de tokens.
 
 ## Worker de recuperação
 

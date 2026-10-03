@@ -16,7 +16,7 @@ Who = Annotated[Principal, Depends(get_principal)]
 
 
 def svc(request: Request) -> SellerService:
-    available = build_ai_model(request.app.state.settings.env).available
+    available = build_ai_model(request.app.state.settings).available
     return SellerService(get_db(request), available)
 
 

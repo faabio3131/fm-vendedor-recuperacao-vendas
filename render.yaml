@@ -25,6 +25,7 @@ services:
       - { key: FM_PUBLIC_BASE_URL, sync: false }
       - { key: FM_PLATFORM_CAKTO_SECRET, sync: false }
       - { key: FM_PLATFORM_HOTMART_HOTTOK, sync: false }
+      - { key: FM_AI_API_KEY, sync: false }
 
   # Worker de recuperação. RASCUNHO: o envio real do WhatsApp ainda não existe, então em staging
   # ele só reprocessa eventos e não envia nada.
@@ -43,6 +44,7 @@ services:
       - { key: FM_GOOGLE_CLIENT_ID, sync: false }
       - { key: FM_WEB_ORIGIN, sync: false }
       - { key: FM_PUBLIC_BASE_URL, sync: false }
+      - { key: FM_AI_API_KEY, sync: false }
 
   - type: web
     name: fm-seller-web
