@@ -168,6 +168,7 @@ BEGIN
     GRANT SELECT, INSERT, UPDATE ON tenant_settings, webhook_events, contacts, recovery_sequences,
       message_templates, recovery_cases, recovery_steps, platform_events TO fm_app;
     GRANT SELECT, INSERT ON suppressions TO fm_app;
+    GRANT DELETE ON recovery_sequences TO fm_app;
     GRANT SELECT ON plan_products TO fm_app;
   END IF;
 END $$;

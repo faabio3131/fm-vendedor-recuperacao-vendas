@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from fm_seller import __version__
-from fm_seller.api.routes import auth, connections, health, me, platform, webhooks
+from fm_seller.api.routes import auth, connections, health, me, platform, recovery, webhooks
 from fm_seller.auth.google import GoogleVerifier, build_verifier
 from fm_seller.config import Settings, get_settings
 from fm_seller.db import Database
@@ -116,4 +116,5 @@ def create_app(
     app.include_router(connections.router, prefix="/v1")
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(platform.router, prefix="/v1")
+    app.include_router(recovery.router, prefix="/v1")
     return app
