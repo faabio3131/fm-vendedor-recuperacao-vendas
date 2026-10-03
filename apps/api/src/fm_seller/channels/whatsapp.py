@@ -13,11 +13,13 @@ import json
 import logging
 import uuid
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from fm_seller.db import Conn, Database
 from fm_seller.errors import AppError, bad_request, not_found
 from fm_seller.events.normalize import normalize_phone_br
+from fm_seller.recovery.cases import stop_cold_cases
 from fm_seller.recovery.optout import is_opt_out, suppress_identity
 from fm_seller.security.crypto import CryptoError, SecretBox
 
@@ -184,7 +186,9 @@ def _inbound(
     message_id = str(msg.get("id", ""))
     if not phone or not message_id:
         return
-    _, conv_id = upsert_conversation(conn, tenant_id, phone, names.get(str(msg.get("from")), ""))
+    contact_id, conv_id = upsert_conversation(
+        conn, tenant_id, phone, names.get(str(msg.get("from")), "")
+    )
     text = _text_of(msg)
     optout = is_opt_out(text)
     inserted = conn.execute(
@@ -210,6 +214,7 @@ def _inbound(
         enqueue_text(conn, tenant_id, conv_id, "system", OPT_OUT_REPLY)
         counts["opt_outs"] += 1
         return
+    stop_cold_cases(conn, tenant_id, contact_id, datetime.now(UTC))
     # Quem escreveu reabre a conversa; o vendedor IA só volta a falar se a pessoa não foi bloqueada.
     conn.execute(
         "UPDATE conversations SET last_inbound_at = now(), last_message_at = now(), "

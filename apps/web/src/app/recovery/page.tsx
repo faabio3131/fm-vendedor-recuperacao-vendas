@@ -6,6 +6,7 @@ import { Shell, useMe } from "@/components/Shell";
 import {
   api,
   brl,
+  type ImportResult,
   type RecoveryCase,
   type RecoverySequence,
   type RecoverySettings,
@@ -19,6 +20,14 @@ const TRIGGERS: Record<string, string> = {
   pix_pending: "PIX gerado e não pago",
   boleto_pending: "Boleto gerado e não pago",
   purchase_refused: "Pagamento recusado",
+  quote_pending: "Orçamento em aberto",
+  conversation_cold: "Conversa que esfriou",
+};
+const SOURCE: Record<RecoveryCase["source"], string> = {
+  checkout: "Checkout",
+  conversa: "Conversa",
+  manual: "Registro manual",
+  importacao: "Planilha",
 };
 const CASE_STATUS: Record<string, string> = {
   open: "Em andamento",
@@ -66,7 +75,6 @@ function Note({ note }: { note: { kind: "ok" | "bad"; text: string } | null }) {
 function Readiness({ s }: { s: RecoverySummary }) {
   const r = s.readiness;
   const items: [boolean, string, string][] = [
-    [r.checkout_connected, "Cakto ou Hotmart conectada", "/connections"],
     [r.whatsapp_connected, "WhatsApp oficial conectado", "/connections"],
     [r.approved_templates > 0, "Ao menos um template aprovado na Meta", "#templates"],
     [r.consent_declared, "Consentimento dos contatos declarado", "#ajustes"],
@@ -164,7 +172,23 @@ function Settings({ canEdit, onSaved }: { canEdit: boolean; onSaved: () => void 
           />
           <span>Recuperação de vendas ligada</span>
         </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            disabled={!canEdit || !s.recovery_enabled}
+            checked={s.cold_enabled}
+            onChange={(e) => void save({ cold_enabled: e.target.checked })}
+          />
+          <span>
+            Recuperar conversas que esfriaram: quando o cliente pergunta, é respondido e some, o sistema retoma o
+            contato.
+          </span>
+        </label>
         <div className="grid">
+          <div>
+            <label htmlFor="ch">Conversa esfria depois de (horas sem resposta)</label>
+            <input id="ch" type="number" min={1} max={48} disabled={!canEdit} value={s.cold_after_hours} onChange={(e) => num("cold_after_hours", e.target.value)} />
+          </div>
           <div>
             <label htmlFor="qs">Não enviar a partir das (hora)</label>
             <input id="qs" type="number" min={0} max={23} disabled={!canEdit} value={s.quiet_start} onChange={(e) => num("quiet_start", e.target.value)} />
@@ -411,16 +435,154 @@ function Blocklist({ canEdit }: { canEdit: boolean }) {
   );
 }
 
-function Cases() {
+const toCents = (text: string): number | null => {
+  const clean = text.replace(/R\$|\s/g, "");
+  if (!clean) return 0;
+  const n = Number(clean.includes(",") ? clean.replace(/\./g, "").replace(",", ".") : clean);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
+};
+
+const EMPTY = { name: "", phone: "", product: "", amount: "", link: "", note: "", authorized: false };
+
+function Opportunities({ onChange }: { onChange: () => void }) {
+  const [f, setF] = useState(EMPTY);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [fileAuthorized, setFileAuthorized] = useState(false);
+  const { note, run } = useNote();
+  const set = (k: keyof typeof EMPTY, v: string | boolean) => setF({ ...f, [k]: v });
+  const create = () =>
+    run(async () => {
+      const cents = toCents(f.amount);
+      if (cents === null) throw new Error("Valor inválido. Exemplo: 1.234,56");
+      await api("/v1/recovery/opportunities", {
+        method: "POST",
+        body: JSON.stringify({
+          name: f.name,
+          phone: f.phone,
+          product: f.product,
+          amount_cents: cents,
+          payment_url: f.link || null,
+          note: f.note,
+          contact_authorized: f.authorized,
+        }),
+      });
+      setF(EMPTY);
+      onChange();
+      return "Oportunidade registrada. A recuperação começa no horário permitido.";
+    });
+  const upload = (file: File | undefined) =>
+    run(async () => {
+      if (!file) return;
+      const csv = await file.text();
+      const res = await api<ImportResult>("/v1/recovery/opportunities/import", {
+        method: "POST",
+        body: JSON.stringify({ csv, contact_authorized: fileAuthorized }),
+      });
+      setResult(res);
+      onChange();
+      return `${res.created} de ${res.total} linhas registradas.`;
+    });
+  return (
+    <section id="oportunidades">
+      <h2>Registrar oportunidade</h2>
+      <p className="muted">
+        Orçamento enviado, pedido pendente ou cliente que ficou de voltar: registre aqui e o sistema faz o
+        acompanhamento pelo WhatsApp.
+      </p>
+      <div className="card">
+        <div className="grid">
+          <div>
+            <label htmlFor="on">Nome</label>
+            <input id="on" value={f.name} maxLength={200} onChange={(e) => set("name", e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="op">WhatsApp (com DDD)</label>
+            <input id="op" inputMode="tel" value={f.phone} onChange={(e) => set("phone", e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="opr">Produto ou serviço</label>
+            <input id="opr" value={f.product} maxLength={200} onChange={(e) => set("product", e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="ov">Valor (R$)</label>
+            <input id="ov" inputMode="decimal" value={f.amount} onChange={(e) => set("amount", e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="ol">Link de pagamento (opcional)</label>
+            <input id="ol" value={f.link} placeholder="https://" onChange={(e) => set("link", e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="oo">Observação (opcional)</label>
+            <input id="oo" value={f.note} maxLength={300} onChange={(e) => set("note", e.target.value)} />
+          </div>
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={f.authorized} onChange={(e) => set("authorized", e.target.checked)} />
+          <span>Este cliente autorizou receber mensagens por WhatsApp.</span>
+        </label>
+        <div className="row">
+          <button className="primary" onClick={() => void create()}>
+            Registrar
+          </button>
+        </div>
+        <hr />
+        <h3>Importar planilha</h3>
+        <p className="muted">
+          Arquivo CSV com cabeçalho. Colunas: <code>telefone</code> (obrigatória), <code>nome</code>,{" "}
+          <code>produto</code>, <code>valor</code>, <code>link</code>, <code>observacao</code>. Até 200 linhas.
+        </p>
+        <label className="check">
+          <input type="checkbox" checked={fileAuthorized} onChange={(e) => setFileAuthorized(e.target.checked)} />
+          <span>Todos os clientes desta planilha autorizaram receber mensagens por WhatsApp.</span>
+        </label>
+        <input
+          type="file"
+          accept=".csv,text/csv,text/plain"
+          aria-label="Planilha CSV"
+          onChange={(e) => {
+            void upload(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+        {result && (
+          <div className="muted" aria-live="polite">
+            {result.skipped.map((x) => (
+              <div key={x.reason}>
+                {x.count} ignoradas: {x.message}
+              </div>
+            ))}
+            {result.errors.map((x) => (
+              <div key={x.line}>
+                Linha {x.line}: {x.message}
+              </div>
+            ))}
+            {result.errors_total > result.errors.length && <div>…e mais {result.errors_total - result.errors.length} com erro.</div>}
+          </div>
+        )}
+        <Note note={note} />
+      </div>
+    </section>
+  );
+}
+
+function Cases({ version, onChange }: { version: number; onChange: () => void }) {
   const [cases, setCases] = useState<RecoveryCase[]>([]);
+  const { note, run } = useNote();
   useEffect(() => {
-    api<RecoveryCase[]>("/v1/recovery/cases?limit=20").then(setCases).catch(() => undefined);
-  }, []);
+    api<RecoveryCase[]>("/v1/recovery/cases?limit=30").then(setCases).catch(() => undefined);
+  }, [version]);
+  const outcome = (id: string, value: "sold" | "lost") =>
+    run(async () => {
+      await api(`/v1/recovery/cases/${id}/outcome`, { method: "POST", body: JSON.stringify({ outcome: value }) });
+      onChange();
+      return value === "sold" ? "Venda registrada." : "Marcada como perdida.";
+    });
   return (
     <section>
       <h2>Vendas em recuperação</h2>
+      <Note note={note} />
       {cases.length === 0 ? (
-        <p className="muted">Nenhuma ainda. Elas aparecem quando um evento chega da sua plataforma de checkout.</p>
+        <p className="muted">Nenhuma ainda. Registre uma oportunidade acima ou ligue a recuperação de conversas.</p>
       ) : (
         <div className="card tablewrap">
           <table>
@@ -428,10 +590,11 @@ function Cases() {
               <tr>
                 <th>Contato</th>
                 <th>Produto</th>
-                <th>Motivo</th>
+                <th>Origem</th>
                 <th>Valor</th>
                 <th>Mensagens</th>
                 <th>Situação</th>
+                <th>Desfecho</th>
               </tr>
             </thead>
             <tbody>
@@ -441,11 +604,19 @@ function Cases() {
                     {c.contact.name || "—"} {c.contact.phone}
                   </td>
                   <td>{c.product || "—"}</td>
-                  <td>{TRIGGERS[c.trigger] ?? c.trigger}</td>
+                  <td title={TRIGGERS[c.trigger] ?? c.trigger}>{SOURCE[c.source] ?? c.source}</td>
                   <td>{brl(c.amount_cents)}</td>
                   <td>{c.messages_sent}</td>
                   <td>
                     <span className={`badge ${c.status}`}>{CASE_STATUS[c.status] ?? c.status}</span>
+                  </td>
+                  <td>
+                    {(c.status === "open" || c.status === "exhausted") && (
+                      <div className="row">
+                        <button onClick={() => void outcome(c.id, "sold")}>Vendido</button>
+                        <button onClick={() => void outcome(c.id, "lost")}>Perdi</button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -462,9 +633,14 @@ function Recovery() {
   const canEdit = me.tenant.role === "owner" || me.tenant.role === "admin";
   const [summary, setSummary] = useState<RecoverySummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
   const loadSummary = useCallback(() => {
     api<RecoverySummary>("/v1/recovery/summary").then(setSummary).catch((e: unknown) => setError(e instanceof Error ? e.message : "Erro."));
   }, []);
+  const refresh = useCallback(() => {
+    loadSummary();
+    setVersion((v) => v + 1);
+  }, [loadSummary]);
   useEffect(loadSummary, [loadSummary]);
 
   if (error) {
@@ -478,14 +654,17 @@ function Recovery() {
   return (
     <>
       <h1>Recuperação de vendas</h1>
-      <p className="muted">Carrinho abandonado, PIX, boleto e pagamento recusado viram mensagens no WhatsApp.</p>
+      <p className="muted">
+        Orçamentos em aberto, conversas que esfriaram e vendas paradas no checkout viram mensagens no WhatsApp.
+      </p>
       {summary && <Readiness s={summary} />}
       {summary && <Summary s={summary} />}
+      <Opportunities onChange={refresh} />
       <Settings canEdit={canEdit} onSaved={loadSummary} />
       <Sequences canEdit={canEdit} />
       <Templates canEdit={canEdit} onChange={loadSummary} />
       <Blocklist canEdit={canEdit} />
-      <Cases />
+      <Cases version={version} onChange={refresh} />
     </>
   );
 }

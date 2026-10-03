@@ -46,6 +46,16 @@ falha de tratamento deixa o evento `failed` para reprocesso. O worker usa o modo
 MessageSender.send_text`. O vendedor responde numa transação que também marca a mensagem como tratada, e a
 saída segue a regra de no máximo uma vez. O modelo recebe só persona, ofertas e histórico; nunca credenciais.
 
+## Oportunidades próprias (Bloco 4)
+
+O motor não depende de checkout. `Opportunity` (gatilho, origem, referência, contato, produto, valor) é a
+entrada única de `open_opportunity`, usada por: eventos de checkout (`source=checkout`), conversa que
+esfriou (`conversa`, detectada pelo worker em `recovery/cold.py`), registro avulso (`manual`) e planilha CSV
+(`importacao`). Todas passam pelas mesmas regras (consentimento, opt-out, janela de silêncio, limites,
+template aprovado). A conversa que volta a escrever encerra o caso `conversa`; o lojista encerra qualquer
+caso com "vendido" (conta como recuperada só se alguma mensagem já saiu) ou "perdi". Cakto e Hotmart do
+cliente são apenas mais uma fonte; a Cakto/Hotmart da F&M servem só para vender o SaaS (compra cria a conta).
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.

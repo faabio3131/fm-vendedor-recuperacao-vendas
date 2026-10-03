@@ -32,6 +32,15 @@ DEFAULT_SEQUENCES: dict[str, list[dict[str, Any]]] = {
         {"delay_minutes": 10, "template_key": "recusada_1"},
         {"delay_minutes": 24 * 60, "template_key": "recusada_2"},
     ],
+    n.QUOTE_PENDING: [
+        {"delay_minutes": 24 * 60, "template_key": "orcamento_1"},
+        {"delay_minutes": 3 * 24 * 60, "template_key": "orcamento_2"},
+        {"delay_minutes": 7 * 24 * 60, "template_key": "orcamento_3"},
+    ],
+    n.CONVERSATION_COLD: [
+        {"delay_minutes": 1, "template_key": "conversa_1"},
+        {"delay_minutes": 2 * 24 * 60, "template_key": "conversa_2"},
+    ],
 }
 
 DEFAULT_TEMPLATES: dict[str, str] = {
@@ -49,6 +58,16 @@ DEFAULT_TEMPLATES: dict[str, str] = {
     "recusada_1": "Oi, {nome}! O pagamento de {produto} não foi aprovado. "
     "Quer tentar de novo ou usar outra forma de pagamento? {link}",
     "recusada_2": "{nome}, ainda dá para concluir a compra de {produto}. Posso ajudar? {link}",
+    "orcamento_1": "Oi, {nome}! Passando para saber se você conseguiu avaliar o orçamento de "
+    "{produto} ({valor}). Posso ajudar com alguma dúvida? {link}",
+    "orcamento_2": "{nome}, o orçamento de {produto} ainda está disponível. "
+    "Se quiser ajustar algo, é só responder esta mensagem. {link}",
+    "orcamento_3": "Última mensagem sobre o orçamento de {produto}, {nome}. "
+    "Se ainda fizer sentido para você, estou por aqui. {link}",
+    "conversa_1": "Oi, {nome}! Ficou alguma dúvida sobre o que conversamos? "
+    "Se quiser, continuamos de onde paramos.",
+    "conversa_2": "{nome}, sigo à disposição se ainda tiver interesse. "
+    "É só responder esta mensagem.",
 }
 
 

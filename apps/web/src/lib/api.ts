@@ -105,6 +105,8 @@ export type RecoverySettings = {
   max_contacts_per_case: number;
   recovery_enabled: boolean;
   consent_declared: boolean;
+  cold_enabled: boolean;
+  cold_after_hours: number;
 };
 
 export type RecoverySequence = {
@@ -124,6 +126,8 @@ export type RecoveryTemplate = {
 export type RecoveryCase = {
   id: string;
   trigger: string;
+  source: "checkout" | "conversa" | "manual" | "importacao";
+  note: string;
   product: string;
   amount_cents: number;
   status: string;
@@ -132,6 +136,14 @@ export type RecoveryCase = {
   opened_at: string;
   contact: { name: string; phone: string; email: string };
   messages_sent: number;
+};
+
+export type ImportResult = {
+  total: number;
+  created: number;
+  skipped: { reason: string; message: string; count: number }[];
+  errors: { line: number; message: string }[];
+  errors_total: number;
 };
 
 export type Suppression = { id: string; identity: string; reason: string; created_at: string };
