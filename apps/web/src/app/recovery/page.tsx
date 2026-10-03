@@ -41,6 +41,8 @@ const META: Record<RecoveryTemplate["meta_status"], string> = {
   submitted: "Enviado à Meta",
   approved: "Aprovado",
   rejected: "Reprovado",
+  paused: "Pausado pela Meta",
+  disabled: "Desativado pela Meta",
 };
 const SKIP: Record<string, string> = {
   template_nao_aprovado: "Template sem aprovação",
@@ -331,6 +333,7 @@ function Sequences({ canEdit }: { canEdit: boolean }) {
 function Templates({ canEdit, onChange }: { canEdit: boolean; onChange: () => void }) {
   const [tpls, setTpls] = useState<RecoveryTemplate[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [category, setCategory] = useState<Record<string, string>>({});
   const { note, run } = useNote();
   const load = useCallback(() => {
     api<RecoveryTemplate[]>("/v1/recovery/templates").then(setTpls).catch(() => undefined);
@@ -340,10 +343,27 @@ function Templates({ canEdit, onChange }: { canEdit: boolean; onChange: () => vo
     <section id="templates">
       <h2>Mensagens (templates)</h2>
       <div className="alert">
-        No WhatsApp, a primeira mensagem para um cliente só pode ser um template aprovado pela Meta. Cadastre o texto
-        aqui, envie para aprovação no painel da Meta e marque o resultado. Nada é enviado sem aprovação. Variáveis:{" "}
-        <code>{"{nome}"}</code> <code>{"{produto}"}</code> <code>{"{valor}"}</code> <code>{"{link}"}</code>.
+        No WhatsApp, a primeira mensagem para um cliente só pode ser um template aprovado pela Meta. Salve o texto,
+        envie para aprovação aqui mesmo (o WhatsApp precisa estar conectado) e use “Atualizar status” para ver a
+        resposta da Meta. Nada é enviado sem aprovação. Variáveis: <code>{"{nome}"}</code> <code>{"{produto}"}</code>{" "}
+        <code>{"{valor}"}</code> <code>{"{link}"}</code>.
       </div>
+      {canEdit && (
+        <div className="row" style={{ marginBottom: 12 }}>
+          <button
+            onClick={() =>
+              void run(async () => {
+                const r = await api<{ checked: number; updated: number }>("/v1/recovery/templates/sync", { method: "POST" });
+                load();
+                onChange();
+                return `Status consultado na Meta: ${r.checked} template(s), ${r.updated} mudança(s).`;
+              })
+            }
+          >
+            Atualizar status
+          </button>
+        </div>
+      )}
       {tpls.map((t) => {
         const body = draft[t.key] ?? t.body;
         return (
@@ -352,6 +372,17 @@ function Templates({ canEdit, onChange }: { canEdit: boolean; onChange: () => vo
               <strong>{t.key}</strong>
               <span className={`badge ${t.meta_status}`}>{META[t.meta_status]}</span>
             </div>
+            {t.meta_name && (
+              <p className="muted" style={{ margin: "4px 0" }}>
+                Nome na Meta: <code>{t.meta_name}</code>
+                {t.meta_category ? ` · ${t.meta_category === "MARKETING" ? "Marketing" : "Utilidade"}` : ""}
+              </p>
+            )}
+            {t.meta_reason && (
+              <p role="alert" style={{ margin: "4px 0", color: "var(--bad)" }}>
+                Motivo informado pela Meta: {t.meta_reason}
+              </p>
+            )}
             <label htmlFor={`b-${t.key}`}>Texto</label>
             <textarea id={`b-${t.key}`} disabled={!canEdit} value={body} maxLength={1024} onChange={(e) => setDraft({ ...draft, [t.key]: e.target.value })} />
             {canEdit && (
@@ -370,6 +401,40 @@ function Templates({ canEdit, onChange }: { canEdit: boolean; onChange: () => vo
                 >
                   Salvar texto
                 </button>
+                {t.saved && (t.meta_status === "draft" || t.meta_status === "rejected") && (
+                  <>
+                    <label htmlFor={`c-${t.key}`} style={{ margin: 0 }}>
+                      Categoria
+                    </label>
+                    <select
+                      id={`c-${t.key}`}
+                      style={{ width: "auto" }}
+                      value={category[t.key] ?? t.meta_category ?? "MARKETING"}
+                      onChange={(e) => setCategory({ ...category, [t.key]: e.target.value })}
+                    >
+                      <option value="MARKETING">Marketing</option>
+                      <option value="UTILITY">Utilidade</option>
+                    </select>
+                    <button
+                      className="primary"
+                      onClick={() =>
+                        void run(async () => {
+                          const r = await api<RecoveryTemplate>(`/v1/recovery/templates/${t.key}/submit`, {
+                            method: "POST",
+                            body: JSON.stringify({ category: category[t.key] ?? t.meta_category ?? "MARKETING" }),
+                          });
+                          load();
+                          onChange();
+                          return r.note === "pending_confirmation"
+                            ? `${t.key}: não deu para confirmar o envio. Use “Atualizar status” em instantes.`
+                            : `${t.key}: ${META[r.meta_status]}.`;
+                        })
+                      }
+                    >
+                      Enviar para aprovação na Meta
+                    </button>
+                  </>
+                )}
                 {t.saved &&
                   (["submitted", "approved", "rejected"] as const).map((st) => (
                     <button

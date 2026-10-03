@@ -120,8 +120,13 @@ export type RecoverySequence = {
 export type RecoveryTemplate = {
   key: string;
   body: string;
-  meta_status: "draft" | "submitted" | "approved" | "rejected";
+  meta_status: "draft" | "submitted" | "approved" | "rejected" | "paused" | "disabled";
+  meta_name: string | null;
+  meta_reason: string | null;
+  meta_category: "MARKETING" | "UTILITY" | null;
+  synced_at: string | null;
   saved: boolean;
+  note?: string | null;
 };
 
 export type RecoveryCase = {

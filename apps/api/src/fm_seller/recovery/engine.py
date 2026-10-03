@@ -28,6 +28,7 @@ from fm_seller.money import format_brl
 from fm_seller.recovery.cases import close_case as _close_case
 from fm_seller.recovery.defaults import default_steps
 from fm_seller.recovery.senders import MessageSender, OutboundMessage, SendError
+from fm_seller.recovery.templates import to_meta
 from fm_seller.recovery.timing import (
     in_quiet_hours,
     local_day_start,
@@ -292,13 +293,17 @@ class _Step:
 _VAR = re.compile(r"\{(nome|produto|valor|link)\}")
 
 
-def render(body: str, *, name: str, product: str, cents: int, link: str | None) -> str:
-    values = {
+def _values(name: str, product: str, cents: int, link: str | None) -> dict[str, str]:
+    return {
         "nome": (name.split()[:1] or ["cliente"])[0].title(),
         "produto": product or "sua compra",
         "valor": format_brl(cents),
         "link": link or "",
     }
+
+
+def render(body: str, *, name: str, product: str, cents: int, link: str | None) -> str:
+    values = _values(name, product, cents, link)
     return _VAR.sub(lambda m: values[m.group(1)], body).strip()
 
 
@@ -496,7 +501,8 @@ def _check(conn: Conn, box: SecretBox, step: _Step, now: datetime) -> _Decision 
         return ("rescheduled", "scheduled", "limite_do_numero", at)
 
     tpl = conn.execute(
-        "SELECT body, meta_status FROM message_templates WHERE tenant_id = %s AND key = %s",
+        "SELECT body, meta_status, meta_name, meta_language FROM message_templates "
+        "WHERE tenant_id = %s AND key = %s",
         (step.tenant_id, step.template_key),
     ).fetchone()
     if tpl is None or tpl["meta_status"] != "approved":
@@ -522,5 +528,15 @@ def _check(conn: Conn, box: SecretBox, step: _Step, now: datetime) -> _Decision 
         cents=ctx["amount_cents"],
         link=ctx["payment_url"],
     )
-    message = OutboundMessage(step.tenant_id, ctx["phone"], step.template_key, body)
+    _, names = to_meta(tpl["body"])
+    values = _values(ctx["name"], ctx["product_name"], ctx["amount_cents"], ctx["payment_url"])
+    message = OutboundMessage(
+        step.tenant_id,
+        ctx["phone"],
+        step.template_key,
+        body,
+        meta_name=tpl["meta_name"],
+        language=tpl["meta_language"],
+        params=tuple(values[n] for n in names),
+    )
     return _Ready(message, {k: str(v) for k, v in config.items()})

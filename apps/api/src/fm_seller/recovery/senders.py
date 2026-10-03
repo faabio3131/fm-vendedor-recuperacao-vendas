@@ -6,6 +6,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from fm_seller.config import Settings
+
 
 class SendError(Exception):
     """Envio recusado de forma definitiva (a mensagem NÃO foi entregue ao canal)."""
@@ -17,6 +19,10 @@ class OutboundMessage:
     to_phone: str  # só dígitos, com DDI
     template_key: str
     body: str
+    # Envio real: nome do template aprovado na Meta, idioma e valores das variáveis, em ordem.
+    meta_name: str | None = None
+    language: str = "pt_BR"
+    params: tuple[str, ...] = ()
 
 
 class MessageSender(Protocol):
@@ -54,8 +60,8 @@ class SimulatedSender:
 
 
 class UnavailableSender:
-    """Staging/produção enquanto o adaptador real do WhatsApp Cloud não existir (e não tiver sido
-    validado com uma conta verificada na Meta). O worker não pega passos nesse estado."""
+    """Staging/produção enquanto o envio real não estiver ligado (FM_WHATSAPP_LIVE), o que só deve
+    acontecer depois de validar com uma conta verificada na Meta. O worker não pega passos."""
 
     available = False
 
@@ -66,5 +72,19 @@ class UnavailableSender:
         raise SendError("Envio real pelo WhatsApp ainda não está habilitado nesta instalação.")
 
 
-def build_sender(env: str) -> MessageSender:
-    return SimulatedSender() if env in ("dev", "test") else UnavailableSender()
+def build_sender(settings: Settings) -> MessageSender:
+    """Real só com FM_WHATSAPP_LIVE ligado (e nunca em teste); senão simulador em dev/teste."""
+    if settings.whatsapp_live and settings.env != "test":
+        from fm_seller.channels.meta_api import MetaClient
+        from fm_seller.channels.whatsapp_send import WhatsAppCloudSender
+
+        return WhatsAppCloudSender(
+            MetaClient(
+                base=settings.meta_graph_base,
+                version=settings.meta_graph_version,
+                timeout=settings.meta_timeout_seconds,
+            )
+        )
+    if settings.env in ("dev", "test"):
+        return SimulatedSender()
+    return UnavailableSender()

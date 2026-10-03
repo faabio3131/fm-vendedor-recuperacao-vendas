@@ -26,9 +26,10 @@ services:
       - { key: FM_PLATFORM_CAKTO_SECRET, sync: false }
       - { key: FM_PLATFORM_HOTMART_HOTTOK, sync: false }
       - { key: FM_AI_API_KEY, sync: false }
+      - { key: FM_WHATSAPP_LIVE, value: "false" }
 
-  # Worker de recuperação. RASCUNHO: o envio real do WhatsApp ainda não existe, então em staging
-  # ele só reprocessa eventos e não envia nada.
+  # Worker de recuperação. RASCUNHO: sem FM_WHATSAPP_LIVE o envio real fica desligado e ele só
+  # reprocessa eventos. Ligue FM_WHATSAPP_LIVE=true (API e worker) só depois de validar com conta real.
   - type: worker
     name: fm-seller-worker
     runtime: docker
@@ -45,6 +46,7 @@ services:
       - { key: FM_WEB_ORIGIN, sync: false }
       - { key: FM_PUBLIC_BASE_URL, sync: false }
       - { key: FM_AI_API_KEY, sync: false }
+      - { key: FM_WHATSAPP_LIVE, value: "false" }
 
   - type: web
     name: fm-seller-web

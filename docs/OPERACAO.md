@@ -63,6 +63,21 @@ Falha do modelo (rede, cota, bloqueio, formato inválido) passa a conversa para 
 (`erro_do_modelo`) e avisa o cliente; não há nova tentativa infinita. O corpo das conversas e a chave
 não vão para o log; só modelo, tempo e contagem de tokens.
 
+## WhatsApp real (Meta)
+
+Desligado por padrão. `FM_WHATSAPP_LIVE=true` (API **e** worker) troca o simulador pelo envio real, o teste
+da conexão passa a consultar a Graph API (número e conta, só leitura) e liga o envio/sincronização de templates;
+`FM_META_GRAPH_VERSION` (padrão `v26.0`), `FM_META_GRAPH_BASE` e `FM_META_TIMEOUT_SECONDS` são opcionais.
+**Só ligue depois de validar com uma conta real** (docs/PENDENCIAS_EXTERNAS.md): o formato foi escrito pela
+documentação da Meta e testado só contra servidor falso. Sem a variável, staging/produção não pegam passos de
+recuperação e o envio de templates responde "ainda não está habilitado".
+Fluxo do cliente: Recuperação → Mensagens → "Enviar para aprovação na Meta" (precisa do WhatsApp conectado e
+testado) → "Atualizar status" (o worker também consulta sozinho). O nome na Meta é `chave_vN`; editar o texto
+volta o template a rascunho e o próximo envio cria a versão seguinte. Os botões "Marcar: …" continuam
+para quem aprovou direto no painel da Meta, mas no envio real o template precisa ter sido enviado por aqui
+(sem nome na Meta o envio é recusado). **Risco conhecido:** a Meta pode recusar texto que começa ou termina com
+variável (os textos padrão terminam com `{link}`); o motivo aparece no template e basta ajustar o texto.
+
 ## Limites e custo
 
 - **IA por plano:** `plans.limits` (JSON, dado editável) tem `ai_replies_per_month`; ausente = sem limite. Os

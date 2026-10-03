@@ -73,6 +73,10 @@ test("recuperação: ajustes exigem consentimento, template e sem rolagem horizo
   await tpl.getByLabel("Texto").fill(`Oi, {nome}! Teste ${Date.now()} {link}`);
   await tpl.getByRole("button", { name: "Salvar texto" }).click();
   await expect(tpl.getByText("Rascunho")).toBeVisible(); // texto novo sempre volta a rascunho
+  // sem WhatsApp conectado e testado, o envio para a Meta é recusado com explicação
+  await tpl.getByRole("button", { name: "Enviar para aprovação na Meta" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Conecte e teste o WhatsApp" })).toBeVisible();
+  await expect(tpl.getByText("Rascunho")).toBeVisible();
   await tpl.getByRole("button", { name: "Marcar: Aprovado" }).click();
   await expect(tpl.getByText("Aprovado").first()).toBeVisible();
 

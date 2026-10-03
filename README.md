@@ -5,7 +5,7 @@ cobrança e anúncios em fases. Produto comercial da F&M Tecnologia, **Web First
 
 ## Estado
 
-Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini) e 6 (limites e custo) concluídos, tudo contra simuladores. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
+Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo) e 7 (WhatsApp real e templates da Meta) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
 
 | Peça | Estado |
 |---|---|
@@ -13,9 +13,9 @@ Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA),
 | Banco Postgres com isolamento por cliente (RLS), migrations, auditoria | Feito e testado |
 | Credenciais de clientes cifradas (AES-256-GCM, com rotação de chave) | Feito e testado |
 | Painel web (Next.js): login, visão geral, conexões | Feito; testado em celular, tablet e desktop |
-| Integrações reais (Meta, Cakto, Hotmart, IA) | **Não feito.** Próximos blocos, primeiro contra simuladores |
+| Integrações reais (Meta, Cakto, Hotmart, IA) | Código de WhatsApp e Gemini feito contra servidor falso; **nada validado com conta real** |
 | Recebimento de eventos Cakto/Hotmart (segredo, dedupe, reprocesso) | Feito e testado com payloads **sintéticos**; formato real a confirmar |
-| Motor de recuperação (carrinho, PIX, boleto, recusa), worker, opt-out, janela de silêncio, limite diário | Feito e testado; **envio real pelo WhatsApp não existe** (só simulador em dev/teste) |
+| Motor de recuperação (carrinho, PIX, boleto, recusa), worker, opt-out, janela de silêncio, limite diário | Feito e testado; envio real pelo WhatsApp existe mas fica **desligado** (`FM_WHATSAPP_LIVE`); simulador em dev/teste |
 | Compra do próprio SaaS cria cliente, plano e convite | Feito e testado com payloads sintéticos |
 | Tela "Recuperação" (ajustes com consentimento, sequências, templates, bloqueios, casos) | Feito; testado em celular, tablet e desktop |
 | Entrada do WhatsApp (assinatura, mensagens, status de entrega, "SAIR"), fila de saída, conversas | Feito e testado com payloads sintéticos no formato documentado pela Meta; **não testado com conta real** |
@@ -23,6 +23,7 @@ Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA),
 | Telas Conversas e Vendedor IA | Feito; testado em celular, tablet e desktop |
 | Oportunidades próprias para comércio local: conversa que esfriou, registro avulso, planilha CSV, "vendido/perdi" | Feito e testado; sem integração externa (o dado já está no sistema) |
 | Limite mensal de IA por plano (dado), medição de uso, limite diário de contatos novos por número | Feito e testado; **valores dos planos são provisórios** |
+| WhatsApp Cloud API real: envio de template/texto, envio de templates para aprovação, sincronização de status, teste real da conexão | Feito e testado contra **servidor falso** (formato da documentação da Meta); **desligado por padrão; falta validar com conta real** |
 | Messenger/Instagram, cobrança própria, anúncios | **Não feito.** Próximos blocos |
 
 Contas e configurações externas ainda pendentes: ver `docs/PENDENCIAS_EXTERNAS.md`.

@@ -16,6 +16,7 @@ import psycopg
 from fm_seller.ai.model import build_ai_model
 from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.outbox import flush_outbox
+from fm_seller.channels.templates_gateway import build_template_gateway
 from fm_seller.config import Settings, get_settings
 from fm_seller.db import Database
 from fm_seller.events.ingest import reprocess_failed
@@ -25,6 +26,7 @@ from fm_seller.provisioning.platform import reprocess_platform
 from fm_seller.recovery.cold import detect_cold_conversations
 from fm_seller.recovery.engine import handle_event, run_due_steps
 from fm_seller.recovery.senders import build_sender
+from fm_seller.recovery.template_sync import sync_all
 from fm_seller.security.crypto import SecretBox
 
 
@@ -74,8 +76,9 @@ def run_worker(interval: int, once: bool) -> None:
     db = Database(settings.database_url)
     db.open()
     box = SecretBox(settings.secrets_keys)
-    sender = build_sender(settings.env)
+    sender = build_sender(settings)
     model = build_ai_model(settings)
+    gateway = build_template_gateway(settings)
     try:
         while True:
             redone = reprocess_failed(db, box, handle_event)
@@ -84,6 +87,7 @@ def run_worker(interval: int, once: bool) -> None:
             stats = run_due_steps(db, box, sender)
             seller = run_ai_replies(db, model)
             outbox = flush_outbox(db, box, sender)
+            templates = sync_all(db, box, gateway)
             log.info(
                 "ciclo",
                 extra={
@@ -94,6 +98,7 @@ def run_worker(interval: int, once: bool) -> None:
                         "recuperacao": stats.__dict__,
                         "vendedor": seller.__dict__,
                         "saida": outbox.__dict__,
+                        "templates": templates.__dict__,
                     }
                 },
             )

@@ -306,7 +306,8 @@ class RecoveryService:
             rows = {
                 r["key"]: r
                 for r in conn.execute(
-                    "SELECT key, body, meta_status FROM message_templates"
+                    "SELECT key, body, meta_status, meta_name, meta_reason, meta_category, "
+                    "meta_synced_at FROM message_templates"
                 ).fetchall()
             }
         out: list[dict[str, Any]] = []
@@ -317,6 +318,10 @@ class RecoveryService:
                     "key": key,
                     "body": row["body"] if row else DEFAULT_TEMPLATES[key],
                     "meta_status": row["meta_status"] if row else "draft",
+                    "meta_name": row["meta_name"] if row else None,
+                    "meta_reason": row["meta_reason"] if row else None,
+                    "meta_category": row["meta_category"] if row else None,
+                    "synced_at": row["meta_synced_at"] if row else None,
                     "saved": row is not None,
                 }
             )
@@ -330,12 +335,19 @@ class RecoveryService:
         if not 1 <= len(body) <= 1024:
             raise bad_request("invalid_body", "O texto deve ter de 1 a 1024 caracteres.")
         with self._tx(p) as conn:
-            # Texto alterado perde a aprovação: precisa ser aprovado de novo na Meta.
+            # Texto alterado perde a aprovação e o vínculo com a Meta: precisa de novo envio
+            # (o nome da próxima versão é novo; `meta_version` nunca volta).
             conn.execute(
                 "INSERT INTO message_templates (tenant_id, key, body) VALUES (%s, %s, %s) "
                 "ON CONFLICT (tenant_id, key) DO UPDATE SET body = EXCLUDED.body, "
                 "meta_status = CASE WHEN message_templates.body = EXCLUDED.body "
-                "THEN message_templates.meta_status ELSE 'draft' END, updated_at = now()",
+                "THEN message_templates.meta_status ELSE 'draft' END, "
+                "meta_name = CASE WHEN message_templates.body = EXCLUDED.body "
+                "THEN message_templates.meta_name END, "
+                "meta_template_id = CASE WHEN message_templates.body = EXCLUDED.body "
+                "THEN message_templates.meta_template_id END, "
+                "meta_reason = CASE WHEN message_templates.body = EXCLUDED.body "
+                "THEN message_templates.meta_reason END, updated_at = now()",
                 (p.tenant_id, key, body),
             )
             row = conn.execute(
