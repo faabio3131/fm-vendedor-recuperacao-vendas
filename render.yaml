@@ -1,0 +1,35 @@
+# RASCUNHO de blueprint para o Render (decisão de hospedagem do Fábio, 03/10/2026).
+# NÃO foi validado contra o Render. Conferir antes do primeiro deploy.
+# Segredos usam `sync: false`: são preenchidos no painel do Render, nunca no repositório.
+databases:
+  - name: fm-seller-db
+    plan: basic-256mb
+    databaseName: fm_seller
+
+services:
+  - type: web
+    name: fm-seller-api
+    runtime: docker
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: apps/api
+    preDeployCommand: python -m fm_seller.cli migrate
+    healthCheckPath: /v1/health
+    envVars:
+      - { key: FM_ENV, value: staging }
+      - { key: FM_COOKIE_SECURE, value: "true" }
+      - { key: FM_DATABASE_URL, sync: false }        # papel fm_app
+      - { key: FM_DATABASE_ADMIN_URL, sync: false }  # papel fm_owner (só migrations)
+      - { key: FM_SECRETS_KEYS, sync: false }
+      - { key: FM_GOOGLE_CLIENT_ID, sync: false }
+      - { key: FM_WEB_ORIGIN, sync: false }
+      - { key: FM_PUBLIC_BASE_URL, sync: false }
+
+  - type: web
+    name: fm-seller-web
+    runtime: docker
+    dockerfilePath: apps/web/Dockerfile
+    dockerContext: apps/web
+    healthCheckPath: /login
+    envVars:
+      - { key: NEXT_PUBLIC_API_URL, sync: false }
+      - { key: NEXT_PUBLIC_GOOGLE_CLIENT_ID, sync: false }
