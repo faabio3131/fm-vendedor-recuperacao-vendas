@@ -138,3 +138,48 @@ export type Suppression = { id: string; identity: string; reason: string; create
 
 export const brl = (cents: number): string =>
   (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+export type Offer = {
+  id: string;
+  name: string;
+  description: string;
+  price_cents: number;
+  payment_url: string;
+  active: boolean;
+};
+
+export type SellerSettings = {
+  ai_enabled: boolean;
+  ai_persona: string;
+  active_offers: number;
+  ai_available: boolean;
+};
+
+export type ConversationRow = {
+  id: string;
+  status: "bot" | "human" | "closed";
+  handoff_reason: string | null;
+  name: string;
+  phone: string;
+  preview: string;
+  last_message_at: string;
+  window_open: boolean;
+};
+
+export type ChatMessage = {
+  id: string;
+  direction: "in" | "out";
+  author: "customer" | "bot" | "human" | "recovery" | "system";
+  body: string;
+  status: string;
+  error: string | null;
+  created_at: string;
+};
+
+export type ConversationDetail = {
+  status: ConversationRow["status"];
+  name: string;
+  phone: string;
+  window_open: boolean;
+  messages: ChatMessage[];
+};
