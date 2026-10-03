@@ -129,8 +129,12 @@ CREATE TABLE platform_events (
   event_type  text NOT NULL,
   buyer_email text,
   tenant_id   uuid REFERENCES tenants(id) ON DELETE SET NULL,
+  -- Corpo bruto cifrado: permite reprocessar compra paga de produto ainda sem plano mapeado.
+  payload_encrypted bytea NOT NULL,
   outcome     text NOT NULL DEFAULT 'received',
+  error       text,
   received_at timestamptz NOT NULL DEFAULT now(),
+  processed_at timestamptz,
   UNIQUE (provider, dedupe_key)
 );
 

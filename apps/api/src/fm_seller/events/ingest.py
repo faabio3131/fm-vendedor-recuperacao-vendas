@@ -65,7 +65,7 @@ def secret_ok(
     return ok
 
 
-def _dedupe_key(body: dict[str, Any], raw: bytes) -> str:
+def dedupe_key(body: dict[str, Any], raw: bytes) -> str:
     event_id = body.get("id")
     if isinstance(event_id, str | int) and str(event_id):
         return f"id:{event_id}"
@@ -119,7 +119,7 @@ def ingest_webhook(
         raise AppError(403, "tenant_suspended", "Cliente suspenso.")
 
     event_type = str(body.get("event", ""))[:100] or "unknown"
-    dedupe = _dedupe_key(body, raw_body)
+    dedupe = dedupe_key(body, raw_body)
     encrypted = box.encrypt(body, tenant_id=str(tenant_id), provider=f"webhook:{provider}")
 
     with db.tx(tenant_id=tenant_id) as conn:

@@ -18,6 +18,7 @@ from fm_seller.db import Database
 from fm_seller.events.ingest import reprocess_failed
 from fm_seller.logging_setup import setup_logging
 from fm_seller.migrate import apply_migrations
+from fm_seller.provisioning.platform import reprocess_platform
 from fm_seller.recovery.engine import handle_event, run_due_steps
 from fm_seller.recovery.senders import build_sender
 from fm_seller.security.crypto import SecretBox
@@ -49,6 +50,18 @@ def create_tenant(admin_url: str, name: str, email: str, plan: str, role: str = 
     return str(tenant_id)
 
 
+def map_product(admin_url: str, provider: str, product_id: str, plan: str) -> None:
+    """Liga um produto vendido na Cakto/Hotmart a um plano (dado, não código)."""
+    with psycopg.connect(admin_url) as conn:
+        conn.execute(
+            "INSERT INTO plan_products (provider, external_product_id, plan_key) "
+            "VALUES (%s, %s, %s) ON CONFLICT (provider, external_product_id) "
+            "DO UPDATE SET plan_key = EXCLUDED.plan_key",
+            (provider, product_id, plan),
+        )
+        conn.commit()
+
+
 def run_worker(interval: int, once: bool) -> None:
     """Repassa eventos que falharam e envia os passos de recuperação devidos."""
     settings = get_settings()
@@ -61,8 +74,14 @@ def run_worker(interval: int, once: bool) -> None:
     try:
         while True:
             redone = reprocess_failed(db, box, handle_event)
+            redone_platform = reprocess_platform(db, box)
             stats = run_due_steps(db, box, sender)
-            log.info("ciclo", extra={"ctx": {"reprocessados": redone, **stats.__dict__}})
+            log.info(
+                "ciclo",
+                extra={
+                    "ctx": {"reprocessados": redone, "compras": redone_platform, **stats.__dict__}
+                },
+            )
             if once:
                 return
             time.sleep(interval)
@@ -79,6 +98,10 @@ def main(argv: list[str] | None = None) -> int:
     ct.add_argument("--name", required=True)
     ct.add_argument("--email", required=True)
     ct.add_argument("--plan", default="fase-1")
+    mp = sub.add_parser("map-product", help="Liga um produto da Cakto/Hotmart a um plano")
+    mp.add_argument("--provider", required=True, choices=["cakto", "hotmart"])
+    mp.add_argument("--product-id", required=True)
+    mp.add_argument("--plan", required=True)
     wk = sub.add_parser("worker", help="Envia passos de recuperação devidos e reprocessa falhas")
     wk.add_argument("--interval", type=int, default=30, help="segundos entre ciclos")
     wk.add_argument("--once", action="store_true", help="roda um ciclo e sai")
@@ -93,6 +116,9 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "create-tenant":
         tenant_id = create_tenant(settings.database_admin_url, args.name, args.email, args.plan)
         print("Cliente criado:", tenant_id)
+    elif args.cmd == "map-product":
+        map_product(settings.database_admin_url, args.provider, args.product_id, args.plan)
+        print("Produto ligado ao plano.")
     elif args.cmd == "worker":
         run_worker(args.interval, args.once)
     return 0
