@@ -26,9 +26,8 @@ class Provider:
     phase: int
     feature: str
     fields: tuple[Field, ...]
-    webhook: bool = (
-        False  # o sistema gera URL e segredo de webhook para o cliente colar na plataforma
-    )
+    webhook: bool = False  # o sistema gera a URL de webhook que o cliente cola na plataforma
+    generates_secret: bool = True  # False: o segredo é o que a plataforma do cliente define
     description: str = ""
     extra: dict[str, str] = field(default_factory=dict)
 
@@ -81,8 +80,17 @@ PROVIDERS: tuple[Provider, ...] = (
         phase=1,
         feature="checkout.cakto",
         description="Eventos de checkout e compra da Cakto.",
-        fields=(Field("api_token", "Token de API (opcional)", secret=True, required=False),),
+        fields=(
+            Field(
+                "webhook_secret",
+                "Segredo do webhook",
+                secret=True,
+                help="O mesmo segredo cadastrado no webhook da Cakto.",
+            ),
+            Field("api_token", "Token de API (opcional)", secret=True, required=False),
+        ),
         webhook=True,
+        generates_secret=False,
     ),
     Provider(
         key="hotmart",
@@ -93,6 +101,7 @@ PROVIDERS: tuple[Provider, ...] = (
         description="Eventos de checkout e compra da Hotmart.",
         fields=(Field("hottok", "Token de verificação (hottok)", secret=True),),
         webhook=True,
+        generates_secret=False,
     ),
     Provider(
         key="ai_model",

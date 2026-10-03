@@ -13,11 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from fm_seller import __version__
-from fm_seller.api.routes import auth, connections, health, me
+from fm_seller.api.routes import auth, connections, health, me, webhooks
 from fm_seller.auth.google import GoogleVerifier, build_verifier
 from fm_seller.config import Settings, get_settings
 from fm_seller.db import Database
 from fm_seller.errors import AppError
+from fm_seller.events.ingest import EventHandler
 from fm_seller.logging_setup import setup_logging
 from fm_seller.providers.testers import ConnectionTester, build_tester
 from fm_seller.security.crypto import SecretBox
@@ -34,6 +35,7 @@ def create_app(
     verifier: GoogleVerifier | None = None,
     tester: ConnectionTester | None = None,
     box: SecretBox | None = None,
+    event_handler: EventHandler | None = None,
 ) -> FastAPI:
     cfg = settings or get_settings()
     setup_logging()
@@ -57,6 +59,8 @@ def create_app(
     app.state.db = database
     app.state.verifier = google
     app.state.connections = ConnectionService(database, cfg, secret_box, conn_tester)
+    app.state.box = secret_box
+    app.state.event_handler = event_handler or (lambda conn, tenant_id, event: None)
 
     app.add_middleware(
         CORSMiddleware,
@@ -107,4 +111,5 @@ def create_app(
     app.include_router(auth.router, prefix="/v1")
     app.include_router(me.router, prefix="/v1")
     app.include_router(connections.router, prefix="/v1")
+    app.include_router(webhooks.router, prefix="/v1")
     return app

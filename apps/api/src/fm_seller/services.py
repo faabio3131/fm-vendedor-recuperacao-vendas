@@ -277,7 +277,7 @@ class ConnectionService:
                 raise bad_request("missing_fields", "Preencha: " + ", ".join(missing))
 
             new_secret: str | None = None
-            if provider.webhook and not config.get("webhook_secret"):
+            if provider.webhook and provider.generates_secret and not config.get("webhook_secret"):
                 new_secret = secrets.token_urlsafe(24)
                 config["webhook_secret"] = new_secret
                 changed.append("webhook_secret")
@@ -286,7 +286,7 @@ class ConnectionService:
             for f in provider.fields:
                 raw = str(config.get(f.key, ""))
                 hint[f.key] = (mask_secret(raw) if f.secret else raw) if raw else ""
-            if provider.webhook:
+            if provider.webhook and provider.generates_secret:
                 hint["webhook_secret"] = mask_secret(str(config["webhook_secret"]))
 
             blob = self._box.encrypt(config, tenant_id=tenant, provider=provider.key)
