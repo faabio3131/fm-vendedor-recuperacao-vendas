@@ -17,9 +17,9 @@ Legenda: **RESPONDIDO** (existe e foi testado) · **PARCIAL** · **PENDENTE** (d
 | 9 | Logs, métricas e alertas | PARCIAL | Log JSON com `request_id`, sem corpo/cookies. Métricas e alertas (webhook parado, fila, falha de envio, nota do WhatsApp) são dos próximos blocos. |
 | 10 | Backup e restore | PENDENTE | Proposta: diário, 30 dias, com teste de restauração. Depende do plano do banco na hospedagem. |
 | 11 | Ambientes dev/staging/prod | PARCIAL | Configuração por `FM_ENV`; verificador simulado e testador simulado só em dev/teste. Staging e produção ainda não existem. |
-| 12 | Teste em celular, tablet e desktop | PARCIAL | Playwright nos 3 tamanhos passou localmente (sem rolagem horizontal, segredo não vaza na tela). O job de CI foi escrito, **mas ainda não rodou no GitHub**. |
+| 12 | Teste em celular, tablet e desktop | RESPONDIDO | Playwright nos 3 tamanhos (sem rolagem horizontal, segredo não vaza na tela). Passou localmente e no CI do GitHub (03/10/2026): jobs api, web e e2e verdes. |
 
 ## Pendências para fechar o gate
 
 Confirmar hospedagem e criar staging (8, 11) · Client ID do Google (3) · definir cofre de chaves (7) ·
-retenção de backup (10) · primeira execução do CI no GitHub (12) · métricas e alertas (9).
+retenção de backup (10) · métricas e alertas (9).
