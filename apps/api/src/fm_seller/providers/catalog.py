@@ -44,6 +44,13 @@ PROVIDERS: tuple[Provider, ...] = (
             Field("phone_number_id", "ID do número de telefone"),
             Field("waba_id", "ID da conta do WhatsApp Business"),
             Field("access_token", "Token de acesso", secret=True),
+            Field(
+                "app_secret",
+                "Segredo do app Meta",
+                secret=True,
+                required=False,
+                help="Valida a assinatura das mensagens recebidas; sem ele nada é aceito.",
+            ),
         ),
         webhook=True,
     ),

@@ -16,6 +16,7 @@ from fm_seller.recovery.defaults import (
     default_steps,
     validate_steps,
 )
+from fm_seller.recovery.optout import suppress_identity
 from fm_seller.services import EDIT_ROLES, Principal, audit, tenant_features
 
 FEATURE = "recovery.sequences"
@@ -379,24 +380,6 @@ class RecoveryService:
                 "invalid_identity", "Informe um telefone com DDD ou um e-mail válido."
             )
         with self._tx(p) as conn:
-            conn.execute(
-                "INSERT INTO suppressions (tenant_id, identity, reason) VALUES (%s, %s, 'manual') "
-                "ON CONFLICT (tenant_id, identity) DO NOTHING",
-                (p.tenant_id, identity),
-            )
-            # Quem pediu para não ser contatado sai das sequências em andamento.
-            conn.execute(
-                "UPDATE recovery_steps SET status = 'canceled', detail = 'nao_contatar' "
-                "WHERE status = 'scheduled' AND case_id IN (SELECT c.id FROM recovery_cases c "
-                "JOIN contacts ct ON ct.id = c.contact_id WHERE c.status = 'open' "
-                "AND (ct.phone = %s OR lower(ct.email) = %s))",
-                (identity, identity),
-            )
-            conn.execute(
-                "UPDATE recovery_cases SET status = 'stopped', closed_reason = 'opt_out', "
-                "closed_at = now() WHERE status = 'open' AND contact_id IN ("
-                "SELECT id FROM contacts WHERE phone = %s OR lower(email) = %s)",
-                (identity, identity),
-            )
+            suppress_identity(conn, p.tenant_id, identity, "manual")
             audit(conn, tenant_id=p.tenant_id, actor=p.user_id, action="recovery.suppression")
         return {"status": "added"}

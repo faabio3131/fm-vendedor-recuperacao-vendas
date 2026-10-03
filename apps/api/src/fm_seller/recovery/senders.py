@@ -26,6 +26,10 @@ class MessageSender(Protocol):
         """Envia e devolve o id da mensagem no provedor. Levanta SendError se recusar."""
         ...
 
+    def send_text(self, config: dict[str, str], to_phone: str, body: str) -> str:
+        """Texto livre, só válido dentro da janela de 24 h aberta pelo cliente."""
+        ...
+
 
 @dataclass
 class SimulatedSender:
@@ -33,12 +37,19 @@ class SimulatedSender:
 
     available: bool = True
     sent: list[OutboundMessage] = field(default_factory=list)
+    texts: list[tuple[str, str]] = field(default_factory=list)
     fail_with: str | None = None
 
     def send(self, config: dict[str, str], message: OutboundMessage) -> str:
         if self.fail_with:
             raise SendError(self.fail_with)
         self.sent.append(message)
+        return "sim-" + uuid.uuid4().hex[:12]
+
+    def send_text(self, config: dict[str, str], to_phone: str, body: str) -> str:
+        if self.fail_with:
+            raise SendError(self.fail_with)
+        self.texts.append((to_phone, body))
         return "sim-" + uuid.uuid4().hex[:12]
 
 
@@ -49,6 +60,9 @@ class UnavailableSender:
     available = False
 
     def send(self, config: dict[str, str], message: OutboundMessage) -> str:
+        raise SendError("Envio real pelo WhatsApp ainda não está habilitado nesta instalação.")
+
+    def send_text(self, config: dict[str, str], to_phone: str, body: str) -> str:
         raise SendError("Envio real pelo WhatsApp ainda não está habilitado nesta instalação.")
 
 

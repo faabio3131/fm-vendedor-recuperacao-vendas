@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from fm_seller.channels.whatsapp import upsert_conversation
 from fm_seller.db import Conn, Database
 from fm_seller.events import normalize as n
 from fm_seller.events.normalize import CheckoutEvent
@@ -387,6 +388,17 @@ def _process(
             "sent_at = CASE WHEN %s = 'sent' THEN %s ELSE NULL END WHERE id = %s",
             (status, detail, provider_id, status, now, step.id),
         )
+        if status == "sent":  # a conversa passa a mostrar o que foi enviado ao cliente
+            _, conv_id = upsert_conversation(conn, step.tenant_id, message.to_phone, "")
+            conn.execute(
+                "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, "
+                "status, provider_message_id) VALUES (%s, %s, 'out', 'recovery', %s, 'sent', %s) "
+                "ON CONFLICT DO NOTHING",
+                (step.tenant_id, conv_id, message.body, provider_id),
+            )
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
         _finish_if_done(conn, step.case_id, now)
     return outcome
 
