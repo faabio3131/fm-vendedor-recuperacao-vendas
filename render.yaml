@@ -48,6 +48,26 @@ services:
       - { key: FM_AI_API_KEY, sync: false }
       - { key: FM_WHATSAPP_LIVE, value: "false" }
 
+  # Verificação de alertas a cada 5 min (RASCUNHO, não validado no Render): sai com código 1 (aviso)
+  # ou 2 (crítico) e imprime o motivo. Ligue a notificação de falha de cron do Render a um e-mail.
+  - type: cron
+    name: fm-seller-ops-check
+    runtime: docker
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: apps/api
+    schedule: "*/5 * * * *"
+    dockerCommand: python -m fm_seller.cli ops-check
+    envVars:
+      - { key: FM_ENV, value: staging }
+      - { key: FM_COOKIE_SECURE, value: "true" }
+      - { key: FM_DATABASE_URL, sync: false }
+      - { key: FM_DATABASE_ADMIN_URL, sync: false }
+      - { key: FM_SECRETS_KEYS, sync: false }
+      - { key: FM_GOOGLE_CLIENT_ID, sync: false }
+      - { key: FM_WEB_ORIGIN, sync: false }
+      - { key: FM_PUBLIC_BASE_URL, sync: false }
+      - { key: FM_WHATSAPP_LIVE, value: "false" }
+
   - type: web
     name: fm-seller-web
     runtime: docker

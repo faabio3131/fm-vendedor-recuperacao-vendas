@@ -13,19 +13,21 @@ from datetime import UTC, datetime, timedelta
 
 import psycopg
 
-from fm_seller.ai.model import build_ai_model
+from fm_seller.ai.model import AiModel, build_ai_model
 from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.outbox import flush_outbox
-from fm_seller.channels.templates_gateway import build_template_gateway
+from fm_seller.channels.templates_gateway import TemplateGateway, build_template_gateway
 from fm_seller.config import Settings, get_settings
 from fm_seller.db import Database
 from fm_seller.events.ingest import reprocess_failed
 from fm_seller.logging_setup import setup_logging
 from fm_seller.migrate import apply_migrations
+from fm_seller.ops.health import check as ops_check
+from fm_seller.ops.health import exit_code, pending_migrations
 from fm_seller.provisioning.platform import reprocess_platform
 from fm_seller.recovery.cold import detect_cold_conversations
 from fm_seller.recovery.engine import handle_event, run_due_steps
-from fm_seller.recovery.senders import build_sender
+from fm_seller.recovery.senders import MessageSender, build_sender
 from fm_seller.recovery.template_sync import sync_all
 from fm_seller.security.crypto import SecretBox
 
@@ -68,6 +70,60 @@ def map_product(admin_url: str, provider: str, product_id: str, plan: str) -> No
         conn.commit()
 
 
+def _heartbeat_error(db: Database, error: str) -> None:
+    """Registra o erro sem mexer em quando o último ciclo terminou bem."""
+    with db.tx(system=True) as conn:
+        conn.execute(
+            "INSERT INTO worker_heartbeat (worker, last_cycle_at, cycles, last_error) "
+            "VALUES ('recovery', 'epoch'::timestamptz, 0, %s) ON CONFLICT (worker) "
+            "DO UPDATE SET last_error = EXCLUDED.last_error",
+            (error,),
+        )
+
+
+def _heartbeat(db: Database, error: str | None) -> None:
+    """Registra que o worker concluiu um ciclo com sucesso, para o alerta de worker parado."""
+    with db.tx(system=True) as conn:
+        conn.execute(
+            "INSERT INTO worker_heartbeat (worker, last_cycle_at, cycles, last_error) "
+            "VALUES ('recovery', now(), 1, %s) ON CONFLICT (worker) DO UPDATE SET "
+            "last_cycle_at = now(), cycles = worker_heartbeat.cycles + 1, "
+            "last_error = EXCLUDED.last_error",
+            (error,),
+        )
+
+
+def _cycle(
+    db: Database,
+    box: SecretBox,
+    sender: MessageSender,
+    model: AiModel,
+    gateway: TemplateGateway,
+    log: logging.Logger,
+) -> None:
+    redone = reprocess_failed(db, box, handle_event)
+    redone_platform = reprocess_platform(db, box)
+    cold = detect_cold_conversations(db)
+    stats = run_due_steps(db, box, sender)
+    seller = run_ai_replies(db, model)
+    outbox = flush_outbox(db, box, sender)
+    templates = sync_all(db, box, gateway)
+    log.info(
+        "ciclo",
+        extra={
+            "ctx": {
+                "reprocessados": redone,
+                "compras": redone_platform,
+                "conversas_frias": cold,
+                "recuperacao": stats.__dict__,
+                "vendedor": seller.__dict__,
+                "saida": outbox.__dict__,
+                "templates": templates.__dict__,
+            }
+        },
+    )
+
+
 def run_worker(interval: int, once: bool) -> None:
     """Repassa eventos que falharam e envia os passos de recuperação devidos."""
     settings = get_settings()
@@ -81,32 +137,41 @@ def run_worker(interval: int, once: bool) -> None:
     gateway = build_template_gateway(settings)
     try:
         while True:
-            redone = reprocess_failed(db, box, handle_event)
-            redone_platform = reprocess_platform(db, box)
-            cold = detect_cold_conversations(db)
-            stats = run_due_steps(db, box, sender)
-            seller = run_ai_replies(db, model)
-            outbox = flush_outbox(db, box, sender)
-            templates = sync_all(db, box, gateway)
-            log.info(
-                "ciclo",
-                extra={
-                    "ctx": {
-                        "reprocessados": redone,
-                        "compras": redone_platform,
-                        "conversas_frias": cold,
-                        "recuperacao": stats.__dict__,
-                        "vendedor": seller.__dict__,
-                        "saida": outbox.__dict__,
-                        "templates": templates.__dict__,
-                    }
-                },
-            )
+            try:
+                _cycle(db, box, sender, model, gateway, log)
+            except Exception as exc:
+                # Um ciclo com erro não derruba o worker; o erro fica no log e no batimento
+                # (só o tipo: o detalhe pode ter dado de cliente). O alerta de worker parado
+                # dispara se os ciclos continuarem falhando.
+                log.exception("ciclo do worker falhou")
+                _heartbeat_error(db, type(exc).__name__)
+                if once:
+                    raise
+            else:
+                _heartbeat(db, None)
             if once:
                 return
             time.sleep(interval)
     finally:
         db.close()
+
+
+def ops_check_command(settings: Settings, *, require_worker: bool) -> int:
+    """Imprime os achados operacionais; agende a cada poucos minutos e alerte pelo código."""
+    db = Database(settings.database_url)
+    db.open()
+    try:
+        findings = ops_check(db, build_sender(settings), require_worker=require_worker)
+    finally:
+        db.close()
+    pending = pending_migrations(settings.database_admin_url)
+    for f in findings:
+        print(f"[{f.level.upper()}] {f.code}: {f.message}")
+    if pending:
+        print("[CRITICAL] migrations_pendentes:", ", ".join(pending))
+    if not findings and not pending:
+        print("OK: nada a reportar.")
+    return 2 if pending else exit_code(findings)
 
 
 def ai_check(settings: Settings) -> int:
@@ -176,6 +241,11 @@ def main(argv: list[str] | None = None) -> int:
     wk.add_argument("--interval", type=int, default=30, help="segundos entre ciclos")
     wk.add_argument("--once", action="store_true", help="roda um ciclo e sai")
     sub.add_parser("ai-check", help="Testa a chave e o modelo de IA com uma chamada real")
+    oc = sub.add_parser(
+        "ops-check",
+        help="Verifica worker, filas e sincronização; sai com 0 (ok), 1 (aviso), 2 (crítico)",
+    )
+    oc.add_argument("--no-worker", action="store_true", help="não exige batimento do worker")
     args = parser.parse_args(argv)
 
     settings = get_settings()
@@ -194,6 +264,8 @@ def main(argv: list[str] | None = None) -> int:
         run_worker(args.interval, args.once)
     elif args.cmd == "ai-check":
         return ai_check(settings)
+    elif args.cmd == "ops-check":
+        return ops_check_command(settings, require_worker=not args.no_worker)
     return 0
 
 
