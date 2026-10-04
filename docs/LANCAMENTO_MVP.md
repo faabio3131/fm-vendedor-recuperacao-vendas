@@ -22,7 +22,7 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 | # | Decisão | Sugestão | Estado |
 |---|---|---|---|
 | D1 | Nome comercial, domínio e marca | **AtendeVendeIA** (`atendevendeia.com.br`) | NOME DECIDIDO em 03/10/2026; registro do domínio, consulta de marca e perfis sociais pendentes (ação do Diretor) |
-| D2 | Preços e limites por plano (pesquisa de mercado) | Plano de entrada: **R$ 97,90/mês no anual** e **R$ 149/mês no mensal** (Diretor, 03/10/2026). Demais planos e limites de respostas de IA: ver seção 2.1 | PARCIAL: preço de entrada definido; planos acima e limites PENDENTES |
+| D2 | Preços e limites por plano (pesquisa de mercado) | Plano de entrada: **R$ 97,90/mês no anual** e **R$ 149,90/mês no mensal** (Diretor, 03/10/2026). Demais planos e limites de respostas de IA: ver seção 2.1 | PARCIAL: preço de entrada definido; planos acima e limites PENDENTES |
 | D3 | Quem paga as mensagens da Meta | O cliente, na própria conta Meta, controlando o próprio gasto | **DECIDIDO** em 03/10/2026 |
 | D4 | Conexão do WhatsApp sem Tech Provider e sem CNPJ (cliente com CPF) | Conexão simples para o cliente; caminho depende do teste real (seção 2.2) | PENDENTE |
 | D5 | Garantia e reembolso | Seguir a regra de cada plataforma (confirmar) | PENDENTE |
@@ -45,7 +45,7 @@ Concorrentes olhados nos sites deles; preços mudam, reconferir antes de publica
 - O padrão é limitar por **resposta de IA por mês**, igual ao `plans.limits` que já existe.
 - Faltam: planos acima do de entrada, e o limite de respostas por plano. Dependem do custo real por
   resposta do Gemini (teste 1 da seção 4). Os valores no código seguem **provisórios**.
-- Leitura adotada: R$ 97,90 é o valor mensal cobrado no plano anual; o plano mensal é R$ 149.
+- Leitura adotada: R$ 97,90 é o valor mensal cobrado no plano anual; o plano mensal é R$ 149,90 (confirmado pelo Diretor).
 
 ### 2.2 D3 e D4: custo da Meta e conexão
 
