@@ -27,7 +27,7 @@ Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA),
 | WhatsApp Cloud API real: envio de template/texto, envio de templates para aprovação, sincronização de status, teste real da conexão | Feito e testado contra **servidor falso** (formato da documentação da Meta); **desligado por padrão; falta validar com conta real** |
 | Messenger/Instagram, cobrança própria, anúncios | **Não feito.** Próximos blocos |
 
-Contas e configurações externas ainda pendentes: ver `docs/PENDENCIAS_EXTERNAS.md`. Roteiro e critérios de lançamento: `docs/LANCAMENTO_MVP.md`. Encaixe futuro com o Core: `docs/adr/0002-encaixe-com-o-core-v2.md`.
+Contas e configurações externas ainda pendentes: ver `docs/PENDENCIAS_EXTERNAS.md`. Roteiro e critérios de lançamento: `docs/LANCAMENTO_MVP.md`. Criar o staging no Render: `docs/STAGING_RENDER.md`. Encaixe futuro com o Core: `docs/adr/0002-encaixe-com-o-core-v2.md`.
 
 ## Estrutura
 
