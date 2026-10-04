@@ -14,6 +14,10 @@ test("login de desenvolvimento, conexão do WhatsApp e ausência de segredo na t
 
   const card = () => page.locator(".card", { hasText: "WhatsApp oficial" }).first();
   await card().getByRole("button", { name: /Configurar|Gerenciar/ }).click();
+  // guia de conexão: aberto sob demanda, sem rolagem horizontal
+  await card().getByText("Como conectar o WhatsApp (passo a passo)").click();
+  await expect(card().getByText("ID do número de telefone", { exact: false }).first()).toBeVisible();
+  await expect(card().getByRole("link", { name: /primeiros passos/ })).toHaveAttribute("href", /developers\.facebook\.com/);
   await card().getByLabel("ID do número de telefone").fill("1055550001");
   await card().getByLabel("ID da conta do WhatsApp Business").fill("2077770002");
   await card().getByLabel("Token de acesso").fill(SECRET);

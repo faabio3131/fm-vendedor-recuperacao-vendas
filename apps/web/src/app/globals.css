@@ -58,6 +58,10 @@ input, select { font: inherit; width: 100%; padding: 9px 10px; border-radius: 8p
 .alert { border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 8px; padding: 10px 12px; margin: 12px 0; background: var(--surface); }
 .alert.bad { border-left-color: var(--bad); }
 .alert.ok { border-left-color: var(--ok); }
+.guide { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 12px 0; background: var(--surface); }
+.guide summary { cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.guide ol { padding-left: 20px; margin: 8px 0; }
+.guide li { margin-bottom: 8px; }
 textarea { font: inherit; width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-height: 90px; resize: vertical; }
 .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; }
 .check input { width: 20px; min-height: 20px; margin-top: 3px; flex: none; }
