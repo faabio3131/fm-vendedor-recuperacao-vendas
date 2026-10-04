@@ -63,6 +63,18 @@ Falha do modelo (rede, cota, bloqueio, formato inválido) passa a conversa para 
 (`erro_do_modelo`) e avisa o cliente; não há nova tentativa infinita. O corpo das conversas e a chave
 não vão para o log; só modelo, tempo e contagem de tokens.
 
+## Limites e custo
+
+- **IA por plano:** `plans.limits` (JSON, dado editável) tem `ai_replies_per_month`; ausente = sem limite. Os
+  valores atuais (1000) são **provisórios**, decisão comercial do Fábio. Ao atingir o limite, novas conversas
+  vão para uma pessoa (`limite_do_plano`); o painel (Vendedor IA) mostra o uso e avisa a partir de 80%.
+  Só chamadas bem-sucedidas contam; falhas ficam registradas à parte. Mês no fuso do cliente. A tabela
+  `ai_usage` guarda só contagens e tokens, nunca texto de conversa. Para mudar um plano:
+  `UPDATE plans SET limits = '{"ai_replies_per_month": 3000}' WHERE key = 'fase-1';`
+- **Contatos novos por dia no número:** a Meta limita quantos contatos novos o número pode abordar em 24 h
+  (começa em 250). O cliente ajusta em Recuperação → Ajustes (padrão 200). Passos além do limite são adiados
+  para a manhã seguinte (`limite_do_numero`); quem já foi contatado no dia não conta de novo.
+
 ## Worker de recuperação
 
 `python -m fm_seller.cli worker [--interval 30] [--once]` envia os passos devidos e reprocessa eventos que

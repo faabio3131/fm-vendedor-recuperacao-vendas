@@ -46,6 +46,12 @@ falha de tratamento deixa o evento `failed` para reprocesso. O worker usa o modo
 MessageSender.send_text`. O vendedor responde numa transação que também marca a mensagem como tratada, e a
 saída segue a regra de no máximo uma vez. O modelo recebe só persona, ofertas e histórico; nunca credenciais.
 
+## Limites (Bloco 6)
+
+Limite de uso da IA é dado do plano (`plans.limits`), checado antes de cada chamada ao modelo; uso diário
+agregado em `ai_usage`. O limite de contatos novos por número é por cliente (`tenant_settings`) e é
+reconferido na hora do envio, junto das demais travas da recuperação.
+
 ## Modelo de IA (Bloco 5)
 
 `ai/gemini.py` implementa `AiModel` com saída JSON estruturada. O prompt de sistema traz regras fixas, as

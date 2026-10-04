@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
+from fm_seller.ai import usage
 from fm_seller.channels.outbox import WINDOW
 from fm_seller.channels.whatsapp import enqueue_text
 from fm_seller.db import Database
@@ -150,6 +151,12 @@ class SellerService:
             "active_offers": offers["c"],
             "ai_available": self._ai_available,
         }
+
+    def usage(self, p: Principal) -> dict[str, Any]:
+        self._guard(p)
+        with self._tx(p) as conn:
+            row = conn.execute("SELECT timezone FROM tenant_settings").fetchone()
+            return usage.summary(conn, p.tenant_id, row["timezone"] if row else "America/Sao_Paulo")
 
     def put_settings(self, p: Principal, ai_enabled: bool, ai_persona: str) -> dict[str, Any]:
         self._guard(p, edit=True)

@@ -66,6 +66,8 @@ test("recuperação: ajustes exigem consentimento, template e sem rolagem horizo
   await expect(page.getByText("Ajustes salvos.")).toBeVisible();
   await expect(enable).toBeEnabled();
 
+  await expect(page.getByLabel(/Contatos novos por dia/)).toHaveValue("200");
+
   // template: salvar o texto não o aprova sozinho
   const tpl = page.locator(".card", { hasText: "carrinho_1" }).first();
   await tpl.getByLabel("Texto").fill(`Oi, {nome}! Teste ${Date.now()} {link}`);
@@ -89,6 +91,7 @@ test("vendedor IA: oferta com link https, ajustes e caixa de conversas sem rolag
   await page.getByRole("button", { name: "Entrar (simulado)" }).click();
   await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Vendedor IA" }).click();
   await expect(page.getByRole("heading", { name: "Vendedor IA" })).toBeVisible();
+  await expect(page.getByLabel("Uso da IA no mês")).toContainText("Respostas da IA neste mês");
 
   const name = `Curso E2E ${Date.now()}`;
   await page.getByLabel("Nome", { exact: true }).fill(name);

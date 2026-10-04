@@ -72,6 +72,11 @@ def get_settings(s: Svc, p: Who) -> dict[str, Any]:
     return s.get_settings(p)
 
 
+@router.get("/seller/usage")
+def usage(s: Svc, p: Who) -> dict[str, Any]:
+    return s.usage(p)
+
+
 @router.put("/seller/settings")
 def put_settings(body: SettingsIn, s: Svc, p: Who) -> dict[str, Any]:
     return s.put_settings(p, body.ai_enabled, body.ai_persona)

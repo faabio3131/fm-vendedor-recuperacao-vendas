@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from dataclasses import replace
 from typing import Any
 
 import httpx
@@ -55,6 +56,10 @@ RESPONSE_SCHEMA: dict[str, Any] = {
     },
     "required": ["text", "handoff"],
 }
+
+
+def _count(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
 class AiModelError(RuntimeError):
@@ -174,7 +179,12 @@ class GeminiModel:
                 }
             },
         )
-        return parse_reply(data)
+        reply = parse_reply(data)
+        return replace(
+            reply,
+            tokens_in=_count(usage.get("promptTokenCount")),
+            tokens_out=_count(usage.get("candidatesTokenCount")),
+        )
 
     def _post(self, body: dict[str, Any]) -> dict[str, Any]:
         last = "erro desconhecido"

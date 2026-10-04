@@ -50,6 +50,7 @@ class TenantSettings:
     quiet_end: int = 8
     daily_cap: int = 1
     max_contacts_per_case: int = 4
+    number_daily_limit: int = 200
     recovery_enabled: bool = False
     consent_declared_at: datetime | None = None
 
@@ -61,7 +62,8 @@ class TenantSettings:
 def load_settings(conn: Conn, tenant_id: uuid.UUID) -> TenantSettings:
     row = conn.execute(
         "SELECT timezone, quiet_start, quiet_end, daily_cap, max_contacts_per_case, "
-        "recovery_enabled, consent_declared_at FROM tenant_settings WHERE tenant_id = %s",
+        "number_daily_limit, recovery_enabled, consent_declared_at "
+        "FROM tenant_settings WHERE tenant_id = %s",
         (tenant_id,),
     ).fetchone()
     if row is None:
@@ -72,6 +74,7 @@ def load_settings(conn: Conn, tenant_id: uuid.UUID) -> TenantSettings:
         quiet_end=row["quiet_end"],
         daily_cap=row["daily_cap"],
         max_contacts_per_case=row["max_contacts_per_case"],
+        number_daily_limit=row["number_daily_limit"],
         recovery_enabled=row["recovery_enabled"],
         consent_declared_at=row["consent_declared_at"],
     )
@@ -479,6 +482,18 @@ def _check(conn: Conn, box: SecretBox, step: _Step, now: datetime) -> _Decision 
     if today["c"] >= settings.daily_cap:
         at = next_local_day_open(now, tz, settings.quiet_end)
         return ("rescheduled", "scheduled", "limite_diario", at)
+
+    # A Meta limita os contatos novos por número em 24 h: quem já falou hoje não conta de novo.
+    reach = conn.execute(
+        "SELECT count(DISTINCT c.contact_id) AS n, coalesce(bool_or(c.contact_id = %s), false) "
+        "AS mine FROM recovery_steps s JOIN recovery_cases c ON c.id = s.case_id "
+        "WHERE c.tenant_id = %s AND s.status = 'sent' AND s.sent_at >= %s",
+        (ctx["contact_id"], step.tenant_id, local_day_start(now, tz)),
+    ).fetchone()
+    assert reach is not None
+    if reach["n"] >= settings.number_daily_limit and not reach["mine"]:
+        at = next_local_day_open(now, tz, settings.quiet_end)
+        return ("rescheduled", "scheduled", "limite_do_numero", at)
 
     tpl = conn.execute(
         "SELECT body, meta_status FROM message_templates WHERE tenant_id = %s AND key = %s",
