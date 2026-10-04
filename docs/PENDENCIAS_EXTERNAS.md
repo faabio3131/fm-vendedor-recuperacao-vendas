@@ -44,7 +44,7 @@ de conexões de cada cliente.
 
 ## Decisões de produto abertas
 
-- Janela de atribuição de venda recuperada (hoje 7 dias).
+- Janela de atribuição de venda recuperada: decidida em 5 dias (D6, 04/10/2026).
 - Limites e preços por plano (valores atuais de `plans.limits`, 1000 respostas de IA por mês, são **provisórios**; custo real por resposta só se sabe após o `ai-check`).
 - Sequências e textos padrão da recuperação.
 - Quando buscar Tech Provider (exige CNPJ).

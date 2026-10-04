@@ -229,6 +229,20 @@ def test_late_purchase_after_sequence_end_still_counts_within_window(ctx: Ctx) -
     ctx.handle(ev(kind=n.PURCHASE_APPROVED, ref="pay-5", product="Curso"), now=NOW)
 
 
+def test_attribution_window_is_five_days_after_the_sequence_ends(ctx: Ctx) -> None:
+    ctx.handle(ev())
+    for days in (0, 1, 3):
+        ctx.run(NOW + timedelta(days=days, minutes=31))
+    closed = ctx.case("r1")["closed_at"]
+    assert ctx.case("r1")["status"] == "exhausted"
+    # Um pouco depois de 5 dias: fora da janela, não é venda recuperada.
+    ctx.handle(ev(kind=n.PURCHASE_APPROVED, ref="pay-6"), now=closed + timedelta(days=5, hours=1))
+    assert ctx.case("r1")["status"] == "exhausted"
+    # Um pouco antes de 5 dias: dentro da janela.
+    ctx.handle(ev(kind=n.PURCHASE_APPROVED, ref="pay-7"), now=closed + timedelta(days=4, hours=23))
+    assert ctx.case("r1")["status"] == "recovered"
+
+
 def test_template_not_approved_skips_step(ctx: Ctx) -> None:
     ctx.env.sql(
         "UPDATE message_templates SET meta_status = 'submitted' "
