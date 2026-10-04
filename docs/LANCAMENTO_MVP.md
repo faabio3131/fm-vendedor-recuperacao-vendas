@@ -27,7 +27,7 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 | D4 | Conexão do WhatsApp sem Tech Provider e sem CNPJ (cliente com CPF) | Conexão simples para o cliente; caminho depende do teste real (seção 2.2) | PENDENTE |
 | D5 | Garantia e reembolso | Segue a regra de cada plataforma onde o produto for vendido (Cakto e Hotmart); sem regra própria no código | **DECIDIDO** em 04/10/2026; o texto na política de uso e nos termos fica para depois (P8) |
 | D6 | Janela de atribuição da venda recuperada | Hoje: 7 dias após a última mensagem. Pesquisa (seção 2.3) sugere reduzir para 5 | PESQUISADO; aguarda decisão do Diretor |
-| D7 | Sequências e textos padrão | Tempos atuais já batem com o mercado; textos: ver seção 2.3 | PESQUISADO; aguarda decisão do Diretor |
+| D7 | Sequências e textos padrão | Tempos mantidos (batem com o mercado); textos ajustados para não começar nem terminar com variável (seção 2.3) | **DECIDIDO** em 04/10/2026 e aplicado; a primeira reprovação real da Meta ainda pode pedir novo ajuste |
 | D8 | Vendedor IA apresentado como "básico" no MVP | Lançar a versão básica (MVP) primeiro; a V2 vem depois com o Core | **DECIDIDO** em 04/10/2026 |
 | D9 | Hospedagem (rascunho: Render) | Render como rascunho (decisão do Diretor, 04/10/2026); falta criar o staging e validar o `render.yaml` | **DECIDIDO como rascunho**; staging PENDENTE |
 
@@ -77,8 +77,8 @@ parar assim que o cliente responde ou compra, e depois da terceira mensagem sem 
 (carrinho: 30 min, 24 h e 3 dias; Pix: 15 min e 3 h; boleto: 1 e 3 dias) já seguem isso. Os números de
 recuperação que os blogs citam (15 a 35%) são de marketing deles, não medidos: não usar em texto de venda.
 Pontos a tratar nos textos: (a) vários terminam em `{link}`; há relatos de que a Meta rejeita variável no
-começo ou no fim do corpo (não confirmado na documentação). Seguro e barato: acrescentar uma frase depois do
-link. (b) a Meta não aprova texto promocional em categoria utilidade: cupom e desconto vão em MARKETING.
+começo ou no fim do corpo (não confirmado na documentação). Decisão do Diretor: ajustar. Feito: nenhum texto padrão começa ou termina com variável (teste
+`test_default_templates_*`). (b) a Meta não aprova texto promocional em categoria utilidade: cupom e desconto vão em MARKETING.
 
 ## 3. Contas e ações que destravam os testes
 

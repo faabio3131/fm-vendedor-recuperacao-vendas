@@ -43,30 +43,37 @@ DEFAULT_SEQUENCES: dict[str, list[dict[str, Any]]] = {
     ],
 }
 
+# Nenhum texto começa nem termina com variável: há relatos de que a Meta reprova assim (não
+# confirmado na documentação). O teste `test_default_templates_*` garante isso.
 DEFAULT_TEMPLATES: dict[str, str] = {
     "carrinho_1": "Oi, {nome}! Vi que você começou a comprar {produto} e não finalizou. "
-    "Posso ajudar com alguma dúvida? Se quiser retomar: {link}",
-    "carrinho_2": "{nome}, sua compra de {produto} ainda está esperando por você. "
-    "Se ficou alguma dúvida, é só responder esta mensagem. Link: {link}",
-    "carrinho_3": "Última mensagem sobre {produto}, {nome}. "
-    "Se ainda fizer sentido para você: {link}",
-    "pix_1": "Oi, {nome}! Seu PIX de {produto} ({valor}) foi gerado e ainda não "
-    "foi pago. Se precisar, o link é: {link}",
-    "pix_2": "{nome}, o PIX de {produto} ainda está em aberto. Posso ajudar com algo? {link}",
-    "boleto_1": "Oi, {nome}! O boleto de {produto} ({valor}) está em aberto. Link: {link}",
-    "boleto_2": "{nome}, lembrete: o boleto de {produto} ainda não foi pago. {link}",
+    "Se quiser retomar, o link é {link}. Qualquer dúvida, é só responder esta mensagem.",
+    "carrinho_2": "Oi, {nome}! Sua compra de {produto} ainda está esperando por você. "
+    "Link para finalizar: {link}. Se ficou alguma dúvida, é só responder esta mensagem.",
+    "carrinho_3": "Oi, {nome}! Última mensagem sobre {produto}. "
+    "Se ainda fizer sentido para você, o link é {link}. Qualquer dúvida, estou por aqui.",
+    "pix_1": "Oi, {nome}! Seu PIX de {produto} ({valor}) foi gerado e ainda não foi pago. "
+    "Se precisar, o link é {link}. Qualquer dúvida, é só responder esta mensagem.",
+    "pix_2": "Oi, {nome}! O PIX de {produto} ainda está em aberto. Link: {link}. "
+    "Posso ajudar com algo? É só responder esta mensagem.",
+    "boleto_1": "Oi, {nome}! O boleto de {produto} ({valor}) está em aberto. Link: {link}. "
+    "Qualquer dúvida, é só responder esta mensagem.",
+    "boleto_2": "Oi, {nome}! Lembrete: o boleto de {produto} ainda não foi pago. Link: {link}. "
+    "Se precisar de ajuda, é só responder esta mensagem.",
     "recusada_1": "Oi, {nome}! O pagamento de {produto} não foi aprovado. "
-    "Quer tentar de novo ou usar outra forma de pagamento? {link}",
-    "recusada_2": "{nome}, ainda dá para concluir a compra de {produto}. Posso ajudar? {link}",
+    "Quer tentar de novo ou usar outra forma de pagamento? O link é {link}. "
+    "Estou por aqui para ajudar.",
+    "recusada_2": "Oi, {nome}! Ainda dá para concluir a compra de {produto}. Link: {link}. "
+    "Posso ajudar? É só responder esta mensagem.",
     "orcamento_1": "Oi, {nome}! Passando para saber se você conseguiu avaliar o orçamento de "
-    "{produto} ({valor}). Posso ajudar com alguma dúvida? {link}",
-    "orcamento_2": "{nome}, o orçamento de {produto} ainda está disponível. "
-    "Se quiser ajustar algo, é só responder esta mensagem. {link}",
-    "orcamento_3": "Última mensagem sobre o orçamento de {produto}, {nome}. "
-    "Se ainda fizer sentido para você, estou por aqui. {link}",
+    "{produto} ({valor}). O link é {link}. Posso ajudar com alguma dúvida?",
+    "orcamento_2": "Oi, {nome}! O orçamento de {produto} ainda está disponível. Link: {link}. "
+    "Se quiser ajustar algo, é só responder esta mensagem.",
+    "orcamento_3": "Oi, {nome}! Última mensagem sobre o orçamento de {produto}. "
+    "Se ainda fizer sentido para você, o link é {link}. Estou por aqui.",
     "conversa_1": "Oi, {nome}! Ficou alguma dúvida sobre o que conversamos? "
     "Se quiser, continuamos de onde paramos.",
-    "conversa_2": "{nome}, sigo à disposição se ainda tiver interesse. "
+    "conversa_2": "Oi, {nome}! Sigo à disposição se ainda tiver interesse. "
     "É só responder esta mensagem.",
 }
 
