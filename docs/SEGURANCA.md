@@ -68,10 +68,18 @@ tempo limite configurado.
   por Google, então não há senha nem "esqueci a senha" para consultar quem existe.
 - Toda escrita exige `Origin` igual ao do painel (proteção contra CSRF), exceto webhooks, que se autenticam por segredo.
 
+## Administração da plataforma
+
+`/v1/admin/*` é a única rota de pessoa que lê vários clientes (modo `system`). Cercas: papel `platform_admins` só por convite da linha de
+comando, sessão e papel validados antes de qualquer consulta, colunas escolhidas à mão (nunca conversa, contato ou credencial),
+ações auditadas no cliente afetado, escrita sujeita à guarda de origem e ao limite sensível. Ver `docs/adr/0003-administracao-da-plataforma.md`.
+**Não provado:** revisão independente das consultas do administrador (um erro ali seria vazamento entre clientes).
+
 ## SSRF, injeção e log
 
-- **SSRF:** nenhuma URL escrita pelo cliente é buscada. Links de pagamento são só guardados e enviados. Só quatro módulos falam com
-  a rede (`ai/gemini.py`, `auth/google.py`, `channels/meta_api.py` e `ops/smoke.py`), cada um com endereço fixo ou da plataforma. Um
+- **SSRF:** nenhuma URL escrita pelo cliente é buscada. Links de pagamento são só guardados e enviados. Só cinco módulos falam com
+  a rede (`ai/gemini.py`, `auth/google.py`, `channels/meta_api.py`, `ops/smoke.py` e `ops/loadtest.py`), cada um com endereço fixo, da
+  plataforma ou passado pelo operador na linha de comando. Um
   teste trava isso: módulo novo que use HTTP falha até alguém revisar.
 - **Planilha (CSV):** texto que uma planilha leria como fórmula (`=`, `+`, `-`, `@`) é escapado na exportação (Bloco 13).
 - **SQL:** todo SQL usa parâmetros; as poucas consultas montadas à mão são texto fixo.

@@ -27,7 +27,7 @@ documentos listados abaixo) e continuar a partir do estado descrito aqui.
   13 (relatórios de recuperação), 14 (captura segura de eventos reais) e 15 (prontidão de subida). O prompt mestre
   `docs/PROMPT_MESTRE_BLOCOS_11_A_15.md` está concluído; cada bloco entrou no `main` pela sua PR com o CI verde.
 - Em andamento: `docs/PROMPT_MESTRE_BLOCOS_16_A_20.md` (16 primeiros passos, 17 qualidade do vendedor IA, 18 LGPD,
-  19 segurança, 20 operação da plataforma). Os Blocos 16 (primeiros passos), 17 (qualidade do vendedor IA), 18 (privacidade e LGPD) e 19 (segurança e limites de abuso) estão feitos; ver o próximo no prompt.
+  19 segurança, 20 operação da plataforma). Os Blocos 16 (primeiros passos), 17 (qualidade do vendedor IA), 18 (privacidade e LGPD) 19 (segurança e limites de abuso) e 20 (operação da plataforma) estão feitos: o prompt mestre dos Blocos 16 a 20 está concluído.
 - **GitHub Actions:** ficou bloqueado por cobrança da conta (04/10/2026) e foi **liberado** quando o repositório
   virou público; o CI (`api`, `web`, `e2e`) roda normalmente e é condição de qualquer merge.
 - Ainda **nada** foi validado com conta real (Render, Google, Meta, Gemini, Cakto, Hotmart).

@@ -158,6 +158,10 @@ exclusão sem apagar o que não deve, e o texto jurídico (P8). Go exige D11 dec
 sem aviso de cabeçalho no ambiente real, `FM_RATE_LIMIT_ENABLED=true` (o `preflight` barra em produção), IP real atrás do proxy conferido
 (`FM_TRUST_PROXY`), auditoria de dependências limpa e a decisão sobre teste de invasão registrada (`docs/SEGURANCA.md`).
 
+**Operação (Bloco 20):** a administração da plataforma, as métricas e a saúde existem e foram testadas com simulador. Para o go: um
+administrador criado e entrando com o Google no ambiente real, o `ops-check` agendado (`docs/OPERACAO.md`) com alerta que chegue a alguém,
+e o runbook de incidentes lido por quem vai operar.
+
 ## 6. Critérios de go / no-go
 
 **Go** somente se: testes 1 a 8 da seção 4 registrados · decisões D1–D6 tomadas · termos e privacidade

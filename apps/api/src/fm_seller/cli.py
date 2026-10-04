@@ -382,6 +382,59 @@ def ai_eval_command(settings: Settings, real: bool) -> int:
     return report.exit_code
 
 
+def platform_admin_command(settings: Settings, args: argparse.Namespace) -> int:
+    from fm_seller import platform_admin as pa
+
+    if args.cmd == "create-platform-admin":
+        try:
+            result = pa.invite_admin(settings.database_admin_url, args.email, args.days)
+        except ValueError as exc:
+            print("ERRO:", exc)
+            return 1
+        if result == "ja_existia":
+            print("Essa pessoa já tem conta: virou administradora da plataforma agora.")
+        else:
+            print(
+                f"Convite criado (vale {args.days} dias). A pessoa vira administradora no "
+                "primeiro login com esse e-mail do Google."
+            )
+        return 0
+    removed = pa.revoke_admin(settings.database_admin_url, args.email)
+    print("Acesso de administrador removido." if removed else "Essa pessoa não era administradora.")
+    return 0
+
+
+def metrics_command(settings: Settings) -> int:
+    """Números do sistema inteiro em JSON (contagens e idades, nunca conteúdo)."""
+    import json
+
+    from fm_seller import platform_admin as pa
+
+    db = Database(settings.database_url)
+    db.open()
+    try:
+        with db.tx(system=True) as conn:
+            print(json.dumps(pa.metrics(conn), indent=2, ensure_ascii=False))
+    finally:
+        db.close()
+    return 0
+
+
+def loadtest_command(args: argparse.Namespace) -> int:
+    from fm_seller.ops import loadtest
+
+    if not loadtest.is_local(args.api) and not args.remote:
+        print(
+            "ERRO: o teste de carga só roda contra endereço local. Para testar um servidor de "
+            "verdade, confirme com --remote (pode custar ou derrubar o que está no ar)."
+        )
+        return 2
+    report = loadtest.run(args.api, seconds=args.seconds, concurrency=args.concurrency)
+    for line in report.lines():
+        print(line)
+    return 1 if report.errors else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fm-seller")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -434,6 +487,24 @@ def main(argv: list[str] | None = None) -> int:
     wk = sub.add_parser("worker", help="Envia passos de recuperação devidos e reprocessa falhas")
     wk.add_argument("--interval", type=int, default=30, help="segundos entre ciclos")
     wk.add_argument("--once", action="store_true", help="roda um ciclo e sai")
+    cpa = sub.add_parser(
+        "create-platform-admin",
+        help="Dá acesso à administração da plataforma (convite para o e-mail do Google)",
+    )
+    cpa.add_argument("--email", required=True)
+    cpa.add_argument("--days", type=int, default=7, help="validade do convite")
+    rpa = sub.add_parser(
+        "revoke-platform-admin", help="Tira o acesso à administração da plataforma"
+    )
+    rpa.add_argument("--email", required=True)
+    sub.add_parser("metrics", help="Números do sistema inteiro em JSON (sem conteúdo de conversa)")
+    lt = sub.add_parser(
+        "loadtest", help="Teste de carga leve contra uma API local (números da máquina de teste)"
+    )
+    lt.add_argument("--api", required=True, help="endereço da API, ex.: http://localhost:8000")
+    lt.add_argument("--seconds", type=float, default=10)
+    lt.add_argument("--concurrency", type=int, default=10)
+    lt.add_argument("--remote", action="store_true", help="aceita endereço que não é local")
     sub.add_parser("ai-check", help="Testa a chave e o modelo de IA com uma chamada real")
     ae = sub.add_parser(
         "ai-eval",
@@ -487,6 +558,12 @@ def main(argv: list[str] | None = None) -> int:
         return capture_command(settings, args)
     elif args.cmd == "worker":
         run_worker(args.interval, args.once)
+    elif args.cmd in ("create-platform-admin", "revoke-platform-admin"):
+        return platform_admin_command(settings, args)
+    elif args.cmd == "metrics":
+        return metrics_command(settings)
+    elif args.cmd == "loadtest":
+        return loadtest_command(args)
     elif args.cmd == "ai-check":
         return ai_check(settings)
     elif args.cmd == "ai-eval":

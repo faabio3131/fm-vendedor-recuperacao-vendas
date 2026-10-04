@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import uuid
 from collections.abc import Awaitable, Callable, MutableMapping
 from typing import Any
 
@@ -23,6 +25,14 @@ FAILED_WEBHOOK = {400, 401, 403, 404}
 Scope = MutableMapping[str, Any]
 Receive = Callable[[], Awaitable[MutableMapping[str, Any]]]
 Send = Callable[[MutableMapping[str, Any]], Awaitable[None]]
+
+
+_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
+
+
+def request_id_for(header: str | None) -> str:
+    """O ID do cabeçalho só vale se for curto e simples (nada que forje linha de log)."""
+    return header if header and _REQUEST_ID.match(header) else uuid.uuid4().hex
 
 
 def security_headers(cfg: Settings) -> dict[str, str]:
@@ -57,7 +67,7 @@ def _account_key(request: Request, ip: str) -> str:
 def is_sensitive(request: Request) -> bool:
     """Exportação, apagamento, importação e planilha: pedido caro ou que mexe em dado pessoal."""
     path = request.url.path
-    if path.startswith("/v1/privacy"):
+    if path.startswith(("/v1/privacy", "/v1/admin")):
         return request.method in UNSAFE
     if path.endswith(".csv"):
         return True
@@ -181,6 +191,7 @@ class BodyLimitMiddleware:
         headers = [
             (b"content-type", b"application/json"),
             (b"content-length", str(len(body)).encode()),
+            (b"x-request-id", uuid.uuid4().hex.encode()),
         ]
         headers += [(k.lower().encode(), v.encode()) for k, v in security_headers(self.cfg).items()]
         await send({"type": "http.response.start", "status": 413, "headers": headers})
