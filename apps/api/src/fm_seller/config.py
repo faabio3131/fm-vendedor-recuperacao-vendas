@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     ai_api_key: SecretStr = SecretStr("")
     ai_model: str = "gemini-3.8-flash"
     ai_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    ai_thinking_level: Literal["low", "medium", "high"] = "low"
     ai_timeout_seconds: float = Field(default=20.0, ge=1, le=60)
 
     # Envio real pelo WhatsApp Cloud API. Desligado por padrão: só ligar depois de validar com uma

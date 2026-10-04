@@ -15,7 +15,7 @@ Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA),
 | Credenciais de clientes cifradas (AES-256-GCM, com rotação de chave) | Feito e testado |
 | Painel web (Next.js): login, visão geral, conexões | Feito; testado em celular, tablet e desktop |
 | Integrações reais (Meta, Cakto, Hotmart, IA) | Código de WhatsApp e Gemini feito contra servidor falso; **nada validado com conta real** |
-| Recebimento de eventos Cakto/Hotmart (segredo, dedupe, reprocesso) | Feito e testado com payloads **sintéticos**; formato real a confirmar |
+| Recebimento de eventos Cakto/Hotmart (segredo, dedupe, reprocesso) | Cakto: assinatura, dedupe e campos conforme a documentação oficial, testados com payloads de exemplo dela; Hotmart: **suposições** (documentação inacessível). Nada visto com evento real |
 | Motor de recuperação (carrinho, PIX, boleto, recusa), worker, opt-out, janela de silêncio, limite diário | Feito e testado; envio real pelo WhatsApp existe mas fica **desligado** (`FM_WHATSAPP_LIVE`); simulador em dev/teste |
 | Compra do próprio SaaS cria cliente, plano e convite | Feito e testado com payloads sintéticos |
 | Tela "Recuperação" (ajustes com consentimento, sequências, templates, bloqueios, casos) | Feito; testado em celular, tablet e desktop |

@@ -32,7 +32,7 @@ def purchase(
         "event": event,
         "secret": SECRET,
         "data": {
-            "id": f"o-{email}-{event}",
+            "id": f"o-{email}-{event}-{product}",  # pedido novo = id novo
             "customer": {"name": "Comprador", "email": email, "phone": "11999998888"},
             "product": {"id": product, "name": "F&M Vendedor"},
             "amount": 197,

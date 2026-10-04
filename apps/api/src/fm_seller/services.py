@@ -340,6 +340,29 @@ class ConnectionService:
             config = self._box.decrypt(
                 current["config_encrypted"], tenant_id=tenant, provider=provider.key
             )
+            if provider.group == "checkout":
+                # Cakto/Hotmart não têm como serem consultadas por nós: a prova é um evento
+                # válido chegando (ver events/ingest.py). O botão apenas informa esse estado e
+                # nunca apaga uma confirmação que já veio de um evento real.
+                if current["status"] == "connected" and current["last_verified_at"] is not None:
+                    message = f"Confirmada: já chegou evento válido da {provider.name}."
+                else:
+                    message = (
+                        f"Ainda não chegou nenhum evento válido da {provider.name}. Cadastre o "
+                        "endereço do webhook lá e envie o evento de teste: a conexão é "
+                        "confirmada quando ele chegar."
+                    )
+                audit(
+                    conn,
+                    tenant_id=p.tenant_id,
+                    actor=p.user_id,
+                    action="connection.tested",
+                    target=provider.key,
+                    detail={"ok": current["status"] == "connected", "by": "webhook"},
+                )
+                out = _public_connection(current, provider, self._settings.public_base_url)
+                out["message"] = message
+                return out
             result = self._tester.test(provider, {k: str(v) for k, v in config.items()})
             row = conn.execute(
                 "UPDATE connections SET status = %s, last_error = %s, "

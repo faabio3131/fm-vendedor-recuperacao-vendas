@@ -95,16 +95,6 @@ def test_wrong_or_missing_secret_is_401_and_nothing_is_stored(
     assert count[0][0] == 0
 
 
-def test_secret_accepted_via_bearer_header(wclient: TestClient, env: Env) -> None:
-    _, pid = _setup(wclient, env)
-    body = _cakto("e-4")
-    del body["secret"]
-    res = wclient.post(
-        f"/v1/webhooks/cakto/{pid}", json=body, headers={"Authorization": f"Bearer {SECRET}"}
-    )
-    assert res.status_code == 200
-
-
 def test_hotmart_hottok_header(wclient: TestClient, env: Env, rec: Recorder) -> None:
     _, pid = _setup(wclient, env, "hotmart")
     body = {

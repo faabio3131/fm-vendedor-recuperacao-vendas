@@ -189,6 +189,7 @@ def ai_check(settings: Settings) -> int:
         model=settings.ai_model,
         base_url=settings.ai_base_url,
         timeout=settings.ai_timeout_seconds,
+        thinking_level=settings.ai_thinking_level,
     )
     offer = OfferView("oferta-1", "Curso Exemplo", "Curso online de exemplo", "R$ 197,00")
     registry = {"oferta-1": ("Curso Exemplo", "R$ 197,00", "https://pay.example.test/x")}
@@ -211,7 +212,8 @@ def ai_check(settings: Settings) -> int:
         ms = round((time.monotonic() - started) * 1000)
         final = None if reply.handoff else render_reply(reply, registry)
         verdict = "passa para pessoa" if reply.handoff else ("aceita" if final else "RECUSADA")
-        print(f"[{name}] {ms} ms · {verdict}")
+        tokens = f"{reply.tokens_in} de entrada, {reply.tokens_out} de saída"
+        print(f"[{name}] {ms} ms · {verdict} · tokens: {tokens}")
         print(
             f"  texto bruto: {reply.text!r} · offer_id={reply.offer_id} · handoff={reply.handoff}"
         )

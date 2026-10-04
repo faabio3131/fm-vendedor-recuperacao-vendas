@@ -1,10 +1,11 @@
 """Normaliza eventos de checkout (Cakto, Hotmart) para um formato único.
 
-ATENÇÃO — formato a confirmar: os NOMES de evento da Cakto vêm da documentação oficial;
-os da Hotmart vêm de fonte de terceiros. Os CAMINHOS dos campos dentro do payload (cliente,
-produto, valor) são tentativas tolerantes (vários caminhos candidatos) e ainda não foram
-conferidos com um evento real.
-Antes de ir para produção, capture um evento real de cada plataforma e ajuste as listas abaixo.
+Estado de confirmação (ver docs/LANCAMENTO_MVP.md):
+- Cakto: nomes de evento e campos seguem a documentação oficial (docs.cakto.com.br, guia de
+  Webhooks, conferida em 04/10/2026). Ainda NÃO conferido com evento real da conta.
+- Hotmart: a documentação oficial não pôde ser lida (acesso recusado). Nomes de evento e
+  caminhos de campo são de fonte de terceiros e tentativas tolerantes: NÃO CONFIRMADO.
+  Antes de produção, capture um evento real e ajuste os caminhos da Hotmart abaixo.
 """
 
 from __future__ import annotations
@@ -153,16 +154,22 @@ def _build(
     )
 
 
+# Pedido (purchase_*, pix_gerado, boleto_gerado, subscription_*, refund, chargeback):
+# data.{id, customer{name,email,phone}, product{id,name}, offer{id,price}, amount, checkoutUrl}.
+# Carrinho abandonado tem outro formato (sem id, status ou amount): customerName/customerEmail/
+# customerCellphone, offer.price, checkoutUrl, createdAt.
 _CAKTO_PATHS: dict[str, tuple[str, ...]] = {
-    "email": ("data.customer.email", "data.buyer.email", "customer.email"),
-    "phone": ("data.customer.phone", "data.customer.cellphone", "data.customer.whatsapp"),
-    "name": ("data.customer.name", "data.buyer.name", "customer.name"),
-    "product_id": ("data.product.id", "data.offer.id", "data.product_id"),
-    "product_name": ("data.product.name", "data.offer.name", "data.productName"),
-    "ref": ("data.id", "data.refId", "data.order.id", "id"),
-    "amount": ("data.amount", "data.baseAmount", "data.offer.price", "data.product.price"),
-    "url": ("data.checkoutUrl", "data.checkout_url", "data.boleto.url", "data.boletoUrl"),
+    "email": ("data.customer.email", "data.customerEmail"),
+    "phone": ("data.customer.phone", "data.customerCellphone"),
+    "name": ("data.customer.name", "data.customerName"),
+    "product_id": ("data.product.id",),
+    "product_name": ("data.product.name",),
+    "ref": ("data.id",),
+    "amount": ("data.amount", "data.offer.price"),
+    "url": ("data.checkoutUrl",),
 }
+# No boleto, o link útil é o do próprio boleto; se faltar, vale o do checkout.
+_CAKTO_BOLETO_URL: tuple[str, ...] = ("data.boleto.boletoUrl", "data.checkoutUrl")
 
 _HOTMART_PATHS: dict[str, tuple[str, ...]] = {
     "email": ("data.buyer.email", "data.buyer.checkout_email"),
@@ -180,10 +187,47 @@ _HOTMART_PATHS: dict[str, tuple[str, ...]] = {
 }
 
 
+def cakto_order(payload: dict[str, Any]) -> dict[str, Any]:
+    """Devolve o payload com `data` como objeto.
+
+    No Webhook V2 da Cakto `data` é uma lista com todos os pedidos da mesma cobrança
+    (ex.: produto principal + order bump). Usamos o pedido principal (`offer_type == "main"`),
+    ou o primeiro se nenhum for marcado.
+    """
+    data = payload.get("data")
+    if not isinstance(data, list):
+        return payload
+    orders = [d for d in data if isinstance(d, dict)]
+    chosen = next((d for d in orders if d.get("offer_type") == "main"), None)
+    if chosen is None and orders:
+        chosen = orders[0]
+    return {**payload, "data": chosen or {}}
+
+
+def cakto_dedupe_ref(payload: dict[str, Any]) -> str:
+    """Referência estável do evento (doc oficial): `data.id`; sem ele (carrinho abandonado),
+    e-mail + oferta + `createdAt`. Vazio se não for possível montar."""
+    p = cakto_order(payload)
+    order_id = text(dig(p, "data.id"))
+    if order_id:
+        return order_id
+    email = text(dig(p, "data.customerEmail")).lower()
+    offer = text(dig(p, "data.offer.id"))
+    created = text(dig(p, "data.createdAt"))
+    if email and offer and created:
+        return f"{email}|{offer}|{created}"
+    return ""
+
+
 def normalize_cakto(payload: dict[str, Any]) -> CheckoutEvent | None:
     source = text(payload.get("event"))
     kind = CAKTO_EVENTS.get(source)
-    return None if kind is None else _build(kind, source, payload, _CAKTO_PATHS)
+    if kind is None:
+        return None
+    paths = _CAKTO_PATHS
+    if kind == BOLETO_PENDING:
+        paths = {**paths, "url": _CAKTO_BOLETO_URL}
+    return _build(kind, source, cakto_order(payload), paths)
 
 
 def normalize_hotmart(payload: dict[str, Any]) -> CheckoutEvent | None:

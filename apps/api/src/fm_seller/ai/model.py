@@ -94,6 +94,7 @@ def build_ai_model(settings: Settings) -> AiModel:
             model=settings.ai_model,
             base_url=settings.ai_base_url,
             timeout=settings.ai_timeout_seconds,
+            thinking_level=settings.ai_thinking_level,
         )
     if settings.env in ("dev", "test"):
         return SimulatedAiModel()
