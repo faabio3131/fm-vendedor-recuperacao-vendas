@@ -6,7 +6,7 @@ endereço e entrega são V2 (ADR-0002). Produto comercial da F&M Tecnologia, **W
 
 ## Estado
 
-Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo), 7 (WhatsApp real e templates da Meta), 8 (guia de conexão e checklist de lançamento) 9 (alertas, backup e restauração), 11 (Messenger e Instagram), 12 (ciclo de vida da assinatura), 13 (relatórios de recuperação), 14 (captura de eventos reais), 15 (prontidão de subida) e 16 (primeiros passos guiados) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
+Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo), 7 (WhatsApp real e templates da Meta), 8 (guia de conexão e checklist de lançamento) 9 (alertas, backup e restauração), 11 (Messenger e Instagram), 12 (ciclo de vida da assinatura), 13 (relatórios de recuperação), 14 (captura de eventos reais), 15 (prontidão de subida) e 16 (primeiros passos guiados) e 17 (qualidade do vendedor IA) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
 
 | Peça | Estado |
 |---|---|
@@ -31,6 +31,7 @@ Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA),
 | Captura segura de eventos reais da Cakto/Hotmart (desligada por padrão, cifrada, sem segredos, expira) e conferência campo a campo com o normalizador (CLI e tela) | Feito e testado com eventos **sintéticos**; **nenhum evento real foi capturado ainda**; Hotmart segue com suposições |
 | Prontidão de subida: `preflight` (configuração, chave, banco, papéis, RLS, migrations), `smoke` (ambiente no ar, sem login), ensaio de backup, subida, rollback e nova subida em Postgres local, blueprints do Render conferidos contra o código | Feito e testado **localmente**; **nada foi subido** (Render suspenso de propósito) e nada foi rodado em ambiente real |
 | Primeiros passos guiados: lista do que falta para atender e vender (WhatsApp testado, oferta, consentimento, mensagens aprovadas, tom de voz, plataforma de vendas), calculada do estado real; ligar a recuperação sem WhatsApp conectado, ou o vendedor IA sem oferta ativa, é barrado | Feito e testado com simulador; é regra do próprio sistema, não valida nada com conta real |
+| Qualidade do vendedor IA: 12 conversas sintéticas de avaliação (`ai-eval`), tela "Testar conversa" (simulação sem envio, sem gravar e sem contar no limite) e relatório de transferências por motivo | Feito e testado com **simulador** e com o adaptador do Gemini num servidor falso; **não avalia o modelo real** (isso exige a chave: `ai-eval --real`, chamadas pagas) |
 | Cobrança própria, anúncios | **Não feito** (fora do escopo atual) |
 
 Contas e configurações externas ainda pendentes: ver `docs/PENDENCIAS_EXTERNAS.md`. Roteiro e critérios de lançamento: `docs/LANCAMENTO_MVP.md`. Criar o staging no Render: `docs/STAGING_RENDER.md`. Encaixe futuro com o Core: `docs/adr/0002-encaixe-com-o-core-v2.md`.

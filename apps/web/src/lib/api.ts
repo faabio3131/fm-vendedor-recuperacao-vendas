@@ -298,3 +298,21 @@ export type ConversationDetail = {
   window_open: boolean;
   messages: ChatMessage[];
 };
+
+export type SandboxTurn = { role: "customer" | "assistant"; text: string };
+
+export type SandboxResult = {
+  engine: string;
+  outcome: "reply" | "handoff" | "silence";
+  reason: string | null;
+  reason_label: string | null;
+  text: string;
+  offer: string | null;
+  ai_enabled: boolean;
+};
+
+export type HandoffReport = {
+  days: number;
+  total: number;
+  items: { reason: string; label: string; tip: string; count: number }[];
+};

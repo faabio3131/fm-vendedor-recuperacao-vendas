@@ -106,6 +106,12 @@ Falha do modelo (rede, cota, bloqueio, formato inválido) passa a conversa para 
 (`erro_do_modelo`) e avisa o cliente; não há nova tentativa infinita. O corpo das conversas e a chave
 não vão para o log; só modelo, tempo e contagem de tokens.
 
+**Avaliar o vendedor antes de ligar:** `python -m fm_seller.cli ai-eval` roda 12 conversas sintéticas contra o simulador, sem
+custo (0 tudo certo, 1 avisos, 2 falha de segurança: **não ligue a IA**). `ai-eval --real` faz o mesmo contra o Gemini com a
+chave real (**chamadas pagas**; rode junto do `ai-check`). O simulador não prova o comportamento do modelo real. O cliente
+pode conversar com o vendedor em **Vendedor IA > Testar conversa** (simulação, não envia nada) e ver, em **Por que passou
+para uma pessoa**, os motivos das últimas transferências.
+
 ## WhatsApp real (Meta)
 
 Desligado por padrão. `FM_WHATSAPP_LIVE=true` (API **e** worker) troca o simulador pelo envio real, o teste

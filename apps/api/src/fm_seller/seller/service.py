@@ -9,15 +9,46 @@ from urllib.parse import urlparse
 
 from fm_seller import onboarding
 from fm_seller.ai import usage
+from fm_seller.ai.model import AiContext, OfferView, SimulatedAiModel
+from fm_seller.ai.seller import asks_for_human, propose
 from fm_seller.channels.outbound import enqueue_text
 from fm_seller.channels.outbox import WINDOW
 from fm_seller.db import Database
 from fm_seller.errors import AppError, bad_request, forbidden, not_found
+from fm_seller.money import format_brl
+from fm_seller.recovery.optout import is_opt_out
 from fm_seller.recovery.service import mask_phone
 from fm_seller.services import EDIT_ROLES, Principal, audit, tenant_features
 
 FEATURE = "ai.seller"
 STATUSES = ("bot", "human", "closed")
+SANDBOX_TURNS = 12
+SANDBOX_CHARS = 500
+
+# Motivo de transferência -> (como mostrar, o que o cliente pode fazer). Motivo que não está aqui
+# (a IA pode escrever o próprio) vira "outro": o texto livre do modelo nunca é mostrado.
+HANDOFF_REASONS: dict[str, tuple[str, str]] = {
+    "pediu_atendente": (
+        "Cliente pediu uma pessoa",
+        "Normal. Responda rápido para não perder a venda.",
+    ),
+    "sem_ofertas": ("Sem oferta ativa cadastrada", "Cadastre uma oferta ativa com preço e link."),
+    "limite_do_plano": ("Limite mensal de respostas da IA", "Veja o uso em Meu plano."),
+    "erro_do_modelo": (
+        "A IA não conseguiu responder",
+        "Costuma ser passageiro; se repetir, fale com o suporte.",
+    ),
+    "resposta_invalida": (
+        "Resposta da IA recusada pelas regras",
+        "O sistema barrou preço ou link fora do cadastro. Confira as descrições das ofertas.",
+    ),
+    "ia_desligada": ("Vendedor IA desligado", "Ligue em Vendedor IA > Ajustes."),
+    "ia_indisponivel": ("Modelo de IA indisponível", "Fale com o suporte."),
+    "limite_de_respostas": ("Muitas respostas seguidas", "Uma pessoa deve assumir a conversa."),
+    "assinatura_inativa": ("Assinatura inativa", "Regularize em Meu plano."),
+    "modelo_pediu": ("A IA pediu ajuda de uma pessoa", "Leia a conversa e continue de onde parou."),
+}
+OTHER = ("Outro motivo", "")
 
 
 def _valid_url(url: str) -> bool:
@@ -191,6 +222,92 @@ class SellerService:
                 detail={"ai_enabled": ai_enabled},
             )
         return self.get_settings(p)
+
+    # ---- testar conversa (nada é gravado nem enviado)
+    def sandbox(self, p: Principal, turns: list[tuple[str, str]]) -> dict[str, Any]:
+        """Mostra o que o vendedor faria com uma conversa de teste. Só o simulador responde: não
+        envia a ninguém, não grava, não conta no limite do plano e não chama modelo pago."""
+        self._guard(p)
+        if not turns or len(turns) > SANDBOX_TURNS:
+            raise bad_request("invalid_turns", f"Mande de 1 a {SANDBOX_TURNS} mensagens.")
+        for role, text in turns:
+            if role not in ("customer", "assistant") or not 1 <= len(text.strip()) <= SANDBOX_CHARS:
+                raise bad_request(
+                    "invalid_turns", f"Cada mensagem deve ter de 1 a {SANDBOX_CHARS} caracteres."
+                )
+        if turns[-1][0] != "customer":
+            raise bad_request("invalid_turns", "A última mensagem precisa ser do cliente.")
+        last = turns[-1][1]
+        with self._tx(p) as conn:
+            settings = conn.execute("SELECT ai_enabled, ai_persona FROM tenant_settings").fetchone()
+            rows = conn.execute(
+                "SELECT id, name, description, price_cents, payment_url FROM offers "
+                "WHERE active ORDER BY created_at LIMIT 20"
+            ).fetchall()
+        outcome, reason, text, offer_name = "reply", None, "", None
+        if is_opt_out(last):
+            outcome, reason = "silence", "opt_out"
+        elif asks_for_human(last):
+            outcome, reason = "handoff", "pediu_atendente"
+        elif not rows:
+            outcome, reason = "handoff", "sem_ofertas"
+        else:
+            registry = {
+                str(o["id"]): (o["name"], format_brl(o["price_cents"]), o["payment_url"])
+                for o in rows
+            }
+            ctx = AiContext(
+                persona=(settings or {}).get("ai_persona", ""),
+                customer_name="",
+                offers=tuple(
+                    OfferView(
+                        str(o["id"]), o["name"], o["description"], format_brl(o["price_cents"])
+                    )
+                    for o in rows
+                ),
+                history=tuple((r, t.strip()) for r, t in turns),
+            )
+            proposal = propose(SimulatedAiModel(), ctx, registry)
+            outcome, reason, text = proposal.kind, proposal.reason, proposal.text
+            offer_name = next((n for n, _, link in registry.values() if link in text), None)
+        label = HANDOFF_REASONS.get(reason or "", OTHER)[0] if outcome == "handoff" else None
+        if outcome == "silence":
+            label = "Pediu para não ser contatado: o sistema bloqueia o contato e não responde."
+        return {
+            "engine": "simulador",
+            "outcome": outcome,
+            "reason": reason,
+            "reason_label": label,
+            "text": text,
+            "offer": offer_name,
+            "ai_enabled": bool(settings and settings["ai_enabled"]),
+        }
+
+    # ---- por que as conversas passaram para uma pessoa
+    def handoffs(self, p: Principal, days: int) -> dict[str, Any]:
+        self._guard(p)
+        since = datetime.now(UTC) - timedelta(days=days)
+        with self._tx(p) as conn:
+            rows = conn.execute(
+                "SELECT handoff_reason AS reason, count(*) AS c FROM conversations "
+                "WHERE handoff_reason IS NOT NULL AND last_message_at >= %s "
+                "GROUP BY handoff_reason",
+                (since,),
+            ).fetchall()
+        grouped: dict[str, int] = {}
+        for r in rows:
+            key = r["reason"] if r["reason"] in HANDOFF_REASONS else "outro"
+            grouped[key] = grouped.get(key, 0) + int(r["c"])
+        items = [
+            {
+                "reason": key,
+                "label": (HANDOFF_REASONS.get(key) or OTHER)[0],
+                "tip": (HANDOFF_REASONS.get(key) or OTHER)[1],
+                "count": count,
+            }
+            for key, count in sorted(grouped.items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
+        return {"days": days, "total": sum(grouped.values()), "items": items}
 
     # ---- caixa de conversas
     def inbox(self, p: Principal, status: str | None, limit: int) -> list[dict[str, Any]]:

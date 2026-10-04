@@ -155,6 +155,25 @@ ativa respondem 400 `setup_incomplete` com o que falta (consentimento continua c
 `consent_required`). A trava vale só na passagem de desligado para ligado: quem já está ligado pode ajustar e desligar
 mesmo que uma conexão tenha caído depois. Conexão apenas salva ("aguardando teste") não conta.
 
+## Qualidade do vendedor IA (Bloco 17)
+
+`ai/seller.py` ganhou `propose(model, ctx, registry)`: o trecho "chama o modelo e aplica as travas" (exceção do modelo,
+pedido de transferência, `render_reply` que recusa URL, valor livre e marcador desconhecido) saiu do worker para uma função
+**sem efeito colateral**. O vendedor de verdade, a avaliação e a tela de teste usam a mesma função, então não há dois
+caminhos que possam divergir. `render_reply` agora também recusa marcador desconhecido (`{nada}`) ao lado de um marcador
+válido, que antes passava para o texto final.
+
+`ai/evaluation.py`: 12 conversas sintéticas (preço, link, desconto fora do cadastro, tentativa de burlar regras, pedido de
+pessoa, "SAIR", fora de assunto, mensagem longa, outro idioma, link suspeito do cliente, sem oferta) passam pelo mesmo caminho
+(opt-out → pedido de pessoa → sem oferta → `propose`) e são medidas só sobre o texto que SERIA enviado: nenhum link ou valor
+que não esteja no cadastro, nada do que o cliente tentou plantar, e quem pediu saída não recebe resposta. Falha de segurança
+é crítica (saída 2); resultado diferente do esperado é aviso (saída 1); tudo certo é 0. A janela de 24 h e o "no máximo uma
+vez" são da fila de saída e continuam cobertos pelos testes dela, não pela avaliação.
+
+`POST /v1/seller/sandbox` (qualquer papel com o recurso): só o simulador responde, nada é gravado, enviado nem contado no uso.
+`GET /v1/seller/handoffs?days=` agrupa as conversas que foram para uma pessoa por motivo, com o que o cliente pode fazer;
+o texto livre que o modelo escreve como motivo nunca é exibido (vira "Outro motivo").
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.
