@@ -10,14 +10,18 @@ Dentro: WhatsApp oficial (Meta) · recuperação (carrinho, PIX, boleto, recusa,
 esfriou, registro avulso, planilha) · templates enviados e sincronizados pela Meta · vendedor IA básico
 com limite mensal por plano · painel web · login Google · compra do SaaS na Cakto/Hotmart cria a conta.
 
-Fora (V2 ou depois): Messenger, Instagram, cobrança própria, anúncios (Google/Meta Ads), Tech Provider /
+Texto de venda do V1: "atende e recupera, conduzindo a venda até o link de pagamento". Não prometer
+montagem de pedido na conversa, geração/cobrança de Pix, estoque, entrega nem confirmação automática de
+pagamento (exceto a que vem da Cakto/Hotmart).
+
+Fora (V2 ou depois): checkout na conversa, Pix, endereço e entrega (Assistant/Core), Messenger, Instagram, cobrança própria, anúncios (Google/Meta Ads), Tech Provider /
 Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 
 ## 2. Decisões do Diretor que bloqueiam
 
 | # | Decisão | Sugestão | Estado |
 |---|---|---|---|
-| D1 | Nome comercial, domínio e marca | — | PENDENTE |
+| D1 | Nome comercial, domínio e marca | **AtendeVendeIA** (`atendevendeia.com.br`) | NOME DECIDIDO em 03/10/2026; registro do domínio, consulta de marca e perfis sociais pendentes (ação do Diretor) |
 | D2 | Preços e limites por plano (pesquisa de mercado) | Valores atuais são provisórios | PENDENTE |
 | D3 | Quem paga as mensagens da Meta | O cliente, na própria conta Meta | PENDENTE |
 | D4 | Conexão do WhatsApp sem Tech Provider | Guia no painel + configuração assistida opcional | PENDENTE |

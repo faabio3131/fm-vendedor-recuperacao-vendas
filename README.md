@@ -1,7 +1,8 @@
-# fm-vendedor-recuperacao-vendas
+# AtendeVendeIA (repositório `fm-vendedor-recuperacao-vendas`)
 
-SaaS de vendedor IA e recuperação de vendas por WhatsApp, Messenger e Instagram, com login Google,
-cobrança e anúncios em fases. Produto comercial da F&M Tecnologia, **Web First** (uma única construção).
+SaaS que atende clientes e recupera vendas pelo WhatsApp, conduzindo a conversa até o link de pagamento
+do cliente (V1). Messenger, Instagram, cobrança e anúncios ficam para fases seguintes; checkout, Pix,
+endereço e entrega são V2 (ADR-0002). Produto comercial da F&M Tecnologia, **Web First** (uma única construção).
 
 ## Estado
 

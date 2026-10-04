@@ -66,7 +66,7 @@ def create_app(
             database.close()
 
     app = FastAPI(
-        title="F&M Vendedor e Recuperação de Vendas", version=__version__, lifespan=lifespan
+        title="AtendeVendeIA", version=__version__, lifespan=lifespan
     )
     app.state.settings = cfg
     app.state.db = database

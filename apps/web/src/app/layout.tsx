@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vendedor e Recuperação de Vendas",
-  description: "Atende, vende e recupera vendas no WhatsApp, Messenger e Instagram.",
+  title: "AtendeVendeIA",
+  description: "Atende seus clientes e recupera vendas no WhatsApp, levando até o link de pagamento.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
