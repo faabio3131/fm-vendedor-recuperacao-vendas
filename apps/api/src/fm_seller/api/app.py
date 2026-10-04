@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
@@ -13,8 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from fm_seller import __version__
-from fm_seller.api.guards import BodyLimitMiddleware, Guards, security_headers
+from fm_seller.api.guards import BodyLimitMiddleware, Guards, request_id_for, security_headers
 from fm_seller.api.routes import (
+    admin,
     auth,
     captures,
     connections,
@@ -105,7 +105,7 @@ def create_app(
     async def request_guard(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+        request_id = request_id_for(request.headers.get("x-request-id"))
         started = time.perf_counter()
         limited = guards.before(request)
         if limited is not None:
@@ -157,6 +157,7 @@ def create_app(
     app.include_router(health.router, prefix="/v1")
     app.include_router(auth.router, prefix="/v1")
     app.include_router(me.router, prefix="/v1")
+    app.include_router(admin.router, prefix="/v1")
     app.include_router(onboarding.router, prefix="/v1")
     app.include_router(plan.router, prefix="/v1")
     app.include_router(privacy.router, prefix="/v1")

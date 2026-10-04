@@ -202,6 +202,17 @@ IP, por conta e por falha de webhook; cabeçalhos de segurança e `Cache-Control
 Sessões: no máximo 10 ativas por pessoa e `POST /v1/auth/logout-all`. Em staging e produção `/docs` e `/openapi.json` não existem.
 Modelo de ameaças, limites escolhidos e o que não foi provado: `docs/SEGURANCA.md`.
 
+## Operação da plataforma (Bloco 20)
+
+`platform_admin.py`, `api/routes/admin.py`, migration `0012` e `docs/adr/0003-administracao-da-plataforma.md`. Papel `platform_admins`,
+separado de `memberships`, concedido só por convite criado em `cli create-platform-admin` (vale para o e-mail verificado do
+Google, uma vez, e o banco recusa quem tenta entrar sem convite). `/v1/admin/*` (fora de qualquer rota de cliente) valida a sessão
+**e** o papel antes de tudo e devolve só colunas escolhidas: lista de clientes (plano, estado da assinatura, uso da IA, falhas em 24 h,
+dono mascarado), métricas do sistema (worker, fila de saída, recuperação, eventos, IA, clientes) e a saúde do `ops-check`. Ações
+(suspender, reativar, trocar plano, renovar convite) gravam na auditoria do cliente com quem agiu. É a única exceção à regra "modo
+system nunca em rota de usuário" e vem cercada (ADR-0003). Toda resposta leva `x-request-id` (o do cliente só vale se for curto e
+simples) e o log estruturado em JSON o traz; nada pessoal vai para o log. `ops/loadtest.py` mede a API local.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.

@@ -332,3 +332,42 @@ export type EraseResult = {
   erased?: { mensagens: number; conversas: number; casos: number };
   block_kept?: boolean;
 };
+
+export type AdminClient = {
+  id: string;
+  name: string;
+  status: string;
+  created_at: string;
+  plan: string | null;
+  plan_status: string | null;
+  past_due_since: string | null;
+  deletion_due_at: string | null;
+  owner: string;
+  pending_invites: number;
+  ai_replies_month: number;
+  ai_failures_month: number;
+  sends_failed_24h: number;
+  events_failed_24h: number;
+};
+
+export type AdminClients = {
+  total: number;
+  plans: { key: string; name: string }[];
+  items: AdminClient[];
+};
+
+export type AdminMetrics = {
+  generated_at: string;
+  worker: { cycles: number; last_cycle_age_s: number | null; last_error: boolean };
+  outbox: { queued: number; oldest_queued_age_s: number | null; sent_24h: number; failed_24h: number };
+  recovery: { steps_overdue: number; steps_sent_24h: number; steps_failed_24h: number };
+  events: { received_24h: number; failed_24h: number; platform_failed: number };
+  ai: { replies_today: number; failures_today: number };
+  clients: { total: number; by_plan_status: Record<string, number>; deletion_pending: number };
+};
+
+export type AdminHealth = {
+  ok: boolean;
+  exit_code: number;
+  findings: { level: "critical" | "warning"; code: string; message: string }[];
+};

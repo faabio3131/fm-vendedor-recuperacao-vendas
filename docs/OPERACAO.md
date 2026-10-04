@@ -248,6 +248,52 @@ travada, o segredo configurado está errado (corrija o segredo, não o limite). 
 (ela mesma, ou peça para entrar de novo e sair de todos). **Rode a auditoria de dependências** (`Auditoria de dependências` nas
 Actions) antes de subir e depois a cada semana; o Python não tem arquivo de travamento de versões.
 
+## Operação da plataforma (equipe da F&M)
+
+- **Dar acesso:** `python -m fm_seller.cli create-platform-admin --email pessoa@exemplo.com` (valor `--days` é a validade do convite, 7 por
+  padrão). Quem ainda não entrou vira administrador no primeiro login com **esse** e-mail do Google; quem já tem conta vira na hora.
+  Tirar: `cli revoke-platform-admin --email ...`. Só existe pela linha de comando.
+- **A tela:** `https://<painel>/admin` (quem é só da equipe, sem cliente, cai nela ao entrar). Mostra a saúde (o mesmo `ops-check`), os
+  números do sistema e a lista de clientes com plano, estado da assinatura, uso da IA no mês e falhas das últimas 24 h.
+  Ações: **Suspender**/**Reativar** (pausa envios e vendedor IA, nada é apagado, o login do cliente continua), **Trocar plano** e
+  **Renovar convite** (estende a validade dos convites pendentes; **não envia e-mail**: avise quem comprou). Tudo vai para a auditoria
+  do cliente com o seu usuário (`platform.*`). A tela **nunca** mostra conversa, contato nem credencial.
+- **Números sem tela:** `python -m fm_seller.cli metrics` imprime o mesmo JSON (contagens e idades). Todo pedido à API devolve `x-request-id`
+  e o log em JSON traz o mesmo `request_id`: peça o ID a quem reclamou de erro e procure no log. Nada pessoal vai para o log.
+
+## Runbook de incidentes
+
+Comece sempre por `cli ops-check` (ou a Saúde em `/admin`) e `https://<api>/v1/ready`. Código de saída 2 = crítico.
+
+| Sintoma | O que olhar | O que fazer |
+|---|---|---|
+| `worker_parado` ou `worker_nunca_rodou` | log do worker (o serviço de fundo), `cli metrics` (idade do último ciclo) | reiniciar o worker; se o log mostrar erro de banco ou de chave, corrigir a causa antes. Nada se perde: os passos e a fila ficam no banco e saem no ciclo seguinte |
+| `fila_saida_parada` / `passos_atrasados` | `/admin` (fila e passos), `FM_WHATSAPP_LIVE`, conexão do cliente (`needs_attention`) | worker de pé? canal conectado? Mensagem fora da janela de 24 h falha de propósito. Nada é reenviado sozinho (no máximo uma vez) |
+| Webhook parado (cliente diz que as compras não chegam) | `cli metrics` (eventos recebidos em 24 h), painel da Cakto/Hotmart (entrega do webhook), `eventos_falhos` | conferir o segredo (401 repetido trava o IP: ver abaixo), a URL e o cadastro da conexão. Evento falho reprocessa sozinho; `capture` ajuda a ver o formato real |
+| Muitos `429` | `/admin` e o log (`status: 429`), tabela de limites em `docs/SEGURANCA.md` | se for cliente legítimo, subir o limite da variável (`FM_RATE_*`) e reiniciar. Webhook recusado 30 vezes em 10 min trava o IP: corrigir o segredo, não o limite |
+| Ninguém consegue entrar | `/v1/health`, `FM_GOOGLE_CLIENT_ID`, `FM_COOKIE_SECURE`, `FM_WEB_ORIGIN` | origem do painel diferente da configurada recusa toda escrita (403 `bad_origin`); Client ID provisório quebra o login |
+| IA respondendo mal ou parada | `cli ai-check`, `cli ai-eval`, Saúde (`worker_com_erro`), uso da IA no mês | chave, cota ou modelo; sem IA as conversas vão para uma pessoa (`erro_do_modelo`). O limite do plano também manda para pessoa |
+| Cliente pediu para sair/ser esquecido | menu Privacidade do cliente | exportar e apagar o contato; o bloqueio de contato é mantido (`docs/ARQUITETURA.md`, Bloco 18) |
+| Cliente suspenso por engano | `/admin` | **Reativar** (devolve tudo como estava) |
+| Exclusão da conta pedida por engano | menu Privacidade do dono | cancelar até o fim da carência; depois só restaurando backup |
+| Perdeu a chave de cifragem | `FM_SECRETS_KEYS` e a cópia em cofre | sem a chave as credenciais dos clientes não abrem (o banco restaura, as conexões precisam ser digitadas de novo). Com a chave antiga numa cópia, recolocar **atrás** da nova (`novo:...,antigo:...`) |
+| Banco corrompido ou apagado | `docs/OPERACAO.md`, "Backup e restauração" | restaurar o último backup que passou no `restore_check.sh`, rodar `cli migrate` e `cli preflight`, subir a API com a **mesma** `FM_SECRETS_KEYS` |
+| Migration nova quebrou | `cli ops-check` (`migrations_pendentes`), Rollback abaixo | voltar a imagem anterior (a migration é compatível com ela); desfazer o banco só pelo backup |
+
+## Teste de carga leve (referência da máquina de teste)
+
+`python -m fm_seller.cli loadtest --api http://localhost:8000 --seconds 10 --concurrency 10` dispara pedidos simultâneos em `/v1/health`,
+`/v1/ready` e `/v1/me` (sem login) e imprime pedidos por segundo e latência (média, p50, p95, p99). Só aceita endereço local; `--remote`
+confirma que você quer carregar um servidor de verdade (pode custar ou derrubar o que está no ar). **Os números dependem da máquina,
+do banco e da rede e NÃO são a capacidade de produção**: servem para comparar a mesma máquina antes e depois de uma mudança.
+Rode com `FM_RATE_LIMIT_ENABLED=false`, senão o limite de 1200 pedidos por minuto por IP responde `429` e aparece no relatório.
+
+Referência registrada em 04/10/2026 (ambiente de desenvolvimento do próprio Claude Code: 4 CPUs compartilhadas com o gerador de carga,
+Python 3.12, um processo `uvicorn`, Postgres 16 local, limite de taxa desligado, 10 simultâneos por 10 s): **cerca de 476 pedidos por
+segundo**, latência média 19,6 ms, p50 16,3 ms, p95 37,2 ms, p99 58,5 ms, nenhuma falha de servidor (200 em `/health` e `/ready`, 401 em
+`/me`). Isso só prova que a borda e o banco local aguentam essa carga leve nessa máquina; não diz nada sobre o Render, o plano grátis
+(que dorme), rotas autenticadas nem o worker.
+
 ## Rollback
 
 - **Código:** voltar para a imagem anterior no provedor (redeploy da versão anterior). Vale para API, worker e

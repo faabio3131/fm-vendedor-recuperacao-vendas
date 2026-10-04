@@ -86,6 +86,7 @@ jobs:
           export FM_SECRETS_KEYS="$(python -m fm_seller.cli gen-key)"
           python -m fm_seller.cli migrate
           python -m fm_seller.cli create-tenant --name "Loja Demo" --email demo@example.test --plan fase-1
+          python -m fm_seller.cli create-platform-admin --email demo@example.test
           nohup uvicorn fm_seller.api.app:create_app --factory --port 8000 > api.log 2>&1 &
       - name: Painel
         working-directory: apps/web

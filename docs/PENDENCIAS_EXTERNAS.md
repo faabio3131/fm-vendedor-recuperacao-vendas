@@ -44,6 +44,13 @@ de conexões de cada cliente.
 6. Messenger e Instagram reais: handshake, assinatura, mensagem recebida (ID de quem escreve), resposta (formato de envio e janela de 24 h), entrega/leitura e "SAIR". O formato do envio do Instagram (qual ID e qual endereço da Graph API) **não foi confirmado**.
 7. Limites da Meta: camada de mensagens do número (250 → 2.000 contatos únicos por 24 h); ajustar `Limite diário do número` em Recuperação.
 
+## Operação: o que só o ambiente real responde
+
+Criar o primeiro administrador da plataforma no staging (`cli create-platform-admin --email ...`) e entrar com o Google de verdade;
+conferir a tela de administração com clientes reais de teste; rodar o `loadtest` contra o staging **só com `--remote` e sabendo o
+custo** (os números do repositório são da máquina de teste); decidir se e como a F&M quer ser avisada de incidente (hoje só `ops-check`
+por cron e a tela de saúde: não há e-mail, WhatsApp nem serviço externo, ficou fora de escopo).
+
 ## Segurança: o que só o ambiente real responde
 
 Ver o fim de `docs/SEGURANCA.md`. Resumo: conferir no staging qual IP chega à API atrás do painel (define `FM_TRUST_PROXY`), que o

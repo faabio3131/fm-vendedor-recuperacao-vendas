@@ -79,8 +79,14 @@ def login_with_google(db: Database, settings: Settings, identity: GoogleIdentity
             "ORDER BY created_at LIMIT 1",
             (identity.email,),
         ).fetchone()
+        admin_invite = conn.execute(
+            "SELECT id FROM platform_admin_invites "
+            "WHERE lower(email) = lower(%s) AND accepted_at IS NULL AND expires_at > now() "
+            "ORDER BY created_at LIMIT 1",
+            (identity.email,),
+        ).fetchone()
         if user is None:
-            if invite is None:
+            if invite is None and admin_invite is None:
                 raise forbidden(NO_ACCESS)
             user = conn.execute(
                 "INSERT INTO users (google_sub, email, name) VALUES (%s, %s, %s) RETURNING id",
@@ -106,8 +112,20 @@ def login_with_google(db: Database, settings: Settings, identity: GoogleIdentity
                 action="invite.accepted",
                 target=identity.email,
             )
+        if admin_invite is not None:
+            # Convite criado pela linha de comando: a pessoa passa a ser da equipe da plataforma.
+            conn.execute(
+                "INSERT INTO platform_admins (user_id) VALUES (%s) ON CONFLICT DO NOTHING",
+                (user_id,),
+            )
+            conn.execute(
+                "UPDATE platform_admin_invites SET accepted_at = now() WHERE id = %s",
+                (admin_invite["id"],),
+            )
         has_access = conn.execute(
-            "SELECT 1 FROM memberships WHERE user_id = %s LIMIT 1", (user_id,)
+            "SELECT 1 WHERE EXISTS (SELECT 1 FROM memberships WHERE user_id = %s) "
+            "OR EXISTS (SELECT 1 FROM platform_admins WHERE user_id = %s)",
+            (user_id, user_id),
         ).fetchone()
         if has_access is None:
             raise forbidden(

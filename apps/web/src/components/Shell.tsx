@@ -35,8 +35,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
     api<Me>("/v1/me")
       .then(setMe)
       .catch((e: unknown) => {
-        if (e instanceof ApiError && e.status === 401) router.replace("/login");
-        else setError(e instanceof Error ? e.message : "Não foi possível carregar sua conta.");
+        if (e instanceof ApiError && e.status === 401) {
+          router.replace("/login");
+          return;
+        }
+        const message = e instanceof Error ? e.message : "Não foi possível carregar sua conta.";
+        if (e instanceof ApiError && e.status === 403) {
+          // Quem é só da equipe da plataforma não tem cliente: manda para a administração.
+          api("/v1/admin/me")
+            .then(() => router.replace("/admin"))
+            .catch(() => setError(message));
+          return;
+        }
+        setError(message);
       });
   }, [router]);
 
