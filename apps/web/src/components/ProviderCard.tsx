@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError, type Connection, type Provider } from "@/lib/api";
+import { WhatsAppGuide } from "@/components/WhatsAppGuide";
 
 const STATUS: Record<Connection["status"], string> = {
   pending: "Aguardando teste",
@@ -91,6 +92,7 @@ export function ProviderCard({ provider, connection, canEdit, onChange }: Props)
 
       {open && !locked && (
         <div>
+          {provider.key === "whatsapp_cloud" && <WhatsAppGuide />}
           {provider.fields.map((f) => (
             <div key={f.key}>
               <label htmlFor={`${provider.key}-${f.key}`}>

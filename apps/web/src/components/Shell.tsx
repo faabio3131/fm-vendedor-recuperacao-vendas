@@ -60,7 +60,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <MeContext.Provider value={me}>
       <div className="shell">
         <aside className="side">
-          <div className="brand">Vendedor e Recuperação</div>
+          <div className="brand">AtendeVendeIA</div>
           <nav className="nav" aria-label="Principal">
             {NAV.map((item) => (
               <Link key={item.href} href={item.href} aria-current={path === item.href ? "page" : undefined}>
