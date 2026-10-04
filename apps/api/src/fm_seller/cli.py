@@ -9,6 +9,7 @@ import argparse
 import logging
 import sys
 import time
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
 import psycopg
@@ -16,6 +17,7 @@ import psycopg
 from fm_seller.ai.model import AiModel, build_ai_model
 from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.outbox import flush_outbox
+from fm_seller.channels.social_send import build_social_senders
 from fm_seller.channels.templates_gateway import TemplateGateway, build_template_gateway
 from fm_seller.config import Settings, get_settings
 from fm_seller.db import Database
@@ -97,6 +99,7 @@ def _cycle(
     db: Database,
     box: SecretBox,
     sender: MessageSender,
+    social: Mapping[str, MessageSender],
     model: AiModel,
     gateway: TemplateGateway,
     log: logging.Logger,
@@ -106,7 +109,7 @@ def _cycle(
     cold = detect_cold_conversations(db)
     stats = run_due_steps(db, box, sender)
     seller = run_ai_replies(db, model)
-    outbox = flush_outbox(db, box, sender)
+    outbox = flush_outbox(db, box, sender, social=social)
     templates = sync_all(db, box, gateway)
     log.info(
         "ciclo",
@@ -133,12 +136,13 @@ def run_worker(interval: int, once: bool) -> None:
     db.open()
     box = SecretBox(settings.secrets_keys)
     sender = build_sender(settings)
+    social = build_social_senders(settings)
     model = build_ai_model(settings)
     gateway = build_template_gateway(settings)
     try:
         while True:
             try:
-                _cycle(db, box, sender, model, gateway, log)
+                _cycle(db, box, sender, social, model, gateway, log)
             except Exception as exc:
                 # Um ciclo com erro não derruba o worker; o erro fica no log e no batimento
                 # (só o tipo: o detalhe pode ter dado de cliente). O alerta de worker parado

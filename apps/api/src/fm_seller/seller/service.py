@@ -8,8 +8,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from fm_seller.ai import usage
+from fm_seller.channels.outbound import enqueue_text
 from fm_seller.channels.outbox import WINDOW
-from fm_seller.channels.whatsapp import enqueue_text
 from fm_seller.db import Database
 from fm_seller.errors import AppError, bad_request, forbidden, not_found
 from fm_seller.recovery.service import mask_phone
@@ -22,6 +22,14 @@ STATUSES = ("bot", "human", "closed")
 def _valid_url(url: str) -> bool:
     parts = urlparse(url)
     return parts.scheme == "https" and bool(parts.hostname) and len(url) <= 500
+
+
+def person_label(channel: str, phone: str | None, external_id: str | None) -> str:
+    """Como mostrar quem é a pessoa: telefone mascarado ou o canal com o final do ID."""
+    if channel == "whatsapp":
+        return mask_phone(phone)
+    name = "Messenger" if channel == "messenger" else "Instagram"
+    return f"{name} ••••{external_id[-4:]}" if external_id else name
 
 
 class SellerService:
@@ -188,9 +196,12 @@ class SellerService:
             rows = conn.execute(
                 "SELECT cv.id, cv.status, cv.handoff_reason, cv.last_inbound_at, "
                 "cv.last_message_at, "
-                "ct.name, ct.phone, (SELECT body FROM messages m WHERE m.conversation_id = cv.id "
+                "cv.channel, ct.name, ct.phone, cc.external_id, "
+                "(SELECT body FROM messages m WHERE m.conversation_id = cv.id "
                 "ORDER BY m.created_at DESC LIMIT 1) AS preview "
                 "FROM conversations cv JOIN contacts ct ON ct.id = cv.contact_id "
+                "LEFT JOIN contact_channels cc ON cc.contact_id = ct.id "
+                "AND cc.channel = cv.channel "
                 "WHERE (%s::text IS NULL OR cv.status = %s) "
                 "ORDER BY (cv.status = 'human') DESC, cv.last_message_at DESC LIMIT %s",
                 (status, status, max(1, min(limit, 100))),
@@ -201,8 +212,9 @@ class SellerService:
                 "id": str(r["id"]),
                 "status": r["status"],
                 "handoff_reason": r["handoff_reason"],
+                "channel": r["channel"],
                 "name": r["name"],
-                "phone": mask_phone(r["phone"]),
+                "phone": person_label(r["channel"], r["phone"], r["external_id"]),
                 "preview": (r["preview"] or "")[:160],
                 "last_message_at": r["last_message_at"],
                 "window_open": r["last_inbound_at"] is not None
@@ -215,8 +227,11 @@ class SellerService:
         self._guard(p)
         with self._tx(p) as conn:
             conv = conn.execute(
-                "SELECT cv.status, cv.last_inbound_at, ct.name, ct.phone FROM conversations cv "
-                "JOIN contacts ct ON ct.id = cv.contact_id WHERE cv.id = %s",
+                "SELECT cv.status, cv.channel, cv.last_inbound_at, ct.name, ct.phone, "
+                "cc.external_id FROM conversations cv "
+                "JOIN contacts ct ON ct.id = cv.contact_id "
+                "LEFT JOIN contact_channels cc ON cc.contact_id = ct.id "
+                "AND cc.channel = cv.channel WHERE cv.id = %s",
                 (conv_id,),
             ).fetchone()
             if conv is None:
@@ -229,8 +244,9 @@ class SellerService:
         now = datetime.now(UTC)
         return {
             "status": conv["status"],
+            "channel": conv["channel"],
             "name": conv["name"],
-            "phone": mask_phone(conv["phone"]),
+            "phone": person_label(conv["channel"], conv["phone"], conv["external_id"]),
             "window_open": conv["last_inbound_at"] is not None
             and now - conv["last_inbound_at"] <= WINDOW,
             "messages": [
@@ -254,7 +270,8 @@ class SellerService:
             raise bad_request("invalid_body", "A mensagem deve ter de 1 a 1000 caracteres.")
         with self._tx(p) as conn:
             conv = conn.execute(
-                "SELECT last_inbound_at FROM conversations WHERE id = %s FOR UPDATE", (conv_id,)
+                "SELECT channel, last_inbound_at FROM conversations WHERE id = %s FOR UPDATE",
+                (conv_id,),
             ).fetchone()
             if conv is None:
                 raise not_found("Conversa não encontrada.")
@@ -264,7 +281,11 @@ class SellerService:
                 raise bad_request(
                     "window_closed",
                     "Passaram mais de 24 h desde a última mensagem do cliente: "
-                    "só template aprovado.",
+                    + (
+                        "só template aprovado."
+                        if conv["channel"] == "whatsapp"
+                        else "a Meta não permite resposta livre fora dessa janela."
+                    ),
                 )
             enqueue_text(conn, p.tenant_id, conv_id, "human", body)
             conn.execute(

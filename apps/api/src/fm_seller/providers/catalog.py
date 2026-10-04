@@ -64,6 +64,13 @@ PROVIDERS: tuple[Provider, ...] = (
         fields=(
             Field("page_id", "ID da página"),
             Field("page_access_token", "Token de acesso da página", secret=True),
+            Field(
+                "app_secret",
+                "Segredo do app Meta",
+                secret=True,
+                required=False,
+                help="Valida a assinatura das mensagens recebidas; sem ele nada é aceito.",
+            ),
         ),
         webhook=True,
     ),
@@ -77,6 +84,13 @@ PROVIDERS: tuple[Provider, ...] = (
         fields=(
             Field("instagram_account_id", "ID da conta do Instagram"),
             Field("access_token", "Token de acesso", secret=True),
+            Field(
+                "app_secret",
+                "Segredo do app Meta",
+                secret=True,
+                required=False,
+                help="Valida a assinatura das mensagens recebidas; sem ele nada é aceito.",
+            ),
         ),
         webhook=True,
     ),

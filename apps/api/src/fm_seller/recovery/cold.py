@@ -2,7 +2,8 @@
 
 O worker procura essas conversas e abre uma oportunidade de recuperação para cada uma. Só roda
 para quem ligou a recuperação, declarou o consentimento e ligou esta detecção em Ajustes.
-Não depende de integração nenhuma: o dado já está nas conversas.
+Não depende de integração nenhuma: o dado já está nas conversas. Só WhatsApp: a recuperação
+usa template aprovado, que Messenger e Instagram não têm.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ JOIN LATERAL (
     SELECT m.author, m.status, m.direction, m.created_at FROM messages m
     WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1
 ) lm ON true
-WHERE c.status IN ('bot', 'human') AND c.last_inbound_at IS NOT NULL
+WHERE c.status IN ('bot', 'human') AND c.channel = 'whatsapp' AND c.last_inbound_at IS NOT NULL
   AND lm.direction = 'out' AND lm.status IN ('sent', 'delivered', 'read')
   AND ((c.status = 'bot' AND lm.author = 'bot') OR lm.author = 'human')
   AND lm.created_at <= %(now)s - make_interval(hours => s.cold_after_hours)

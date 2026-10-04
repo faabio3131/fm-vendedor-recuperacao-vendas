@@ -340,7 +340,8 @@ def test_meta_connection_tester_ok_and_failures() -> None:
 
 
 def test_meta_connection_tester_falls_back_for_other_providers() -> None:
-    other = next(p for p in PROVIDERS if p.key != "whatsapp_cloud")
+    # Messenger e Instagram têm teste real próprio (tests/test_social_channels.py).
+    other = next(p for p in PROVIDERS if p.key == "cakto")
     fake = Fake()
     res = MetaConnectionTester(fake.client()).test(other, {})
     assert not res.ok and "não foi confirmada" in res.message and fake.requests == []

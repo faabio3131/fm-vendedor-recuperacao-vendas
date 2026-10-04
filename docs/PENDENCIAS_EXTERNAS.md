@@ -32,6 +32,7 @@ de conexões de cada cliente.
 | C3 | Templates (`carrinho_*`, `pix_*`, `boleto_*`, `recusada_*`, `orcamento_*`, `conversa_*`) enviados para aprovação pelo painel e aprovados pela Meta | PENDENTE por cliente | Envio e sincronização existem, mas só contra servidor falso; precisa de `FM_WHATSAPP_LIVE` |
 | C4 | Declarar consentimento dos contatos e ligar a recuperação | PENDENTE por cliente | Feito no painel, em Recuperação → Ajustes |
 | C5 | Cadastrar ofertas (preço e link https) | PENDENTE por cliente | Sem ofertas ativas o vendedor IA passa a conversa para uma pessoa |
+| C6 | Messenger e Instagram: página do Facebook e conta profissional do Instagram ligadas ao app Meta; ID, token de acesso e segredo do app cadastrados na central de conexões; URL de callback e token de verificação colados na Meta | PENDENTE por cliente | Permissões de mensagens e a revisão do app pela Meta podem ser exigidas fora do modo de teste: **a verificar**. Envio real exige `FM_WHATSAPP_LIVE` |
 
 ## Testes que só podem ser feitos com as contas
 
@@ -40,7 +41,8 @@ de conexões de cada cliente.
 3. Compra de teste Cakto e Hotmart (plataforma) e eventos de checkout (clientes que usam essas plataformas).
 4. Gemini real: `ai-check` e uma conversa de ponta a ponta.
 5. Login Google real em staging.
-6. Limites da Meta: camada de mensagens do número (250 → 2.000 contatos únicos por 24 h); ajustar `Limite diário do número` em Recuperação.
+6. Messenger e Instagram reais: handshake, assinatura, mensagem recebida (ID de quem escreve), resposta (formato de envio e janela de 24 h), entrega/leitura e "SAIR". O formato do envio do Instagram (qual ID e qual endereço da Graph API) **não foi confirmado**.
+7. Limites da Meta: camada de mensagens do número (250 → 2.000 contatos únicos por 24 h); ajustar `Limite diário do número` em Recuperação.
 
 ## Decisões de produto abertas
 

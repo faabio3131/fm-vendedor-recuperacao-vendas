@@ -19,7 +19,8 @@ from datetime import UTC, datetime, timedelta
 
 from fm_seller.ai import usage
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
-from fm_seller.channels.whatsapp import enqueue_text
+from fm_seller.channels.outbound import enqueue_text
+from fm_seller.channels.social import identity_of
 from fm_seller.db import Conn, Database
 from fm_seller.money import format_brl
 from fm_seller.recovery.optout import normalize
@@ -106,12 +107,19 @@ def _handle_conversation(
     conn: Conn, model: AiModel, tenant_id: uuid.UUID, conv_id: uuid.UUID, now: datetime
 ) -> str:
     locked = conn.execute(
-        "SELECT cv.status, cv.contact_id, ct.name, ct.phone FROM conversations cv "
-        "JOIN contacts ct ON ct.id = cv.contact_id WHERE cv.id = %s FOR UPDATE OF cv SKIP LOCKED",
+        "SELECT cv.status, cv.contact_id, cv.channel, ct.name, ct.phone, cc.external_id "
+        "FROM conversations cv JOIN contacts ct ON ct.id = cv.contact_id "
+        "LEFT JOIN contact_channels cc ON cc.contact_id = ct.id AND cc.channel = cv.channel "
+        "WHERE cv.id = %s FOR UPDATE OF cv SKIP LOCKED",
         (conv_id,),
     ).fetchone()
     if locked is None or locked["status"] != "bot":
         return "ignored"
+    identity = (
+        locked["phone"]
+        if locked["channel"] == "whatsapp"
+        else identity_of(locked["channel"], locked["external_id"] or "")
+    )
     inbound = conn.execute(
         "UPDATE messages SET handled = true WHERE conversation_id = %s AND direction = 'in' "
         "AND NOT handled RETURNING body",
@@ -121,7 +129,7 @@ def _handle_conversation(
         return "ignored"
     if conn.execute(
         "SELECT 1 FROM suppressions WHERE tenant_id = %s AND identity = %s",
-        (tenant_id, locked["phone"]),
+        (tenant_id, identity),
     ).fetchone():
         return "ignored"
 

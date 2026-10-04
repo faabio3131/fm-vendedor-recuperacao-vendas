@@ -44,9 +44,10 @@ class UnavailableTester:
 
 
 class MetaConnectionTester:
-    """Teste real do WhatsApp: confere token, número e conta na Graph API (leitura apenas).
+    """Teste real dos canais Meta: confere token e IDs na Graph API (leitura apenas).
 
-    Outros provedores continuam sem verificação automática (resultado honesto: não confirmada).
+    WhatsApp: número e conta. Messenger e Instagram: a página ou a conta. Outros provedores
+    continuam sem verificação automática (resultado honesto: não confirmada).
     """
 
     def __init__(self, client: object, fallback: ConnectionTester | None = None) -> None:
@@ -57,6 +58,8 @@ class MetaConnectionTester:
         self._fallback = fallback or UnavailableTester()
 
     def test(self, provider: Provider, config: dict[str, str]) -> TestResult:
+        if provider.key in ("messenger", "instagram_dm"):
+            return self._test_social(provider, config)
         if provider.key != "whatsapp_cloud":
             return self._fallback.test(provider, config)
         from fm_seller.channels.meta_api import MetaRejected, MetaUncertain
@@ -78,6 +81,24 @@ class MetaConnectionTester:
         name = phone.get("verified_name")
         label = f"{shown} ({name})" if name else str(shown)
         return TestResult(True, f"Conectado ao número {label}.")
+
+    def _test_social(self, provider: Provider, config: dict[str, str]) -> TestResult:
+        from fm_seller.channels.meta_api import MetaRejected, MetaUncertain
+        from fm_seller.channels.social import SOCIAL
+
+        ch = SOCIAL[provider.key]
+        token, account = config.get(ch.token_field, ""), config.get(ch.id_field, "")
+        if not (token and account):
+            return TestResult(False, "Faltam o ID da conta ou o token.")
+        field = "name" if provider.key == "messenger" else "username"
+        try:
+            data = self._client.request("GET", account, token, params={"fields": field})
+        except MetaRejected as exc:
+            return TestResult(False, f"A Meta recusou: {exc.detail} (código {exc.code}).")
+        except MetaUncertain:
+            return TestResult(False, "Não foi possível falar com a Meta agora. Tente de novo.")
+        shown = data.get(field) or account
+        return TestResult(True, f"Conectado a {ch.label}: {shown}.")
 
 
 def build_tester(settings: Settings) -> ConnectionTester:

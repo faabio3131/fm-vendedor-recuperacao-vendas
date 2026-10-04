@@ -1,12 +1,12 @@
 # AtendeVendeIA (repositório `fm-vendedor-recuperacao-vendas`)
 
 SaaS que atende clientes e recupera vendas pelo WhatsApp, conduzindo a conversa até o link de pagamento
-do cliente (V1). Messenger, Instagram, cobrança e anúncios ficam para fases seguintes; checkout, Pix,
+do cliente (V1), pelo WhatsApp, Messenger e Instagram. Cobrança e anúncios ficam para fases seguintes; checkout, Pix,
 endereço e entrega são V2 (ADR-0002). Produto comercial da F&M Tecnologia, **Web First** (uma única construção).
 
 ## Estado
 
-Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo), 7 (WhatsApp real e templates da Meta), 8 (guia de conexão e checklist de lançamento) e 9 (alertas, backup e restauração) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
+Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo), 7 (WhatsApp real e templates da Meta), 8 (guia de conexão e checklist de lançamento) 9 (alertas, backup e restauração) e 11 (Messenger e Instagram) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
 
 | Peça | Estado |
 |---|---|
@@ -25,7 +25,8 @@ Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA),
 | Oportunidades próprias para comércio local: conversa que esfriou, registro avulso, planilha CSV, "vendido/perdi" | Feito e testado; sem integração externa (o dado já está no sistema) |
 | Limite mensal de IA por plano (dado), medição de uso, limite diário de contatos novos por número | Feito e testado; **valores dos planos são provisórios** |
 | WhatsApp Cloud API real: envio de template/texto, envio de templates para aprovação, sincronização de status, teste real da conexão | Feito e testado contra **servidor falso** (formato da documentação da Meta); **desligado por padrão; falta validar com conta real** |
-| Messenger/Instagram, cobrança própria, anúncios | **Não feito.** Próximos blocos |
+| Messenger e Instagram (mensagens diretas): entrada com assinatura, conversa, vendedor IA, opt-out, fila de saída, teste de conexão | Feito e testado contra **servidor falso** (formato da documentação da Meta); envio real **desligado por padrão** (`FM_WHATSAPP_LIVE`); **não testado com conta real**. A recuperação por template segue só no WhatsApp |
+| Cobrança própria, anúncios | **Não feito** (fora do escopo atual) |
 
 Contas e configurações externas ainda pendentes: ver `docs/PENDENCIAS_EXTERNAS.md`. Roteiro e critérios de lançamento: `docs/LANCAMENTO_MVP.md`. Criar o staging no Render: `docs/STAGING_RENDER.md`. Encaixe futuro com o Core: `docs/adr/0002-encaixe-com-o-core-v2.md`.
 
