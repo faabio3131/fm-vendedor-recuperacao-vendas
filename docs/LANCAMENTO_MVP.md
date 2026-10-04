@@ -123,7 +123,8 @@ Cada teste só vale se registrar o resultado real (data, o que foi enviado, o qu
    passo vira `sent` só com id devolvido e que erro incerto vira `failed` sem reenvio.
 7. **Compra de teste Cakto/Hotmart:** cria cliente, plano e convite; capturar o evento real e comparar com a
    seção 2.4. Cakto: o código já segue a documentação; conferir se a assinatura `X-Cakto-Signature` valida
-   (se não, só o `secret` do corpo está valendo). Hotmart: **corrigir os caminhos de campos** de
+   (se não, só o `secret` do corpo está valendo). Com `FM_CAPTURE_EVENTS=true` o campo `auth_method` do evento
+   capturado responde isso (`assinatura_hmac` ou `segredo_no_corpo`) e `capture show` confere os campos. Hotmart: **corrigir os caminhos de campos** de
    `events/normalize.py` (ainda são suposições). Conferir também os eventos de **assinatura** (atraso, recuperação,
    cancelamento, reembolso): nomes, ordem e repetição reais; o ciclo de vida (`provisioning/lifecycle.py`) só
    aceita as transições previstas e ignora o resto.

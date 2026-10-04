@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     meta_graph_version: str = "v26.0"
     meta_timeout_seconds: float = Field(default=15.0, ge=1, le=60)
 
+    # Captura de eventos reais de checkout para conferir o formato (docs/OPERACAO.md). Desligada por
+    # padrão; guarda o corpo cifrado, sem segredos, e apaga sozinha depois do prazo.
+    capture_events: bool = False
+    capture_ttl_hours: int = Field(default=72, ge=1, le=720)
+    capture_keep: int = Field(default=100, ge=1, le=1000)
+
     # Primeira subida sem terminal (docs/STAGING_RENDER.md): `cli bootstrap`. Tudo opcional.
     bootstrap_app_password: SecretStr = SecretStr("")
     bootstrap_owner_email: str = ""

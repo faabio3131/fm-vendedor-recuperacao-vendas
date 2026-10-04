@@ -237,3 +237,10 @@ def normalize_hotmart(payload: dict[str, Any]) -> CheckoutEvent | None:
 
 
 NORMALIZERS = {"cakto": normalize_cakto, "hotmart": normalize_hotmart}
+
+# Para a conferência com eventos reais (events/compare.py): os mesmos dados que o normalizador usa.
+EVENTS_BY_PROVIDER: dict[str, dict[str, str]] = {"cakto": CAKTO_EVENTS, "hotmart": HOTMART_EVENTS}
+PATHS_BY_PROVIDER: dict[str, dict[str, tuple[str, ...]]] = {
+    "cakto": _CAKTO_PATHS,
+    "hotmart": _HOTMART_PATHS,
+}

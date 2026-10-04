@@ -19,6 +19,7 @@ from typing import Any
 
 from fm_seller.db import Conn, Database
 from fm_seller.errors import AppError, bad_request, not_found
+from fm_seller.events.capture import CaptureConfig, safe_record
 from fm_seller.events.normalize import NORMALIZERS, CheckoutEvent, cakto_dedupe_ref
 from fm_seller.security.crypto import CryptoError, SecretBox
 
@@ -65,6 +66,43 @@ def cakto_signature_ok(
     return hmac.compare_digest(signature.encode(), ("v1=" + digest.hexdigest()).encode())
 
 
+def auth_method(
+    provider: str,
+    headers: Mapping[str, str],
+    body: dict[str, Any],
+    expected: str,
+    raw_body: bytes = b"",
+    *,
+    now: float | None = None,
+) -> str | None:
+    """Como o evento provou a origem, ou None se não provou.
+
+    Cakto (documentação oficial): assinatura HMAC no cabeçalho (`assinatura_hmac`) OU o campo
+    `secret` do corpo (`segredo_no_corpo`). Hotmart: `hottok` no cabeçalho `X-Hotmart-Hottok`
+    (`hottok_cabecalho`; documentação oficial não conferida por nós) ou, por tolerância, no corpo
+    (`hottok_corpo`). Saber QUAL funcionou num evento real é o que a captura registra.
+    """
+    if not expected:
+        return None
+    h = {k.lower(): v for k, v in headers.items()}
+    if provider == "cakto":
+        if cakto_signature_ok(headers, raw_body, expected, now=now):
+            return "assinatura_hmac"
+        candidates = [("segredo_no_corpo", str(body.get("secret", "")))]
+    elif provider == "hotmart":
+        candidates = [
+            ("hottok_cabecalho", h.get("x-hotmart-hottok", "")),
+            ("hottok_corpo", str(body.get("hottok", ""))),
+        ]
+    else:
+        return None
+    found: str | None = None
+    for label, candidate in candidates:
+        if candidate and hmac.compare_digest(candidate.encode(), expected.encode()):
+            found = found or label
+    return found
+
+
 def secret_ok(
     provider: str,
     headers: Mapping[str, str],
@@ -74,28 +112,8 @@ def secret_ok(
     *,
     now: float | None = None,
 ) -> bool:
-    """Confere a prova de origem do webhook.
-
-    Cakto (documentação oficial): assinatura HMAC no cabeçalho OU o campo `secret` do corpo.
-    Hotmart: `hottok` no cabeçalho `X-Hotmart-Hottok` (documentação oficial não conferida por nós;
-    o campo no corpo é só tolerância).
-    """
-    if not expected:
-        return False
-    h = {k.lower(): v for k, v in headers.items()}
-    if provider == "cakto":
-        candidates = [str(body.get("secret", ""))]
-        if cakto_signature_ok(headers, raw_body, expected, now=now):
-            return True
-    elif provider == "hotmart":
-        candidates = [h.get("x-hotmart-hottok", ""), str(body.get("hottok", ""))]
-    else:
-        return False
-    ok = False
-    for candidate in candidates:
-        if candidate:
-            ok = hmac.compare_digest(candidate.encode(), expected.encode()) or ok
-    return ok
+    """Confere a prova de origem do webhook (ver `auth_method`)."""
+    return auth_method(provider, headers, body, expected, raw_body, now=now) is not None
 
 
 def dedupe_key(body: dict[str, Any], raw: bytes, provider: str = "") -> str:
@@ -125,6 +143,7 @@ def ingest_webhook(
     headers: Mapping[str, str],
     raw_body: bytes,
     handler: EventHandler,
+    capture: CaptureConfig | None = None,
 ) -> IngestResult:
     if provider not in NORMALIZERS:
         raise not_found("Provedor sem recebimento de webhook.")
@@ -156,10 +175,24 @@ def ingest_webhook(
         log.error("credencial ilegível", extra={"ctx": {"connection_id": str(connection_id)}})
         raise AppError(500, "credentials_unreadable", "Configuração da conexão inválida.") from None
     expected = str(config.get(SECRET_FIELD[provider], ""))
-    if not secret_ok(provider, headers, body, expected, raw_body):
+    method = auth_method(provider, headers, body, expected, raw_body)
+    if method is None:
         raise AppError(401, "invalid_secret", "Segredo do webhook inválido.")
     if row["tenant_status"] != "active":
         raise AppError(403, "tenant_suspended", "Cliente suspenso.")
+    if (
+        capture is not None and capture.enabled
+    ):  # só evento autêntico; nunca atrapalha o recebimento
+        safe_record(
+            db,
+            box,
+            capture,
+            tenant_id=tenant_id,
+            provider=provider,
+            headers=headers,
+            body=body,
+            auth_method=method,
+        )
 
     event_type = str(body.get("event", ""))[:100] or "unknown"
     dedupe = dedupe_key(body, raw_body, provider)

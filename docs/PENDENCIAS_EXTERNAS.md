@@ -38,7 +38,7 @@ de conexões de cada cliente.
 
 1. WhatsApp real: handshake do webhook, assinatura, mensagem recebida, resposta, status de entrega, "SAIR"; **teste da conexão** (token, número, conta) e **envio de texto e de template** (formato do corpo conferido contra a resposta real).
 2. Template real: criar pela API (`POST /<WABA>/message_templates`), conferir aprovação/recusa e motivo na sincronização, categoria devolvida, variável no início/fim do texto, e envio fora da janela de 24 h com parâmetros.
-3. Compra de teste Cakto e Hotmart (plataforma) e eventos de checkout (clientes que usam essas plataformas).
+3. Compra de teste Cakto e Hotmart (plataforma) e eventos de checkout (clientes que usam essas plataformas), **com a captura ligada** (`docs/OPERACAO.md`): `capture show` diz o que bateu e o que faltou, e `capture export` gera a fixture anonimizada para o repositório.
 4. Gemini real: `ai-check` e uma conversa de ponta a ponta.
 5. Login Google real em staging.
 6. Messenger e Instagram reais: handshake, assinatura, mensagem recebida (ID de quem escreve), resposta (formato de envio e janela de 24 h), entrega/leitura e "SAIR". O formato do envio do Instagram (qual ID e qual endereço da Graph API) **não foi confirmado**.

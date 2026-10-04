@@ -120,6 +120,19 @@ escrito no WhatsApp depois da primeira mensagem enviada e até o fim do caso. Tu
 planilha escapa texto que uma planilha leria como fórmula (`=`, `+`, `-`, `@`). Mesmo recurso de plano da
 recuperação: plano suspenso, cancelado ou reembolsado não vê o relatório.
 
+## Captura de eventos reais (Bloco 14)
+
+`events/capture.py`: com `FM_CAPTURE_EVENTS=true` (desligado por padrão) cada evento de checkout que **passou na prova
+de origem** é guardado cifrado em `event_captures` (do cliente, ou da plataforma com `tenant_id` nulo, só visível ao
+modo sistema por RLS). Segredos (`secret`, `hottok`, tokens, senhas) são redigidos **antes** de gravar; o cabeçalho
+do hottok, `Authorization` e cookies nunca são guardados; só cabeçalhos úteis (`content-type`, `user-agent`,
+`x-cakto-*`, `x-hotmart-*` sem segredo). Expira em `FM_CAPTURE_TTL_HOURS` (72) e guarda no máximo `FM_CAPTURE_KEEP`
+(100) por origem; o worker apaga o vencido. Falha na captura nunca derruba o recebimento. `auth_method` registra qual
+prova funcionou (`assinatura_hmac`, `segredo_no_corpo`, `hottok_cabecalho`, `hottok_corpo`): responde de graça à
+dúvida da chave do HMAC da Cakto. `events/compare.py` confere o evento contra o normalizador usando só caminhos e
+tipos (nunca valores): nome conhecido, cada campo achado e onde, o que o evento traz e ninguém lê, e os problemas.
+`mask` esconde dados pessoais ao exibir; `anonymize` troca por valores de exemplo válidos para virar fixture.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.

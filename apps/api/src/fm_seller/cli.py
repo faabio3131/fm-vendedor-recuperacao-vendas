@@ -6,12 +6,14 @@ A criação manual serve até o recebimento de compras (Cakto/Hotmart) entrar em
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import time
 import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import psycopg
 
@@ -22,6 +24,8 @@ from fm_seller.channels.social_send import build_social_senders
 from fm_seller.channels.templates_gateway import TemplateGateway, build_template_gateway
 from fm_seller.config import Settings, get_settings
 from fm_seller.db import Database
+from fm_seller.events import capture as captures
+from fm_seller.events import compare as event_compare
 from fm_seller.events.ingest import reprocess_failed
 from fm_seller.logging_setup import setup_logging
 from fm_seller.migrate import apply_migrations
@@ -96,6 +100,59 @@ def plan_status_command(settings: Settings, tenant_id: str, status: str) -> int:
     return 0 if ok else 1
 
 
+def capture_command(settings: Settings, args: argparse.Namespace) -> int:
+    """Eventos reais capturados: listar, ver (mascarado, com a conferência), exportar fixture."""
+    db = Database(settings.database_admin_url)
+    db.open()
+    try:
+        if args.capture_cmd == "purge":
+            print("Capturas expiradas apagadas:", captures.purge_expired(db))
+            return 0
+        if args.capture_cmd == "list":
+            with db.tx(system=True) as conn:
+                rows = captures.list_captures(conn, limit=args.limit, provider=args.provider)
+            if not rows:
+                print("Nenhum evento capturado (a captura está ligada? FM_CAPTURE_EVENTS=true).")
+            for r in rows:
+                print(
+                    f"{r['id']}  {r['scope']:<10} {r['provider']:<8} {r['event_type']:<32} "
+                    f"{r['auth_method'] or '-':<17} expira {r['expires_at']:%d/%m %H:%M}"
+                )
+            return 0
+        with db.tx(system=True) as conn:
+            found = captures.load_capture(
+                conn, SecretBox(settings.secrets_keys), uuid.UUID(args.id)
+            )
+        if found is None:
+            print("ERRO: evento não encontrado (ou já expirou).")
+            return 1
+        if args.capture_cmd == "show":
+            print(f"Origem provada por: {found['auth_method'] or 'não registrado'}")
+            print("Cabeçalhos:", json.dumps(captures.mask(found["headers"]), ensure_ascii=False))
+            print("Corpo (mascarado):")
+            print(json.dumps(captures.mask(found["payload"]), ensure_ascii=False, indent=2))
+            print()
+            print(event_compare.render(event_compare.compare(found["provider"], found["payload"])))
+            return 0
+        # export: fixture anonimizada para colar em apps/api/tests/fixtures/real_events/<provedor>/
+        out = Path(args.out)
+        if out.exists():
+            print("ERRO: o arquivo já existe; escolha outro nome.")
+            return 1
+        fixture = {
+            "provider": found["provider"],
+            "event": found["event_type"],
+            "origem": "captura_anonimizada",
+            "auth_method": found["auth_method"],
+            "payload": captures.anonymize(found["payload"]),
+        }
+        out.write_text(json.dumps(fixture, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print("Fixture anonimizada gravada em", out)
+        return 0
+    finally:
+        db.close()
+
+
 def _heartbeat_error(db: Database, error: str) -> None:
     """Registra o erro sem mexer em quando o último ciclo terminou bem."""
     with db.tx(system=True) as conn:
@@ -129,6 +186,7 @@ def _cycle(
     log: logging.Logger,
 ) -> None:
     suspended = lifecycle.enforce_grace(db)
+    captures.purge_expired(db)
     redone = reprocess_failed(db, box, handle_event)
     redone_platform = reprocess_platform(db, box)
     cold = detect_cold_conversations(db)
@@ -279,6 +337,19 @@ def main(argv: list[str] | None = None) -> int:
     pg = sub.add_parser("plan-grace", help="Define os dias de carência em atraso de um plano")
     pg.add_argument("--plan", required=True)
     pg.add_argument("--days", required=True, type=int)
+    cp = sub.add_parser(
+        "capture", help="Eventos reais de checkout capturados (exige FM_CAPTURE_EVENTS=true)"
+    )
+    cps = cp.add_subparsers(dest="capture_cmd", required=True)
+    cl = cps.add_parser("list", help="Lista os eventos capturados")
+    cl.add_argument("--provider", choices=["cakto", "hotmart"])
+    cl.add_argument("--limit", type=int, default=20)
+    csh = cps.add_parser("show", help="Mostra um evento (mascarado) e a conferência campo a campo")
+    csh.add_argument("id")
+    cex = cps.add_parser("export", help="Grava uma fixture anonimizada para os testes")
+    cex.add_argument("id")
+    cex.add_argument("--out", required=True)
+    cps.add_parser("purge", help="Apaga as capturas que já expiraram")
     wk = sub.add_parser("worker", help="Envia passos de recuperação devidos e reprocessa falhas")
     wk.add_argument("--interval", type=int, default=30, help="segundos entre ciclos")
     wk.add_argument("--once", action="store_true", help="roda um ciclo e sai")
@@ -320,6 +391,8 @@ def main(argv: list[str] | None = None) -> int:
             print("ERRO: plano inexistente ou dias fora de 0 a 60.")
             return 1
         print("Carência definida.")
+    elif args.cmd == "capture":
+        return capture_command(settings, args)
     elif args.cmd == "worker":
         run_worker(args.interval, args.once)
     elif args.cmd == "ai-check":

@@ -36,6 +36,23 @@ pelo worker depois do `map-product`. Eventos sem e-mail não são provisionados 
 `platform_events`. **Os caminhos dos campos e os nomes de evento da Hotmart são palpites tolerantes: capture
 um evento real de cada plataforma antes de vender.**
 
+## Capturar eventos reais da Cakto e da Hotmart
+
+Serve para descobrir, com um evento de verdade, os nomes e os campos reais (o que hoje é suposição, principalmente na
+Hotmart). **Desligada por padrão.**
+
+1. Ligue com `FM_CAPTURE_EVENTS=true` (opcional: `FM_CAPTURE_TTL_HOURS`, padrão 72, e `FM_CAPTURE_KEEP`, padrão 100).
+2. Faça a compra ou o evento de teste na plataforma. Só entra evento que passou na prova de origem.
+3. `python -m fm_seller.cli capture list` lista; `capture show <id>` mostra o corpo **mascarado** e a conferência
+   campo a campo (achado, não achado, campos que ninguém lê, problemas) e como a origem foi provada. O dono ou
+   administrador do cliente vê os eventos da própria conexão em **Conexões > eventos capturados**; os da compra do
+   SaaS (plataforma) só pela CLI.
+4. `capture export <id> --out <arquivo>` grava uma **fixture anonimizada** para
+   `apps/api/tests/fixtures/real_events/<provedor>/` (ver o README dessa pasta) e `capture purge` apaga o vencido.
+5. Desligue a captura quando terminar. Corpo e cabeçalhos ficam cifrados; segredos nunca são guardados.
+
+Se a conferência mostrar campo diferente, ajuste os caminhos em `events/normalize.py` com a fixture como teste.
+
 ## Relatórios de recuperação
 
 Menu **Relatórios** (ou `GET /v1/reports/recovery?from=AAAA-MM-DD&to=AAAA-MM-DD&group_by=none|day|product|sequence|source`,
