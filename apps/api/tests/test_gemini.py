@@ -85,6 +85,8 @@ def test_request_shape_and_key_only_in_header() -> None:
     assert KEY not in json.dumps(body)
     cfg = body["generationConfig"]
     assert cfg["responseMimeType"] == "application/json" and cfg["responseSchema"]["required"]
+    assert cfg["thinkingConfig"] == {"thinkingLevel": "low"}  # "minimal" não é aceito pelo 3.8
+    assert "temperature" not in cfg  # a documentação recomenda o padrão
     system = body["systemInstruction"]["parts"][0]["text"]
     assert "offer_id=o-1" in system and "Curso X" in system and "Bem-humorado" in system
     assert "NUNCA escreva preço" in system
@@ -271,3 +273,14 @@ def test_model_failure_hands_off_once_instead_of_retrying_forever(
     assert stats.handoffs == 1 and s.conv_state() == ("human", "erro_do_modelo")
     again = run_ai_replies(db, _gemini(lambda _r: response))
     assert again.conversations == 0  # a mensagem foi tratada: nada de tentar de novo
+
+
+def test_thinking_tokens_count_as_output_for_the_cost_limit() -> None:
+    data = answer(GOOD)
+    data["usageMetadata"] = {
+        "promptTokenCount": 10,
+        "candidatesTokenCount": 5,
+        "thoughtsTokenCount": 40,
+    }
+    reply = Fake(httpx.Response(200, json=data)).model().reply(ctx(("customer", "oi")))
+    assert (reply.tokens_in, reply.tokens_out) == (10, 45)

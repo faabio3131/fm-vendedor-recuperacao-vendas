@@ -80,6 +80,23 @@ Pontos a tratar nos textos: (a) vários terminam em `{link}`; há relatos de que
 começo ou no fim do corpo (não confirmado na documentação). Decisão do Diretor: ajustar. Feito: nenhum texto padrão começa ou termina com variável (teste
 `test_default_templates_*`). (b) a Meta não aprova texto promocional em categoria utilidade: cupom e desconto vão em MARKETING.
 
+### 2.4 Adaptadores: o que a documentação oficial confirmou (04/10/2026)
+
+Isto é **leitura de documentação**, não teste com conta real. Cada linha diz o que mudou no código.
+
+| Peça | Confirmado na documentação oficial | Ainda NÃO confirmado |
+|---|---|---|
+| Cakto: assinatura | Cabeçalho `X-Cakto-Signature: v1=<HMAC-SHA256>` sobre `"{X-Cakto-Timestamp}.{corpo bruto}"`, tolerância de 5 min; alternativa: campo `secret` no corpo. Código aceita as duas; os palpites antigos (`Authorization: Bearer`, `X-Cakto-Secret`) foram removidos | Qual chave entra no HMAC (a doc não diz; assumimos o segredo do webhook). Se estiver errada, o `secret` do corpo ainda autentica |
+| Cakto: eventos e campos | Envelope `{secret, event, data}`; pedido em `data.id/customer/product/offer/amount/checkoutUrl`; carrinho abandonado tem formato próprio (`customerName/Email/Cellphone`, sem `id` nem `amount`); `data` pode ser lista (Webhook V2): usamos o pedido `main`; valores em reais (`5.0` = R$ 5); boleto usa `boleto.boletoUrl` | Se a conta real manda exatamente isso; `pix.qrCode` não é usado como link (é o código Pix) |
+| Cakto: repetição | Dedupe por `data.id`, ou e-mail + oferta + `createdAt` no carrinho. A chave inclui o nome do evento (o mesmo pedido gera Pix gerado e depois compra aprovada). Retentativas só ocorrem por rede/timeout; resposta não-2xx **não** é reenviada pela Cakto | Eventos `picpay_gerado` e `openfinance_nubank_gerado` e `refund_requested` não são tratados (ignorados) |
+| Cakto e Hotmart: status da conexão | Não há como consultá-las: o botão "Testar conexão" agora diz "ainda não chegou evento válido" (pendente) e **nunca** rebaixa uma conexão já confirmada por evento real | — |
+| Hotmart | **Nada.** A página de documentação respondeu 403 ao nosso acesso e não foi contornada. Nomes de evento e campos continuam de fonte de terceiros | Tudo: cabeçalho `X-Hotmart-Hottok`, nomes de evento, caminhos dos campos. Precisa da documentação colada pelo Diretor ou de um evento real |
+| Gemini | Modelo `gemini-3.8-flash` existe e está em disponibilidade geral; `generateContent` segue suportado (a Google recomenda a Interactions API para projetos novos, sem data de desativação); chave no cabeçalho `x-goog-api-key`; `thinkingLevel` aceita `low/medium/high` (`minimal` dá erro neste modelo; padrão é `medium`); documentação manda deixar `temperature` no padrão. Código: removida a temperatura, raciocínio `low` (`FM_AI_THINKING_LEVEL`), limite de saída 1024, raciocínio somado à saída no medidor de custo | Se `maxOutputTokens` inclui o raciocínio; se `candidatesTokenCount` já inclui o raciocínio; se o `responseSchema` com tipos em maiúsculas é aceito. O `ai-check` responde as três |
+
+**Preço do Gemini 3.8 Flash (dado com data, fonte: ai.google.dev, 04/10/2026):** US$ 0,75 por milhão de tokens de
+entrada e US$ 3,75 por milhão de saída **até 31/12/2026**; US$ 1,50 e US$ 7,50 **a partir de 01/01/2027**. O preço sobe
+em 3 meses: ao definir limites e planos (D2), usar o valor de 2027.
+
 ## 3. Contas e ações que destravam os testes
 
 - [ ] Client ID do Google (P1) · [ ] chave do Gemini no staging (P2) · [ ] hospedagem e domínio (P3)
@@ -101,8 +118,10 @@ Cada teste só vale se registrar o resultado real (data, o que foi enviado, o qu
    reprovação (atenção: texto que começa ou termina com variável) e corrigir os textos padrão.
 6. **Envio:** texto dentro da janela de 24 h e template fora dela, com parâmetros; conferir que o
    passo vira `sent` só com id devolvido e que erro incerto vira `failed` sem reenvio.
-7. **Compra de teste Cakto/Hotmart:** cria cliente, plano e convite; capturar o evento real e **corrigir os
-   caminhos de campos** de `events/normalize.py` (hoje são suposições).
+7. **Compra de teste Cakto/Hotmart:** cria cliente, plano e convite; capturar o evento real e comparar com a
+   seção 2.4. Cakto: o código já segue a documentação; conferir se a assinatura `X-Cakto-Signature` valida
+   (se não, só o `secret` do corpo está valendo). Hotmart: **corrigir os caminhos de campos** de
+   `events/normalize.py` (ainda são suposições).
 8. **Ponta a ponta:** compra → login → conectar WhatsApp → template aprovado → oportunidade → mensagem
    recebida pelo contato → resposta do contato encerra o caso.
 
@@ -126,5 +145,6 @@ compra não confirmado · restauração de backup nunca testada · token ou cred
 ## 7. Risco residual conhecido
 
 O formato de envio, a criação de template e o teste de conexão foram escritos pela documentação da Meta e
-testados só contra servidor falso. O adaptador do Gemini também. Até os testes da seção 4, trate-os como
-**não validados**.
+testados só contra servidor falso. O adaptador do Gemini também (conferido na documentação oficial, seção 2.4,
+mas nunca chamado com chave real). O formato da Cakto foi alinhado à documentação, sem evento real; o da Hotmart
+nem isso. Até os testes da seção 4, trate-os como **não validados**.

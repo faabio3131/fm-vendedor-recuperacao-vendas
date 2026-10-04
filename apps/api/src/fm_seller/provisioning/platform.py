@@ -158,7 +158,7 @@ def ingest_platform_event(
         raise bad_request("invalid_json", "Corpo não é JSON válido.") from exc
     if not isinstance(body, dict):
         raise bad_request("invalid_json", "Corpo precisa ser um objeto JSON.")
-    if not secret_ok(provider, headers, body, expected):
+    if not secret_ok(provider, headers, body, expected, raw_body):
         raise AppError(401, "invalid_secret", "Segredo do webhook inválido.")
 
     ev = NORMALIZERS[provider](body)
@@ -170,7 +170,7 @@ def ingest_platform_event(
             "ON CONFLICT (provider, dedupe_key) DO NOTHING RETURNING id",
             (
                 provider,
-                dedupe_key(body, raw_body),
+                dedupe_key(body, raw_body, provider),
                 event_type,
                 ev.email if ev else None,
                 box.encrypt(body, tenant_id="platform", provider=f"platform:{provider}"),

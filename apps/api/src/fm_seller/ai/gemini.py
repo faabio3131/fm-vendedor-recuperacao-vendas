@@ -4,8 +4,17 @@ O modelo só propõe texto em JSON estruturado; preço, link e nome da oferta co
 cadastro do cliente (ver `seller.render_reply`). A chave é da plataforma (variável de ambiente), vai
 só no cabeçalho `x-goog-api-key` e nunca é registrada em log. O corpo das conversas também não.
 
-NÃO CONFIRMADO com a API real: nome exato do modelo (`FM_AI_MODEL`), formato de resposta e preço.
-Antes de ligar para clientes rode `python -m fm_seller.cli ai-check` com a chave real.
+Conferido na documentação oficial (ai.google.dev, 04/10/2026): `gemini-3.8-flash` existe e está em
+disponibilidade geral; `generateContent` segue suportado; chave no cabeçalho `x-goog-api-key`;
+`generationConfig` aceita `responseMimeType`, `responseSchema`, `maxOutputTokens` e
+`thinkingConfig.thinkingLevel` (`low`/`medium`/`high`; `minimal` NÃO é aceito por este modelo);
+a documentação recomenda deixar `temperature` no padrão (por isso não enviamos).
+
+NÃO CONFIRMADO com a API real: se `maxOutputTokens` inclui os tokens de raciocínio (a documentação
+não diz; por isso o limite é folgado e o raciocínio é `low`), se `candidatesTokenCount` os inclui
+(contamos `thoughtsTokenCount` à parte, por segurança do custo) e a grafia dos tipos do
+`responseSchema`. Antes de ligar para clientes rode `python -m fm_seller.cli ai-check` com a chave
+real.
 """
 
 from __future__ import annotations
@@ -25,7 +34,7 @@ log = logging.getLogger("fm_seller.ai")
 DEFAULT_MODEL = "gemini-3.8-flash"
 DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 RETRY_STATUS = {429, 500, 502, 503, 504}
-MAX_OUTPUT_TOKENS = 400
+MAX_OUTPUT_TOKENS = 1024  # folga: pode incluir raciocínio. O tamanho da resposta vem do prompt
 
 SYSTEM_RULES = (
     "Você é o assistente virtual de vendas de uma loja, atendendo clientes pelo WhatsApp em "
@@ -136,6 +145,7 @@ class GeminiModel:
         model: str = DEFAULT_MODEL,
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = 20.0,
+        thinking_level: str = "low",
         retries: int = 1,
         transport: httpx.BaseTransport | None = None,
         sleep: Any = time.sleep,
@@ -145,6 +155,7 @@ class GeminiModel:
         self._key = api_key
         self.model = model
         self._url = f"{base_url.rstrip('/')}/models/{model}:generateContent"
+        self._thinking_level = thinking_level
         self._retries = max(0, retries)
         self._sleep = sleep
         self._client = httpx.Client(timeout=timeout, transport=transport)
@@ -156,7 +167,7 @@ class GeminiModel:
             "generationConfig": {
                 "responseMimeType": "application/json",
                 "responseSchema": RESPONSE_SCHEMA,
-                "temperature": 0.4,
+                "thinkingConfig": {"thinkingLevel": self._thinking_level},
                 "maxOutputTokens": MAX_OUTPUT_TOKENS,
             },
         }
@@ -176,6 +187,7 @@ class GeminiModel:
                     "ms": round((time.monotonic() - started) * 1000),
                     "tokens_in": usage.get("promptTokenCount"),
                     "tokens_out": usage.get("candidatesTokenCount"),
+                    "tokens_thoughts": usage.get("thoughtsTokenCount"),
                 }
             },
         )
@@ -183,7 +195,9 @@ class GeminiModel:
         return replace(
             reply,
             tokens_in=_count(usage.get("promptTokenCount")),
-            tokens_out=_count(usage.get("candidatesTokenCount")),
+            # Raciocínio é cobrado como saída: somar é o lado seguro para o limite de custo.
+            tokens_out=_count(usage.get("candidatesTokenCount"))
+            + _count(usage.get("thoughtsTokenCount")),
         )
 
     def _post(self, body: dict[str, Any]) -> dict[str, Any]:
