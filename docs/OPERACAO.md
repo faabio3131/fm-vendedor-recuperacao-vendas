@@ -99,8 +99,8 @@ real do WhatsApp Cloud, validado com conta verificada na Meta. Passo cujo result
 
 Regras aplicadas na hora do envio: recuperação ligada, consentimento declarado, não contatar, janela de
 silêncio (21h–8h no fuso do cliente), limite diário por contato, máximo por venda, template aprovado e WhatsApp
-conectado. Compra aprovada em até 7 dias após o fim da sequência ainda conta como recuperada
-(janela de atribuição: decisão de produto a confirmar).
+conectado. Compra aprovada em até 5 dias após o fim da sequência ainda conta como recuperada
+(janela de atribuição decidida pelo Diretor em 04/10/2026; constante `ATTRIBUTION_DAYS`).
 
 ## Oportunidades (comércio local)
 

@@ -40,7 +40,7 @@ from fm_seller.security.crypto import CryptoError, SecretBox
 log = logging.getLogger("fm_seller.recovery")
 
 # Janela em que uma compra depois do fim da sequência ainda conta como recuperada.
-ATTRIBUTION_DAYS = 7
+ATTRIBUTION_DAYS = 5  # decisão D6 (04/10/2026): dias após o fim da sequência
 STUCK_AFTER = timedelta(hours=1)
 
 

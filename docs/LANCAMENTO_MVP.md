@@ -26,7 +26,7 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 | D3 | Quem paga as mensagens da Meta | O cliente, na própria conta Meta, controlando o próprio gasto | **DECIDIDO** em 03/10/2026 |
 | D4 | Conexão do WhatsApp sem Tech Provider e sem CNPJ (cliente com CPF) | Conexão simples para o cliente; caminho depende do teste real (seção 2.2) | PENDENTE |
 | D5 | Garantia e reembolso | Segue a regra de cada plataforma onde o produto for vendido (Cakto e Hotmart); sem regra própria no código | **DECIDIDO** em 04/10/2026; o texto na política de uso e nos termos fica para depois (P8) |
-| D6 | Janela de atribuição da venda recuperada | Hoje: 7 dias após a última mensagem. Pesquisa (seção 2.3) sugere reduzir para 5 | PESQUISADO; aguarda decisão do Diretor |
+| D6 | Janela de atribuição da venda recuperada | **5 dias** após o fim da sequência (era 7); pesquisa na seção 2.3 | **DECIDIDO** em 04/10/2026 e aplicado no código |
 | D7 | Sequências e textos padrão | Tempos atuais já batem com o mercado; textos: ver seção 2.3 | PESQUISADO; aguarda decisão do Diretor |
 | D8 | Vendedor IA apresentado como "básico" no MVP | Lançar a versão básica (MVP) primeiro; a V2 vem depois com o Core | **DECIDIDO** em 04/10/2026 |
 | D9 | Hospedagem (rascunho: Render) | Render como rascunho (decisão do Diretor, 04/10/2026); falta criar o staging e validar o `render.yaml` | **DECIDIDO como rascunho**; staging PENDENTE |
@@ -66,10 +66,10 @@ Concorrentes olhados nos sites deles; preços mudam, reconferir antes de publica
 publica a janela. A única referência pública achada é a do Klaviyo (mais usado no mundo): atribui por
 **último toque**, com **5 dias após o clique** em mensagem de WhatsApp e 12 horas após a abertura.
 Diferença importante: o Klaviyo exige clique ou abertura; nós contamos pela **mensagem enviada** (não
-rastreamos clique no V1). Nossa regra atual (`ATTRIBUTION_DAYS = 7` em `recovery/engine.py`): a compra conta
-se o caso está aberto ou se encerrou há até 7 dias, com ao menos uma mensagem enviada e o mesmo produto.
+rastreamos clique no V1). Nossa regra (`ATTRIBUTION_DAYS = 5` em `recovery/engine.py`, antes 7): a compra conta
+se o caso está aberto ou se encerrou há até 5 dias, com ao menos uma mensagem enviada e o mesmo produto.
 Contar só por envio é mais generoso que o mercado; janela menor protege a confiança do cliente no número.
-Sugestão: **5 dias** após a última mensagem. Mudar é uma constante e um teste; não bloqueia o lançamento.
+Decisão do Diretor: **5 dias**, aplicado no código com teste de fronteira.
 
 **D7, sequência e textos.** Os guias consultados convergem em **3 mensagens**: 30 min a 1 h (ajuda, sem
 desconto), 24 h (dúvida comum ou valor novo, sem só repetir) e 48 a 72 h (última chamada, com prazo real);
