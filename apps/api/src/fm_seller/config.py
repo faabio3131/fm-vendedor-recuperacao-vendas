@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     ai_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     ai_timeout_seconds: float = Field(default=20.0, ge=1, le=60)
 
+    # Envio real pelo WhatsApp Cloud API. Desligado por padrão: só ligar depois de validar com uma
+    # conta real (docs/PENDENCIAS_EXTERNAS.md). Em FM_ENV=test nunca é usado.
+    whatsapp_live: bool = False
+    meta_graph_base: str = "https://graph.facebook.com"
+    meta_graph_version: str = "v26.0"
+    meta_timeout_seconds: float = Field(default=15.0, ge=1, le=60)
+
     session_ttl_hours: int = Field(default=24 * 14, ge=1)
     cookie_secure: bool = False
 

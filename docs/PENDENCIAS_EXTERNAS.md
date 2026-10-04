@@ -21,6 +21,7 @@ de conexões de cada cliente.
 | P8 | Termos de uso, política de privacidade e papel de operador de dados (LGPD) em texto jurídico | PENDENTE | Vender legalmente | Revisão de advogado; link no login e na área de conexões |
 | P9 | Contador: obrigações do Fábio como pessoa física com as vendas do SaaS; quando abrir CNPJ | PENDENTE | Segurança fiscal | Orientação por escrito |
 | P10 | CNPJ + verificação de empresa na Meta | PENDENTE (não bloqueia) | Futuro: Tech Provider / Embedded Signup | Só necessário para conectar o WhatsApp do cliente com poucos cliques |
+| P11 | `FM_WHATSAPP_LIVE=true` (API e worker) e versão da Graph API (`FM_META_GRAPH_VERSION`) | PENDENTE | Envio real, teste real da conexão e templates na Meta | Só depois dos testes 1 a 3 abaixo, com conta real |
 
 ## Por cliente (cada cliente configura o dele, sem mudar código)
 
@@ -28,14 +29,14 @@ de conexões de cada cliente.
 |---|---|---|---|
 | C1 | Conta Meta Business, app e WhatsApp Business Account com número próprio | PENDENTE por cliente | Número já em uso no app WhatsApp Business pode exigir coexistência/migração: **a verificar** |
 | C2 | Cadastrar na central de conexões: ID do número, ID da conta, token, segredo do app; colar a URL de callback e o token de verificação na Meta | PENDENTE por cliente | Segredo do app é obrigatório (assinatura dos webhooks) |
-| C3 | Templates (`carrinho_*`, `pix_*`, `boleto_*`, `recusada_*`, `orcamento_*`, `conversa_*`) criados e aprovados na Meta; marcar como aprovado no painel | PENDENTE por cliente | A sincronização automática com a Meta ainda não existe (depende da conta de teste) |
+| C3 | Templates (`carrinho_*`, `pix_*`, `boleto_*`, `recusada_*`, `orcamento_*`, `conversa_*`) enviados para aprovação pelo painel e aprovados pela Meta | PENDENTE por cliente | Envio e sincronização existem, mas só contra servidor falso; precisa de `FM_WHATSAPP_LIVE` |
 | C4 | Declarar consentimento dos contatos e ligar a recuperação | PENDENTE por cliente | Feito no painel, em Recuperação → Ajustes |
 | C5 | Cadastrar ofertas (preço e link https) | PENDENTE por cliente | Sem ofertas ativas o vendedor IA passa a conversa para uma pessoa |
 
 ## Testes que só podem ser feitos com as contas
 
-1. WhatsApp real: handshake do webhook, assinatura, mensagem recebida, resposta, status de entrega, "SAIR".
-2. Template real: envio fora da janela de 24 h; recusa e aprovação.
+1. WhatsApp real: handshake do webhook, assinatura, mensagem recebida, resposta, status de entrega, "SAIR"; **teste da conexão** (token, número, conta) e **envio de texto e de template** (formato do corpo conferido contra a resposta real).
+2. Template real: criar pela API (`POST /<WABA>/message_templates`), conferir aprovação/recusa e motivo na sincronização, categoria devolvida, variável no início/fim do texto, e envio fora da janela de 24 h com parâmetros.
 3. Compra de teste Cakto e Hotmart (plataforma) e eventos de checkout (clientes que usam essas plataformas).
 4. Gemini real: `ai-check` e uma conversa de ponta a ponta.
 5. Login Google real em staging.

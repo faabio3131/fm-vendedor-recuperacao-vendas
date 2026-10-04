@@ -66,7 +66,7 @@ textarea { font: inherit; width: 100%; padding: 9px 10px; border-radius: 8px; bo
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .badge.recovered, .badge.approved { color: var(--ok); border-color: var(--ok); }
-.badge.stopped, .badge.rejected { color: var(--bad); border-color: var(--bad); }
+.badge.stopped, .badge.rejected, .badge.paused, .badge.disabled { color: var(--bad); border-color: var(--bad); }
 .badge.open, .badge.submitted, .badge.draft { color: var(--warn); border-color: var(--warn); }
 .step { display: grid; gap: 8px; grid-template-columns: 120px 1fr auto; align-items: end; margin-top: 8px; }
 @media (max-width: 520px) { .step { grid-template-columns: 1fr; } }

@@ -38,3 +38,9 @@ def test_prod_rejects_insecure_defaults(override: dict[str, object]) -> None:
 
 def test_dev_keeps_local_defaults() -> None:
     assert Settings(env="dev").cookie_secure is False
+
+
+def test_whatsapp_live_is_off_by_default() -> None:
+    from fm_seller.config import Settings
+
+    assert Settings().whatsapp_live is False

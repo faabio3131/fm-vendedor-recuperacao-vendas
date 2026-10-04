@@ -71,6 +71,19 @@ template aprovado). A conversa que volta a escrever encerra o caso `conversa`; o
 caso com "vendido" (conta como recuperada só se alguma mensagem já saiu) ou "perdi". Cakto e Hotmart do
 cliente são apenas mais uma fonte; a Cakto/Hotmart da F&M servem só para vender o SaaS (compra cria a conta).
 
+## WhatsApp real e templates (Bloco 7)
+
+`channels/meta_api.py` é o cliente mínimo da Graph API (versão em `FM_META_GRAPH_VERSION`, token só no
+cabeçalho). Recusa clara da Meta = `MetaRejected` (nada foi feito); rede, 5xx ou 2xx sem id = incerto, e o motor
+marca "falhou" sem reenviar (no máximo uma vez). `WhatsAppCloudSender` envia template (`meta_name`, idioma e
+parâmetros na ordem das variáveis) ou texto (janela de 24 h). Os textos do cliente usam `{nome}` `{produto}`
+`{valor}` `{link}`; `recovery/templates.py` converte para `{{1}}`… com exemplos. Cada envio à Meta usa o nome
+`chave_vN` (texto novo = versão nova; nome não se reutiliza). `recovery/template_sync.py`: envio em 3 passos
+(reserva o nome; chamada fora de transação; grava resultado), mapeamento de status
+(APPROVED/PENDING/REJECTED/PAUSED/DISABLED) e rotina do worker (5 min enquanto há template aguardando, 30 min
+depois, para perceber pausa/desativação). O adaptador real só é escolhido com `FM_WHATSAPP_LIVE=true` e nunca
+em `FM_ENV=test`.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.

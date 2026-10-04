@@ -25,6 +25,7 @@ from fm_seller.api.routes import (
     whatsapp,
 )
 from fm_seller.auth.google import GoogleVerifier, build_verifier
+from fm_seller.channels.templates_gateway import TemplateGateway, build_template_gateway
 from fm_seller.config import Settings, get_settings
 from fm_seller.db import Database
 from fm_seller.errors import AppError
@@ -47,13 +48,14 @@ def create_app(
     tester: ConnectionTester | None = None,
     box: SecretBox | None = None,
     event_handler: EventHandler | None = None,
+    templates: TemplateGateway | None = None,
 ) -> FastAPI:
     cfg = settings or get_settings()
     setup_logging()
     database = db or Database(cfg.database_url)
     secret_box = box or SecretBox(cfg.secrets_keys)
     google = verifier or build_verifier(cfg.env, cfg.google_client_id)
-    conn_tester = tester or build_tester(cfg.env)
+    conn_tester = tester or build_tester(cfg)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -72,6 +74,7 @@ def create_app(
     app.state.connections = ConnectionService(database, cfg, secret_box, conn_tester)
     app.state.box = secret_box
     app.state.event_handler = event_handler or handle_event
+    app.state.templates = templates or build_template_gateway(cfg)
 
     app.add_middleware(
         CORSMiddleware,

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from fm_seller.api.deps import get_db, get_principal
 from fm_seller.recovery.opportunities import OpportunityService
 from fm_seller.recovery.service import RecoveryService
+from fm_seller.recovery.template_sync import TemplateSync
 from fm_seller.services import Principal
 
 router = APIRouter(prefix="/recovery", tags=["recuperação"])
@@ -53,6 +54,10 @@ class TemplateIn(BaseModel):
 
 class TemplateStatusIn(BaseModel):
     status: str = Field(max_length=20)
+
+
+class TemplateSubmitIn(BaseModel):
+    category: str = Field(default="MARKETING", max_length=20)
 
 
 class SuppressionIn(BaseModel):
@@ -108,6 +113,23 @@ def templates(s: Svc, p: Who) -> list[dict[str, Any]]:
 @router.put("/templates/{key}")
 def put_template(key: str, body: TemplateIn, s: Svc, p: Who) -> dict[str, Any]:
     return s.put_template(p, key, body.body)
+
+
+def tsvc(request: Request) -> TemplateSync:
+    return TemplateSync(get_db(request), request.app.state.box, request.app.state.templates)
+
+
+TplSvc = Annotated[TemplateSync, Depends(tsvc)]
+
+
+@router.post("/templates/sync")
+def templates_sync(s: TplSvc, p: Who) -> dict[str, Any]:
+    return s.sync(p)
+
+
+@router.post("/templates/{key}/submit")
+def template_submit(key: str, body: TemplateSubmitIn, s: TplSvc, p: Who) -> dict[str, Any]:
+    return s.submit(p, key, body.category)
 
 
 @router.post("/templates/{key}/status")
