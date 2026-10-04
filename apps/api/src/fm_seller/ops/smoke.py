@@ -47,6 +47,28 @@ def _get(
         waited += 5
 
 
+def _is_local(url: str) -> bool:
+    return "localhost" in url or "testserver" in url or "127.0.0.1" in url
+
+
+def missing_headers(res: httpx.Response, *, https: bool) -> list[str]:
+    """Cabeçalhos de segurança que deveriam vir e não vieram (o proxy pode ter tirado)."""
+    h = res.headers
+    csp = h.get("content-security-policy", "")
+    missing = []
+    if h.get("x-content-type-options", "").lower() != "nosniff":
+        missing.append("X-Content-Type-Options")
+    if "frame-ancestors" not in csp and not h.get("x-frame-options"):
+        missing.append("proteção contra embutir em outra página (frame-ancestors)")
+    if not csp:
+        missing.append("Content-Security-Policy")
+    if not h.get("referrer-policy"):
+        missing.append("Referrer-Policy")
+    if https and not h.get("strict-transport-security"):
+        missing.append("Strict-Transport-Security")
+    return missing
+
+
 def _json(res: httpx.Response) -> Any:
     try:
         return res.json()
@@ -78,6 +100,25 @@ def run(
             code = "sem resposta" if res is None else str(res.status_code)
             report.bad(CRITICAL, "health", f"/v1/health não respondeu ok ({code}).")
             return report  # sem API de pé, o resto não faz sentido
+
+        https_api = api.startswith("https://") and not _is_local(api)
+        lacking = missing_headers(res, https=https_api)
+        if lacking:
+            report.bad(
+                WARNING,
+                "api_headers",
+                "A API não enviou cabeçalhos de segurança: " + ", ".join(lacking) + ".",
+            )
+        else:
+            report.ok("A API envia os cabeçalhos de segurança")
+        if not _is_local(api):
+            spec = _get(http, f"{api}/openapi.json", wait=0, sleep=sleep)
+            if spec is not None and spec.status_code == 200:
+                report.bad(
+                    WARNING, "api_docs_open", "A descrição da API (/openapi.json) está exposta."
+                )
+            else:
+                report.ok("A descrição da API não está exposta")
 
         res = _get(http, f"{api}/v1/ready", wait=wait, sleep=sleep)
         body = None if res is None else _json(res)
@@ -146,6 +187,19 @@ def run(
             page = _get(http, f"{web}/login", wait=wait, sleep=sleep)
             if page is not None and page.status_code == 200 and "AtendeVendeIA" in page.text:
                 report.ok("O painel abre a tela de login")
+                web_lacking = missing_headers(
+                    page, https=web.startswith("https://") and not _is_local(web)
+                )
+                if web_lacking:
+                    report.bad(
+                        WARNING,
+                        "web_headers",
+                        "O painel não enviou cabeçalhos de segurança: "
+                        + ", ".join(web_lacking)
+                        + ".",
+                    )
+                else:
+                    report.ok("O painel envia os cabeçalhos de segurança")
             else:
                 code = "sem resposta" if page is None else str(page.status_code)
                 report.bad(CRITICAL, "web_login", f"O painel não abriu o login ({code}).")

@@ -67,6 +67,9 @@ jobs:
     env:
       PGPASSWORD: ci_admin_only
       FM_ENV: dev
+      # O e2e entra várias vezes por minuto pelo mesmo IP: o limite contra abuso fica desligado aqui
+      # e é testado à parte (apps/api/tests/test_security.py).
+      FM_RATE_LIMIT_ENABLED: "false"
       FM_DATABASE_URL: postgresql://fm_app:dev_app_only@localhost:5432/fm_e2e
       FM_DATABASE_ADMIN_URL: postgresql://fm_owner:dev_owner_only@localhost:5432/fm_e2e
     steps:

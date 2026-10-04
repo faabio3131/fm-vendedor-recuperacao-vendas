@@ -19,6 +19,8 @@ from fm_seller.providers.testers import ConnectionTester
 from fm_seller.security.crypto import CryptoError, SecretBox
 
 EDIT_ROLES = ("owner", "admin")
+MAX_SESSIONS = 10  # sessões ativas por pessoa; a mais antiga é encerrada ao passar disso
+NO_ACCESS = "Esta conta Google não tem acesso. Use o e-mail da compra do plano."
 
 
 def hash_token(token: str) -> str:
@@ -79,9 +81,7 @@ def login_with_google(db: Database, settings: Settings, identity: GoogleIdentity
         ).fetchone()
         if user is None:
             if invite is None:
-                raise forbidden(
-                    "Esta conta Google não tem acesso. Use o e-mail da compra do plano."
-                )
+                raise forbidden(NO_ACCESS)
             user = conn.execute(
                 "INSERT INTO users (google_sub, email, name) VALUES (%s, %s, %s) RETURNING id",
                 (identity.sub, identity.email, identity.name),
@@ -110,13 +110,31 @@ def login_with_google(db: Database, settings: Settings, identity: GoogleIdentity
             "SELECT 1 FROM memberships WHERE user_id = %s LIMIT 1", (user_id,)
         ).fetchone()
         if has_access is None:
-            raise forbidden("Esta conta Google não tem acesso a nenhum cliente.")
+            raise forbidden(
+                NO_ACCESS
+            )  # mesma resposta de "conta desconhecida": não revela quem existe
         conn.execute("UPDATE users SET name = %s WHERE id = %s", (identity.name or "", user_id))
         conn.execute(
             "INSERT INTO sessions (user_id, token_hash, expires_at) VALUES (%s, %s, %s)",
             (user_id, hash_token(token), expires),
         )
+        # Sessões esquecidas não ficam valendo para sempre: só as mais recentes seguem ativas.
+        conn.execute(
+            "UPDATE sessions SET revoked_at = now() WHERE user_id = %s AND revoked_at IS NULL "
+            "AND id NOT IN (SELECT id FROM sessions WHERE user_id = %s AND revoked_at IS NULL "
+            "ORDER BY created_at DESC LIMIT %s)",
+            (user_id, user_id, MAX_SESSIONS),
+        )
     return token
+
+
+def revoke_all_sessions(db: Database, user_id: uuid.UUID) -> int:
+    """ "Sair de todos os aparelhos": encerra toda sessão ativa da pessoa."""
+    with db.tx(user_id=user_id) as conn:
+        return conn.execute(
+            "UPDATE sessions SET revoked_at = now() WHERE user_id = %s AND revoked_at IS NULL",
+            (user_id,),
+        ).rowcount
 
 
 def revoke_session(db: Database, token: str) -> None:

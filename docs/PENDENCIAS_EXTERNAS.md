@@ -44,10 +44,17 @@ de conexões de cada cliente.
 6. Messenger e Instagram reais: handshake, assinatura, mensagem recebida (ID de quem escreve), resposta (formato de envio e janela de 24 h), entrega/leitura e "SAIR". O formato do envio do Instagram (qual ID e qual endereço da Graph API) **não foi confirmado**.
 7. Limites da Meta: camada de mensagens do número (250 → 2.000 contatos únicos por 24 h); ajustar `Limite diário do número` em Recuperação.
 
+## Segurança: o que só o ambiente real responde
+
+Ver o fim de `docs/SEGURANCA.md`. Resumo: conferir no staging qual IP chega à API atrás do painel (define `FM_TRUST_PROXY`), que o
+proxy do Render não remove os cabeçalhos de segurança (`cli smoke` avisa), rodar o `preflight`, e contratar um teste de invasão
+antes de abrir para clientes.
+
 ## Decisões de produto abertas
 
 - Janela de atribuição de venda recuperada: decidida em 5 dias (D6, 04/10/2026).
 - Carência em atraso antes de suspender (D10): 3 dias provisórios; o prazo certo é decisão do Diretor.
+- Segurança (Bloco 19), decisões do Diretor: duração da sessão e expiração por inatividade (hoje 14 dias fixos); nonce na CSP do painel; contratar teste de invasão.
 - Privacidade (Bloco 18), decisões do Diretor e do advogado: prazo de retenção das conversas (365 dias provisório), carência da exclusão da conta (30 dias provisório), e se o bloqueio de contato deve ser guardado só como hash com chave própria (hoje fica o telefone ou ID, sem nome nem mensagens, para não correr o risco de esquecer o bloqueio na rotação da chave).
 - Limites e preços por plano (valores atuais de `plans.limits`, 1000 respostas de IA por mês, são **provisórios**; custo real por resposta só se sabe após o `ai-check`).
 - Sequências e textos padrão da recuperação.

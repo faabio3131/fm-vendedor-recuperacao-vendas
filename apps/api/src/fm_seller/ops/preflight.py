@@ -96,6 +96,21 @@ def _settings_problems(settings: Settings, report: Report) -> None:
             "platform_secrets_missing",
             "Sem segredo de Cakto/Hotmart da plataforma: a compra do SaaS não cria conta sozinha.",
         )
+    if not settings.rate_limit_enabled:
+        report.bad(
+            CRITICAL if settings.env == "prod" else WARNING,
+            "rate_limit_off",
+            "FM_RATE_LIMIT_ENABLED=false: sem limite contra tentativa repetida e enxurrada.",
+        )
+    else:
+        report.ok("Limites contra abuso ligados")
+        if not settings.trust_proxy:
+            report.bad(
+                WARNING,
+                "trust_proxy_off",
+                "FM_TRUST_PROXY=false: atrás de um proxy o limite por IP enxerga só o proxy. "
+                "Confirme no ambiente real qual IP chega à API (docs/SEGURANCA.md).",
+            )
     if settings.capture_events:
         report.bad(
             WARNING,
