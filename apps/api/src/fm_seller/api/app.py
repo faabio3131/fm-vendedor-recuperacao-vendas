@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from fm_seller import __version__
+from fm_seller.api.guards import BodyLimitMiddleware, Guards, security_headers
 from fm_seller.api.routes import (
     auth,
     captures,
@@ -71,7 +72,19 @@ def create_app(
         if db is None:
             database.close()
 
-    app = FastAPI(title="AtendeVendeIA", version=__version__, lifespan=lifespan)
+    # Em staging/produção a descrição da API (/docs, /openapi.json) não fica exposta.
+    hide = cfg.is_production_like
+    app = FastAPI(
+        title="AtendeVendeIA",
+        version=__version__,
+        lifespan=lifespan,
+        docs_url=None if hide else "/docs",
+        redoc_url=None if hide else "/redoc",
+        openapi_url=None if hide else "/openapi.json",
+    )
+    guards = Guards(cfg)
+    app.state.guards = guards
+    fixed_headers = security_headers(cfg)
     app.state.settings = cfg
     app.state.db = database
     app.state.verifier = google
@@ -94,6 +107,12 @@ def create_app(
     ) -> Response:
         request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
         started = time.perf_counter()
+        limited = guards.before(request)
+        if limited is not None:
+            limited.headers["x-request-id"] = request_id
+            for name, value in fixed_headers.items():
+                limited.headers[name] = value
+            return limited
         if request.method in UNSAFE and not request.url.path.startswith(
             ("/v1/webhooks/", "/v1/platform/webhooks/")
         ):
@@ -104,9 +123,16 @@ def create_app(
                     content={"error": {"code": "bad_origin", "message": "Origem não permitida."}},
                 )
                 response.headers["x-request-id"] = request_id
+                for name, value in fixed_headers.items():
+                    response.headers[name] = value
                 return response
         response = await call_next(request)
         response.headers["x-request-id"] = request_id
+        for name, value in fixed_headers.items():
+            response.headers[name] = value
+        if request.url.path.startswith("/v1/") and "cache-control" not in response.headers:
+            response.headers["Cache-Control"] = "no-store"  # nada de dado de cliente em cache
+        guards.after(request, response.status_code)
         log.info(
             "request",
             extra={
@@ -127,6 +153,7 @@ def create_app(
             status_code=exc.status, content={"error": {"code": exc.code, "message": exc.message}}
         )
 
+    app.add_middleware(BodyLimitMiddleware, max_bytes=cfg.max_body_bytes, cfg=cfg)
     app.include_router(health.router, prefix="/v1")
     app.include_router(auth.router, prefix="/v1")
     app.include_router(me.router, prefix="/v1")

@@ -230,12 +230,23 @@ Meta e da Cakto/Hotmart.
   login: `/v1/health` e `/v1/ready`, que `/v1/me` exige login, que o CORS não libera origem estranha, que escrita vinda de
   outra origem dá 403, que os webhooks recusam quem não tem conexão ou segredo e, com `--web`, que o painel abre o login
   e repassa `/v1` até a API. Espera até 90 s a instância grátis acordar (`--wait`). Mesmo código de saída.
+- O `smoke` também confere os cabeçalhos de segurança na API e no painel (aviso se faltarem; HSTS só em https fora do local) e avisa se
+  `/openapi.json` estiver exposto. O `preflight` avisa se `FM_RATE_LIMIT_ENABLED=false` (crítico em produção) ou se `FM_TRUST_PROXY=false`.
 - **Não prova** login com Google, WhatsApp, Cakto/Hotmart nem IA: isso é com contas reais (`docs/LANCAMENTO_MVP.md`, seção 4).
 - **Ensaio de subida e rollback:** `FM_DATABASE_ADMIN_URL=postgresql://fm_owner:...@localhost:5432/qualquer_banco
   scripts/ops/rehearsal.sh` (precisa de `psql`, `pg_dump` e `pg_restore`, banco **local**). Sobe a versão anterior, faz
   backup, aplica a migration nova, restaura o backup em outro banco (a "volta"), confere versão, dados e RLS e sobe de
   novo. Apaga os bancos temporários. Roda também nos testes. **Não prova** o rollback da imagem no Render nem o tempo de
   restaurar um banco grande.
+
+## Limites contra abuso e sessões
+
+Os limites (`FM_RATE_*`, padrão folgado) respondem `429` com `Retry-After`; ver a tabela em `docs/SEGURANCA.md`. Se um cliente legítimo
+for barrado, aumente o limite da variável em questão e reinicie a API (a contagem é da memória do processo e zera ao reiniciar).
+Webhook recusado 30 vezes em 10 minutos trava aquele IP nos webhooks por até 10 minutos: se uma plataforma legítima ficou
+travada, o segredo configurado está errado (corrija o segredo, não o limite). Pessoa que perdeu o aparelho: `POST /v1/auth/logout-all`
+(ela mesma, ou peça para entrar de novo e sair de todos). **Rode a auditoria de dependências** (`Auditoria de dependências` nas
+Actions) antes de subir e depois a cada semana; o Python não tem arquivo de travamento de versões.
 
 ## Rollback
 

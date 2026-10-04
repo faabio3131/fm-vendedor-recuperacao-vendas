@@ -193,6 +193,15 @@ anterior. Vencida a carência, o worker apaga o cliente, os eventos de compra de
 cliente, e grava só o id e as datas em `deletion_log`. A trava de somente-inserção da auditoria só cede para as linhas do
 cliente que está sendo excluído (`app.purge_tenant`).
 
+## Segurança da borda (Bloco 19)
+
+`api/guards.py` e `security/ratelimit.py`, ligados em `api/app.py`. Três camadas, de fora para dentro: `BodyLimitMiddleware` (ASGI,
+recusa corpo grande demais pelo `Content-Length` e também no meio da leitura em pedaços), o `request_guard` (limite de taxa por
+IP, por conta e por falha de webhook; cabeçalhos de segurança e `Cache-Control: no-store` em toda resposta, inclusive 403, 413 e
+429) e a guarda de origem de sempre. O limitador é uma janela deslizante na memória do processo, com número de chaves limitado.
+Sessões: no máximo 10 ativas por pessoa e `POST /v1/auth/logout-all`. Em staging e produção `/docs` e `/openapi.json` não existem.
+Modelo de ameaças, limites escolhidos e o que não foi provado: `docs/SEGURANCA.md`.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.

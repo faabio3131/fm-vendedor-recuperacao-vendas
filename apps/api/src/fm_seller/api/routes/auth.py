@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
-from fm_seller.api.deps import COOKIE, get_db
+from fm_seller.api.deps import COOKIE, get_db, get_principal
 from fm_seller.auth.google import GoogleVerifier
 from fm_seller.config import Settings
-from fm_seller.services import login_with_google, revoke_session
+from fm_seller.services import login_with_google, revoke_all_sessions, revoke_session
 
 router = APIRouter(prefix="/auth", tags=["autenticação"])
 
@@ -31,6 +31,15 @@ def google_login(body: GoogleLogin, request: Request, response: Response) -> dic
         path="/",
     )
     return {"status": "ok"}
+
+
+@router.post("/logout-all")
+def logout_all(request: Request, response: Response) -> dict[str, int]:
+    """Encerra todas as sessões da pessoa (todos os aparelhos), inclusive esta."""
+    principal = get_principal(request)
+    closed = revoke_all_sessions(get_db(request), principal.user_id)
+    response.delete_cookie(COOKIE, path="/")
+    return {"closed": closed}
 
 
 @router.post("/logout")

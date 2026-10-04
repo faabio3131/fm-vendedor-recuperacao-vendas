@@ -38,6 +38,7 @@ class Env:
             secrets_keys=self.key_spec,
             web_origin=ORIGIN,
             public_base_url="https://api.example.test",
+            rate_limit_enabled=False,  # os testes de abuso ligam o limite no próprio app
         )
 
     def tenant(self, name: str, email: str, plan: str = "fase-1", role: str = "owner") -> str:

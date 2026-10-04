@@ -60,6 +60,18 @@ class Settings(BaseSettings):
 
     session_ttl_hours: int = Field(default=24 * 14, ge=1)
     cookie_secure: bool = False
+    # Limites contra abuso (docs/SEGURANCA.md). Contagem na memória do processo: com mais de uma
+    # instância cada uma conta sozinha. Em teste e no e2e local fica desligado de propósito.
+    rate_limit_enabled: bool = True
+    # Atrás do proxy do painel/Render o IP do cliente vem em X-Forwarded-For (última entrada).
+    # NÃO CONFIRMADO no Render: sem isto o limite por IP enxerga só o proxy.
+    trust_proxy: bool = False
+    max_body_bytes: int = Field(default=1_048_576, ge=1024)
+    rate_login_per_5min: int = Field(default=60, ge=1)
+    rate_api_per_min: int = Field(default=1200, ge=1)
+    rate_sensitive_per_10min: int = Field(default=20, ge=1)
+    rate_webhook_per_min: int = Field(default=1200, ge=1)
+    rate_webhook_fail_per_10min: int = Field(default=30, ge=1)
 
     @model_validator(mode="after")
     def _require_real_config_outside_dev(self) -> Settings:

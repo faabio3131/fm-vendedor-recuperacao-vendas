@@ -143,7 +143,8 @@ Cada teste só vale se registrar o resultado real (data, o que foi enviado, o qu
 - [ ] Alertas mínimos: webhook parado, fila de saída crescendo, falha de envio, falha de sincronização. *(`ops-check` cobre tudo menos webhook parado e API fora do ar: ver OPERACAO.md; falta ligar o aviso ao e-mail)*
 - [ ] Rollback definido (reverter imagem e migrations compatíveis). *(regra em OPERACAO.md; o rollback do **banco** foi ensaiado em Postgres local com `scripts/ops/rehearsal.sh`, também nos testes; falta ensaiar a volta da imagem no staging)*
 - [ ] `preflight` sem crítico e `smoke` sem crítico no ambiente que vai ao ar. *(comandos prontos e testados contra servidor simulado e banco local; falta rodar no ambiente real)*
-- [ ] CI verde (api, web, e2e) no commit que vai ao ar.
+- [ ] CI verde (api, web, e2e) no commit que vai ao ar e auditoria de dependências sem achado.
+- [ ] Cabeçalhos de segurança chegando pelo proxy do Render e IP do cliente conferido (`cli smoke`; `docs/SEGURANCA.md`).
 
 **Primeiros passos (Bloco 16):** a lista que o cliente vê em "Primeiros passos" é a mesma checagem que barra ligar
 a recuperação (sem WhatsApp testado) e o vendedor IA (sem oferta ativa). Testado com simulador: o teste "conectado"
@@ -152,6 +153,10 @@ em staging real depende de `FM_WHATSAPP_LIVE` e conta Meta (seção 4, teste 3).
 **Privacidade (Bloco 18):** exportar e apagar contato, retenção automática, registro de consentimento e exclusão da conta existem
 e foram testados com dados sintéticos. Falta, com conta real, conferir no ambiente de staging que o worker aplica a retenção e a
 exclusão sem apagar o que não deve, e o texto jurídico (P8). Go exige D11 decidida.
+
+**Segurança (Bloco 19):** limites contra abuso, limite de corpo, cabeçalhos e sessões estão testados com simulador. Para o go: `cli smoke`
+sem aviso de cabeçalho no ambiente real, `FM_RATE_LIMIT_ENABLED=true` (o `preflight` barra em produção), IP real atrás do proxy conferido
+(`FM_TRUST_PROXY`), auditoria de dependências limpa e a decisão sobre teste de invasão registrada (`docs/SEGURANCA.md`).
 
 ## 6. Critérios de go / no-go
 

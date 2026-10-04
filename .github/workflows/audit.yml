@@ -1,0 +1,37 @@
+name: Auditoria de dependências
+
+# Procura vulnerabilidade conhecida nas dependências (pip-audit e npm audit: gratuitos, sem conta).
+# Fica fora do CI principal de propósito: uma vulnerabilidade nova numa biblioteca não deve travar
+# merge que não mexeu em dependência. Roda toda segunda, sob pedido e em PR que mexe nelas.
+on:
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/api/pyproject.toml"
+      - "apps/web/package.json"
+      - "apps/web/package-lock.json"
+      - ".github/workflows/audit.yml"
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pip-audit
+      - name: pip-audit (dependências do projeto)
+        working-directory: apps/api
+        run: pip-audit --progress-spinner off .
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: apps/web/package-lock.json }
+      - name: npm audit (o que vai para produção)
+        working-directory: apps/web
+        run: npm ci && npm audit --omit=dev

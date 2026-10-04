@@ -37,6 +37,7 @@ BASE: dict[str, Any] = {
     "secrets_keys": SecretBox.generate_key_spec(),
     "google_client_id": "123-abc.apps.googleusercontent.com",
     "cookie_secure": True,
+    "trust_proxy": True,
     "web_origin": "https://app.example.test",
     "public_base_url": "https://api.example.test",
     "ai_api_key": "chave-de-teste",
@@ -187,6 +188,7 @@ def test_cli_preflight_prints_the_result_and_returns_the_exit_code(
         "FM_SECRETS_KEYS": BASE["secrets_keys"],
         "FM_GOOGLE_CLIENT_ID": BASE["google_client_id"],
         "FM_COOKIE_SECURE": "true",
+        "FM_TRUST_PROXY": "true",
         "FM_WEB_ORIGIN": BASE["web_origin"],
         "FM_PUBLIC_BASE_URL": BASE["public_base_url"],
         "FM_AI_API_KEY": "x",
@@ -211,6 +213,15 @@ def test_cli_preflight_prints_the_result_and_returns_the_exit_code(
 # ----------------------------------------------------------------------- smoke
 
 
+SECURE = {
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+    "referrer-policy": "no-referrer",
+    "strict-transport-security": "max-age=31536000",
+}
+
+
 def fake_api(**over: Any) -> httpx.MockTransport:
     """API correta por padrão; cada teste estraga uma coisa."""
 
@@ -220,7 +231,7 @@ def fake_api(**over: Any) -> httpx.MockTransport:
             value = over[path]
             return value(req) if callable(value) else cast(httpx.Response, value)
         if path == "/v1/health":
-            return httpx.Response(200, json={"status": "ok", "version": "0.1.0"})
+            return httpx.Response(200, json={"status": "ok", "version": "0.1.0"}, headers=SECURE)
         if path == "/v1/ready":
             return httpx.Response(200, json={"status": "ready"})
         if path == "/v1/me":
@@ -232,7 +243,7 @@ def fake_api(**over: Any) -> httpx.MockTransport:
         if path == "/v1/platform/webhooks/cakto":
             return httpx.Response(401, json={"error": {"code": "invalid_secret"}})
         if path == "/login":
-            return httpx.Response(200, text="<html>AtendeVendeIA</html>")
+            return httpx.Response(200, text="<html>AtendeVendeIA</html>", headers=SECURE)
         return httpx.Response(404)
 
     return httpx.MockTransport(handler)
@@ -247,15 +258,26 @@ def run_smoke(transport: httpx.MockTransport, **kw: Any) -> preflight.Report:
     return report
 
 
+def test_preflight_flags_missing_abuse_limits_and_proxy_trust() -> None:
+    off = preflight.run(lambda: staging(rate_limit_enabled=False), check_database=False)
+    assert "rate_limit_off" in codes(off, WARNING)  # em staging é aviso
+    prod = preflight.run(
+        lambda: staging(env="prod", rate_limit_enabled=False), check_database=False
+    )
+    assert "rate_limit_off" in codes(prod, CRITICAL)
+    proxy = preflight.run(lambda: staging(trust_proxy=False), check_database=False)
+    assert "trust_proxy_off" in codes(proxy, WARNING) and not codes(proxy, CRITICAL)
+
+
 def test_smoke_good_api_passes_every_check() -> None:
     report = run_smoke(fake_api())
-    assert report.findings == [] and len(report.passed) == 6, report.passed
+    assert report.findings == [] and len(report.passed) == 8, report.passed
 
 
 def test_smoke_with_web_checks_login_and_the_v1_proxy() -> None:
     web = "https://app.example.test"
     assert run_smoke(fake_api(), web=web).findings == []
-    assert len(run_smoke(fake_api(), web=web).passed) == 8
+    assert len(run_smoke(fake_api(), web=web).passed) == 11
 
     good = fake_api()
 
@@ -292,6 +314,24 @@ def test_smoke_flags_each_broken_guarantee_as_critical(override: dict[str, Any],
     assert exit_code(report.findings) == 2
 
 
+def test_smoke_warns_when_security_headers_are_missing_or_the_api_description_is_open() -> None:
+    bare = httpx.Response(200, json={"status": "ok", "version": "0.1.0"})
+    report = run_smoke(fake_api(**{"/v1/health": bare}), wait=0)
+    assert "api_headers" in codes(report, WARNING) and exit_code(report.findings) == 1
+    assert "Content-Security-Policy" in report.findings[0].message
+    # HSTS só é cobrado em https fora do local
+    no_hsts = {k: v for k, v in SECURE.items() if k != "strict-transport-security"}
+    res = httpx.Response(200, json={"status": "ok"}, headers=no_hsts)
+    assert "api_headers" in codes(run_smoke(fake_api(**{"/v1/health": res}), wait=0), WARNING)
+    local = run_smoke(fake_api(**{"/v1/health": res}), api="http://localhost:8000", wait=0)
+    assert "api_headers" not in codes(local, WARNING)
+    exposed = fake_api(**{"/openapi.json": httpx.Response(200, json={"openapi": "3.1.0"})})
+    assert "api_docs_open" in codes(run_smoke(exposed, wait=0), WARNING)
+    web = "https://app.example.test"
+    page = httpx.Response(200, text="<html>AtendeVendeIA</html>")
+    assert "web_headers" in codes(run_smoke(fake_api(**{"/login": page}), web=web, wait=0), WARNING)
+
+
 def test_smoke_stops_early_when_the_api_is_down() -> None:
     report = run_smoke(fake_api(**{"/v1/health": httpx.Response(500, json={})}), wait=0)
     assert codes(report) == {"health"} and report.passed == []
@@ -304,7 +344,7 @@ def test_smoke_waits_for_a_free_instance_to_wake_up() -> None:
         attempts["n"] += 1
         if attempts["n"] <= 3:
             return httpx.Response(503, text="acordando")
-        return httpx.Response(200, json={"status": "ok", "version": "0.1.0"})
+        return httpx.Response(200, json={"status": "ok", "version": "0.1.0"}, headers=SECURE)
 
     report = run_smoke(fake_api(**{"/v1/health": waking}), wait=60)
     assert report.findings == [] and report.sleeps == [5, 5, 5]  # type: ignore[attr-defined]
@@ -332,7 +372,9 @@ def test_smoke_against_the_real_app_in_process(env: Env, db: Database) -> None:
         client = httpx.Client(transport=httpx.MockTransport(forward))
         report = smoke.run("http://testserver", client=client, wait=0)
     assert codes(report, CRITICAL) == set(), (report.findings, report.passed)
-    assert len(report.passed) == 6
+    assert (
+        len(report.passed) == 7
+    )  # inclui os cabeçalhos de segurança; /openapi.json só se confere fora do local
 
 
 def test_cli_smoke_exit_codes(
