@@ -174,7 +174,8 @@ def resolve_principal(db: Database, token: str | None, requested_tenant: str | N
 
 
 def tenant_features(db: Database, principal: Principal) -> tuple[str, str | None, list[str]]:
-    """Devolve (status, plano, recursos). Plano cancelado ou ausente não libera nada."""
+    """Devolve (status, plano, recursos). Plano suspenso, cancelado, reembolsado ou ausente não
+    libera nada; em atraso dentro da carência libera tudo."""
     with db.tx(tenant_id=principal.tenant_id, user_id=principal.user_id) as conn:
         row = conn.execute(
             "SELECT tp.status, tp.plan_key, p.features FROM tenant_plans tp "
@@ -183,7 +184,8 @@ def tenant_features(db: Database, principal: Principal) -> tuple[str, str | None
         ).fetchone()
     if row is None:
         return ("none", None, [])
-    features: list[str] = [] if row["status"] == "canceled" else list(row["features"])
+    blocked = row["status"] in ("suspended", "canceled", "refunded")
+    features: list[str] = [] if blocked else list(row["features"])
     return (row["status"], row["plan_key"], features)
 
 

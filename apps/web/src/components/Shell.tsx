@@ -19,6 +19,7 @@ const NAV = [
   { href: "/seller", label: "Vendedor IA" },
   { href: "/recovery", label: "Recuperação" },
   { href: "/connections", label: "Conexões" },
+  { href: "/plan", label: "Meu plano" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -94,6 +95,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
             <button onClick={logout}>Sair</button>
           </div>
+          {me.plan.status === "past_due" && (
+            <div className="alert" role="status">
+              Seu pagamento está em atraso. <Link href="/plan">Veja o prazo</Link>.
+            </div>
+          )}
+          {["suspended", "canceled", "refunded"].includes(me.plan.status) && (
+            <div className="alert bad" role="status">
+              Assinatura inativa: envios e vendedor IA pausados. <Link href="/plan">Saiba mais</Link>.
+            </div>
+          )}
           {children}
         </main>
       </div>

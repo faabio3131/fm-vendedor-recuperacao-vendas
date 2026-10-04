@@ -30,11 +30,27 @@ O dono entra com a conta Google desse e-mail; o convite vale 30 dias.
 4. No produto, configure o link de acesso para a tela de login do painel. O comprador entra com a conta
    Google **do mesmo e-mail da compra**; sem isso o convite não casa.
 
-Compra aprovada cria cliente, plano e convite (30 dias). Atraso → `past_due`; cancelamento e reembolso →
-`canceled` (não libera recursos). Produto sem plano mapeado fica guardado (`unmapped_product`) e é aplicado
+Compra aprovada cria cliente, plano e convite (30 dias). Atraso → `past_due` (carência) e depois `suspended`; cancelamento →
+`canceled`; reembolso → `refunded` (nenhum desses libera recursos; ver a seção da assinatura abaixo). Produto sem plano mapeado fica guardado (`unmapped_product`) e é aplicado
 pelo worker depois do `map-product`. Eventos sem e-mail não são provisionados (`no_email`): ver tabela
 `platform_events`. **Os caminhos dos campos e os nomes de evento da Hotmart são palpites tolerantes: capture
 um evento real de cada plataforma antes de vender.**
+
+## Assinatura do cliente: atraso, suspensão e reativação
+
+Estados do plano (`tenant_plans.status`): `active`, `past_due` (em atraso, dentro da carência), `suspended`,
+`canceled`, `refunded`. Os três últimos **pausam** envios de mensagens, recuperação e vendedor IA (a conversa passa
+para uma pessoa com o motivo "assinatura inativa"); a pessoa que escreve "SAIR" ainda recebe a confirmação. Nada é
+apagado, e o cliente continua entrando para ver a tela "Meu plano".
+
+- Em atraso, tudo continua funcionando até acabar a carência (`plans.grace_days`, padrão 3 dias, provisório). O
+  worker suspende quem passou do prazo (campo `assinaturas_suspensas` no log do ciclo) e registra na auditoria.
+- Eventos da plataforma só mudam o estado nas transições previstas; evento repetido, fora de ordem ou que não faz
+  sentido naquele estado (por exemplo "atraso" depois de "cancelada") é ignorado, e o resultado fica em
+  `platform_events.outcome` (`plan_status_unchanged`). Só uma compra ou renovação nova reativa um plano cancelado
+  ou reembolsado; "pagamento recuperado" reativa quem está em atraso ou suspenso.
+- À mão: `python -m fm_seller.cli plan-status --tenant <id> --status suspended|active` e
+  `python -m fm_seller.cli plan-grace --plan fase-1 --days 5` (de 0 a 60).
 
 ## WhatsApp: ligar o recebimento
 

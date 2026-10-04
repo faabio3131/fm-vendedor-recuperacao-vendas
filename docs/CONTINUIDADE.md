@@ -22,8 +22,8 @@ documentos listados abaixo) e continuar a partir do estado descrito aqui.
 
 ## Estado em 04/10/2026 (tarde)
 
-- No `main`: Blocos 1 a 10C e 11 (Messenger e Instagram, contra servidor falso). Os blocos 12 a 15 seguem
-  o prompt mestre `docs/PROMPT_MESTRE_BLOCOS_11_A_15.md`; o estado de cada um é atualizado aqui ao fechar.
+- No `main`: Blocos 1 a 10C, 11 (Messenger e Instagram) e 12 (ciclo de vida da assinatura), tudo contra
+  simuladores. Os blocos 13 a 15 seguem o prompt mestre `docs/PROMPT_MESTRE_BLOCOS_11_A_15.md`; o estado de cada um é atualizado aqui ao fechar.
 - Ainda **nada** foi validado com conta real (Render, Google, Meta, Gemini, Cakto, Hotmart).
 - **Render em suspenso, por decisão do Fábio:** construir primeiro, sem gastar, e subir ao servidor só no
   final para os testes. O blueprint `atendevendeia-construcao` foi criado no Render, mas o banco grátis não

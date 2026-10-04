@@ -9,6 +9,7 @@ import argparse
 import logging
 import sys
 import time
+import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
@@ -26,6 +27,7 @@ from fm_seller.logging_setup import setup_logging
 from fm_seller.migrate import apply_migrations
 from fm_seller.ops.health import check as ops_check
 from fm_seller.ops.health import exit_code, pending_migrations
+from fm_seller.provisioning import lifecycle
 from fm_seller.provisioning.platform import reprocess_platform
 from fm_seller.recovery.cold import detect_cold_conversations
 from fm_seller.recovery.engine import handle_event, run_due_steps
@@ -72,6 +74,28 @@ def map_product(admin_url: str, provider: str, product_id: str, plan: str) -> No
         conn.commit()
 
 
+def set_grace_days(admin_url: str, plan: str, days: int) -> bool:
+    """Dias em atraso antes de suspender o cliente (dado do plano). False se o plano não existe."""
+    with psycopg.connect(admin_url) as conn:
+        done = conn.execute(
+            "UPDATE plans SET grace_days = %s WHERE key = %s", (days, plan)
+        ).rowcount
+        conn.commit()
+    return bool(done)
+
+
+def plan_status_command(settings: Settings, tenant_id: str, status: str) -> int:
+    """Suspende ou reativa um cliente à mão. Não apaga nada."""
+    db = Database(settings.database_admin_url)
+    db.open()
+    try:
+        ok = lifecycle.set_plan_status(db, uuid.UUID(tenant_id), status)
+    finally:
+        db.close()
+    print("Estado do plano:" if ok else "ERRO: cliente sem plano.", status if ok else "")
+    return 0 if ok else 1
+
+
 def _heartbeat_error(db: Database, error: str) -> None:
     """Registra o erro sem mexer em quando o último ciclo terminou bem."""
     with db.tx(system=True) as conn:
@@ -104,6 +128,7 @@ def _cycle(
     gateway: TemplateGateway,
     log: logging.Logger,
 ) -> None:
+    suspended = lifecycle.enforce_grace(db)
     redone = reprocess_failed(db, box, handle_event)
     redone_platform = reprocess_platform(db, box)
     cold = detect_cold_conversations(db)
@@ -115,6 +140,7 @@ def _cycle(
         "ciclo",
         extra={
             "ctx": {
+                "assinaturas_suspensas": suspended,
                 "reprocessados": redone,
                 "compras": redone_platform,
                 "conversas_frias": cold,
@@ -247,6 +273,12 @@ def main(argv: list[str] | None = None) -> int:
     mp.add_argument("--provider", required=True, choices=["cakto", "hotmart"])
     mp.add_argument("--product-id", required=True)
     mp.add_argument("--plan", required=True)
+    ps = sub.add_parser("plan-status", help="Suspende ou reativa um cliente à mão (não apaga dado)")
+    ps.add_argument("--tenant", required=True, help="id do cliente")
+    ps.add_argument("--status", required=True, choices=["active", "suspended"])
+    pg = sub.add_parser("plan-grace", help="Define os dias de carência em atraso de um plano")
+    pg.add_argument("--plan", required=True)
+    pg.add_argument("--days", required=True, type=int)
     wk = sub.add_parser("worker", help="Envia passos de recuperação devidos e reprocessa falhas")
     wk.add_argument("--interval", type=int, default=30, help="segundos entre ciclos")
     wk.add_argument("--once", action="store_true", help="roda um ciclo e sai")
@@ -279,6 +311,15 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "map-product":
         map_product(settings.database_admin_url, args.provider, args.product_id, args.plan)
         print("Produto ligado ao plano.")
+    elif args.cmd == "plan-status":
+        return plan_status_command(settings, args.tenant, args.status)
+    elif args.cmd == "plan-grace":
+        if not 0 <= args.days <= 60 or not set_grace_days(
+            settings.database_admin_url, args.plan, args.days
+        ):
+            print("ERRO: plano inexistente ou dias fora de 0 a 60.")
+            return 1
+        print("Carência definida.")
     elif args.cmd == "worker":
         run_worker(args.interval, args.once)
     elif args.cmd == "ai-check":

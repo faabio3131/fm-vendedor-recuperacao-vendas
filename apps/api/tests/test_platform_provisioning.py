@@ -97,7 +97,7 @@ def test_late_cancel_and_recovery_change_status(pclient: TestClient, env: Env) -
     for event, expected in (
         ("subscription_late", "past_due"),
         ("subscription_late_recovered", "active"),
-        ("refund", "canceled"),
+        ("refund", "refunded"),  # reembolso é estado próprio (D5: segue a regra da plataforma)
     ):
         out = pclient.post("/v1/platform/webhooks/cakto", json=purchase(email, event))
         assert out.json()["status"] == "plan_status_changed"
@@ -112,7 +112,7 @@ def test_canceled_plan_releases_no_features(pclient: TestClient, env: Env) -> No
     assert pclient.get("/v1/me").json()["features"] != []
     pclient.post("/v1/platform/webhooks/cakto", json=purchase(email, "refund"))
     me = pclient.get("/v1/me").json()
-    assert me["plan"]["status"] == "canceled" and me["features"] == []
+    assert me["plan"]["status"] == "refunded" and me["features"] == []
     assert all(not prov["enabled"] for prov in pclient.get("/v1/providers").json())
 
 

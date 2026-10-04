@@ -100,6 +100,15 @@ em `FM_ENV=test`.
   templates: a recuperação por template e a detecção de conversa fria seguem só no WhatsApp.
 - Vendedor IA e painel de Conversas funcionam igual nos três canais; o painel mostra o canal e mascara o ID.
 
+## Ciclo de vida da assinatura (Bloco 12)
+
+`provisioning/lifecycle.py`: uma tabela de transições (`next_status`) decide o que cada evento de plataforma faz em
+cada estado; o que não está na tabela é ignorado, o que torna evento repetido ou fora de ordem inofensivo. Estados
+`suspended`, `canceled` e `refunded` não liberam recursos (`tenant_features`) e pausam a fila de saída, os passos
+de recuperação, a detecção de conversa fria e o vendedor IA (`blocks_service`). A carência é dado
+(`plans.grace_days`) e o worker aplica a suspensão (`enforce_grace`). Suspender **não** muda `tenants.status`
+(que impediria o login): o cliente entra, vê "Meu plano" e nada é apagado. `GET /v1/plan` alimenta a tela.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.

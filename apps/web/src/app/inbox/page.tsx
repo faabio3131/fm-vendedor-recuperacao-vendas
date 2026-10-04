@@ -18,6 +18,7 @@ const REASON: Record<string, string> = {
   sem_ofertas: "Sem oferta ativa",
   resposta_invalida: "Resposta da IA recusada pelas regras",
   limite_de_respostas: "Limite de respostas por hora",
+  assinatura_inativa: "Assinatura inativa: vendedor IA pausado",
 };
 const AUTHOR: Record<string, string> = {
   customer: "Cliente",
@@ -36,6 +37,7 @@ const DELIVERY: Record<string, string> = {
 };
 const FAILURE: Record<string, string> = {
   janela_24h_fechada: "Passou de 24 h desde a última mensagem do cliente",
+  assinatura_inativa: "Assinatura inativa: vendedor IA pausado",
   sem_id: "Contato sem identificação no canal",
   canal_sem_adaptador: "Canal sem envio habilitado",
   nao_contatar: "Contato pediu para não receber mensagens",

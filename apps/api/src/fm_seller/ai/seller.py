@@ -23,6 +23,7 @@ from fm_seller.channels.outbound import enqueue_text
 from fm_seller.channels.social import identity_of
 from fm_seller.db import Conn, Database
 from fm_seller.money import format_brl
+from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.optout import normalize
 
 log = logging.getLogger("fm_seller.seller")
@@ -132,6 +133,13 @@ def _handle_conversation(
         (tenant_id, identity),
     ).fetchone():
         return "ignored"
+
+    plan = conn.execute(
+        "SELECT status FROM tenant_plans WHERE tenant_id = %s", (tenant_id,)
+    ).fetchone()
+    if plan is not None and blocks_service(plan["status"]):
+        _handoff(conn, tenant_id, conv_id, "assinatura_inativa", notify=False)
+        return "handoffs"
 
     settings = conn.execute(
         "SELECT ai_enabled, ai_persona, timezone FROM tenant_settings WHERE tenant_id = %s",

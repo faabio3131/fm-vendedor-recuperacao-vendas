@@ -45,6 +45,8 @@ WHERE c.status IN ('bot', 'human') AND c.channel = 'whatsapp' AND c.last_inbound
       AND rc.contact_id = c.contact_id
       AND (rc.status = 'open' OR (rc.source = 'conversa'
            AND rc.opened_at >= %(now)s - make_interval(days => %(cool)s))))
+  AND NOT EXISTS (SELECT 1 FROM tenant_plans tp WHERE tp.tenant_id = c.tenant_id
+                  AND tp.status IN ('suspended', 'canceled', 'refunded'))
   AND NOT EXISTS (SELECT 1 FROM suppressions sp WHERE sp.tenant_id = c.tenant_id
                   AND sp.identity = ct.phone)
   AND NOT EXISTS (SELECT 1 FROM recovery_sequences rs WHERE rs.tenant_id = c.tenant_id

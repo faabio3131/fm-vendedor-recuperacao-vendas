@@ -8,6 +8,20 @@ export type Me = {
   features: string[];
 };
 
+export type MyPlan = {
+  state: "none" | "active" | "grace" | "blocked";
+  plan: { key: string; name: string } | null;
+  status?: "active" | "past_due" | "suspended" | "canceled" | "refunded";
+  source?: string;
+  started_at?: string;
+  status_since?: string;
+  grace_days?: number;
+  grace_ends_at: string | null;
+  grace_days_left: number | null;
+  ai: AiUsage;
+  number_daily_limit: number;
+};
+
 export type ProviderField = {
   key: string;
   label: string;
