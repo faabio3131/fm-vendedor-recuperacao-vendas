@@ -14,8 +14,12 @@ def _migrations() -> list[tuple[str, str]]:
     return [(p.name, p.read_text(encoding="utf-8")) for p in files]
 
 
-def apply_migrations(admin_url: str) -> list[str]:
-    """Aplica as migrations pendentes e devolve os nomes aplicados agora."""
+def apply_migrations(admin_url: str, *, until: str | None = None) -> list[str]:
+    """Aplica as migrations pendentes e devolve os nomes aplicados agora.
+
+    `until` (ex.: "0009") para na migration de prefixo igual ou menor: serve ao ensaio de
+    subida e rollback (scripts/ops/rehearsal.sh), nunca ao uso normal.
+    """
     applied_now: list[str] = []
     with psycopg.connect(admin_url, autocommit=True) as conn:
         conn.execute(
@@ -28,6 +32,8 @@ def apply_migrations(admin_url: str) -> list[str]:
             for row in conn.execute("SELECT version, checksum FROM schema_migrations")
         }
         for name, sql in _migrations():
+            if until is not None and name.split("_", 1)[0] > until:
+                break
             checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
             if name in done:
                 if done[name] != checksum:

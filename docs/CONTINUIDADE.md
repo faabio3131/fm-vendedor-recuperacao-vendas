@@ -22,8 +22,12 @@ documentos listados abaixo) e continuar a partir do estado descrito aqui.
 
 ## Estado em 04/10/2026 (tarde)
 
-- No `main`: Blocos 1 a 10C, 11 (Messenger e Instagram), 12 (ciclo de vida da assinatura) e 13 (relatórios de
-  recuperação) e 14 (captura segura de eventos reais), tudo contra simuladores. O bloco 15 segue o prompt mestre `docs/PROMPT_MESTRE_BLOCOS_11_A_15.md`; o estado de cada um é atualizado aqui ao fechar.
+- Construídos (contra simuladores): Blocos 1 a 10C, 11 (Messenger e Instagram), 12 (ciclo de vida da assinatura),
+  13 (relatórios de recuperação), 14 (captura segura de eventos reais) e 15 (prontidão de subida). O prompt mestre
+  `docs/PROMPT_MESTRE_BLOCOS_11_A_15.md` está concluído; cada bloco entra no `main` pela sua PR com o CI verde.
+- **GitHub Actions bloqueado (04/10/2026):** o CI deixou de iniciar jobs ("recent account payments have failed or
+  your spending limit needs to be increased"). É cobrança da conta do Fábio; nada no código. Enquanto isso, PRs que
+  dependem do check `e2e` não podem ser mergeadas. Quando liberar, reexecutar o `e2e` e mergear em ordem.
 - Ainda **nada** foi validado com conta real (Render, Google, Meta, Gemini, Cakto, Hotmart).
 - **Render em suspenso, por decisão do Fábio:** construir primeiro, sem gastar, e subir ao servidor só no
   final para os testes. O blueprint `atendevendeia-construcao` foi criado no Render, mas o banco grátis não
@@ -51,7 +55,8 @@ de venda" (PR #15) foi um erro de leitura e foi fechada sem merge.
 
 ## Próximos passos
 
-Construção (sem custo): bloco 15 do prompt mestre (prontidão de subida); depois o que o Fábio priorizar (cobrança própria e anúncios ficam fora por ora). Testes só com simuladores até a subida.
+Agora: destravar o CI (cobrança do GitHub Actions) e mergear as PRs pendentes em ordem; depois, o que o Fábio
+priorizar (cobrança própria e anúncios ficam fora por ora). Testes só com simuladores até a subida.
 
 Do Fábio, na subida ao servidor: escolher o banco; retomar ou recriar o ambiente no Render pelo guia
 `docs/STAGING_RENDER.md`; registrar `atendevendeia.com.br`; criar o Client ID do Google; colar a documentação

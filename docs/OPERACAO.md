@@ -201,6 +201,26 @@ Meta e da Cakto/Hotmart.
 - O backup automático do provedor (se o plano tiver) é um segundo seguro, não substitui este: confirmar no
   painel do provedor o que o plano de fato cobre.
 
+## Antes e depois de subir: preflight, smoke e o ensaio
+
+- **Antes (`preflight`):** com as variáveis do ambiente exportadas (as mesmas da API),
+  `python -m fm_seller.cli preflight` confere a configuração (a validação de staging/produção), o formato da chave de
+  cifragem, o Client ID do Google (valor provisório é aviso em staging e crítico em produção), que a API e as migrations
+  usam usuários de banco diferentes, que o banco responde, que o papel do app não é superusuário nem ignora RLS, que não
+  há migration pendente e que toda tabela com `tenant_id` tem RLS forçada. Também avisa de envio real ligado, captura de
+  eventos ligada e de chaves opcionais ausentes. Sai com 0 (ok), 1 (avisos) ou 2 (**não suba**) e nunca imprime
+  segredo nem senha. `--no-db` pula as checagens de banco.
+- **Depois (`smoke`):** `python -m fm_seller.cli smoke --api https://<api> --web https://<painel>` testa de fora, sem
+  login: `/v1/health` e `/v1/ready`, que `/v1/me` exige login, que o CORS não libera origem estranha, que escrita vinda de
+  outra origem dá 403, que os webhooks recusam quem não tem conexão ou segredo e, com `--web`, que o painel abre o login
+  e repassa `/v1` até a API. Espera até 90 s a instância grátis acordar (`--wait`). Mesmo código de saída.
+- **Não prova** login com Google, WhatsApp, Cakto/Hotmart nem IA: isso é com contas reais (`docs/LANCAMENTO_MVP.md`, seção 4).
+- **Ensaio de subida e rollback:** `FM_DATABASE_ADMIN_URL=postgresql://fm_owner:...@localhost:5432/qualquer_banco
+  scripts/ops/rehearsal.sh` (precisa de `psql`, `pg_dump` e `pg_restore`, banco **local**). Sobe a versão anterior, faz
+  backup, aplica a migration nova, restaura o backup em outro banco (a "volta"), confere versão, dados e RLS e sobe de
+  novo. Apaga os bancos temporários. Roda também nos testes. **Não prova** o rollback da imagem no Render nem o tempo de
+  restaurar um banco grande.
+
 ## Rollback
 
 - **Código:** voltar para a imagem anterior no provedor (redeploy da versão anterior). Vale para API, worker e
