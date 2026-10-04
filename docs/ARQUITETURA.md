@@ -109,6 +109,17 @@ de recuperação, a detecção de conversa fria e o vendedor IA (`blocks_service
 (`plans.grace_days`) e o worker aplica a suspensão (`enforce_grace`). Suspender **não** muda `tenants.status`
 (que impediria o login): o cliente entra, vê "Meu plano" e nada é apagado. `GET /v1/plan` alimenta a tela.
 
+## Relatórios de recuperação (Bloco 13)
+
+`recovery/reports.py` e `GET /v1/reports/recovery` (+ `.csv`): funil por período no fuso do cliente (casos abertos,
+com mensagem, enviadas, entregues, lidas, responderam, recuperadas, valor recuperado, "comprou sem mensagem"),
+agrupável por dia, produto, sequência ou origem, mais as conversas por canal. Os números vêm só do que o motor
+gravou: "recuperada" é o estado do caso pela regra D6 (5 dias, último toque, mensagem enviada, mesmo produto), que o
+relatório **não reinterpreta**; entrega e leitura vêm do estado informado pelo provedor; "respondeu" é o contato ter
+escrito no WhatsApp depois da primeira mensagem enviada e até o fim do caso. Tudo passa pela RLS do cliente. A
+planilha escapa texto que uma planilha leria como fórmula (`=`, `+`, `-`, `@`). Mesmo recurso de plano da
+recuperação: plano suspenso, cancelado ou reembolsado não vê o relatório.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.

@@ -18,6 +18,7 @@ const NAV = [
   { href: "/inbox", label: "Conversas" },
   { href: "/seller", label: "Vendedor IA" },
   { href: "/recovery", label: "Recuperação" },
+  { href: "/reports", label: "Relatórios" },
   { href: "/connections", label: "Conexões" },
   { href: "/plan", label: "Meu plano" },
 ];

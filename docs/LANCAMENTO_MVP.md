@@ -127,7 +127,9 @@ Cada teste só vale se registrar o resultado real (data, o que foi enviado, o qu
    `events/normalize.py` (ainda são suposições). Conferir também os eventos de **assinatura** (atraso, recuperação,
    cancelamento, reembolso): nomes, ordem e repetição reais; o ciclo de vida (`provisioning/lifecycle.py`) só
    aceita as transições previstas e ignora o resto.
-8. **Ponta a ponta:** compra → login → conectar WhatsApp → template aprovado → oportunidade → mensagem
+8. **Relatório:** depois de uma compra de teste recuperada de verdade, conferir se o valor e a data do relatório batem com
+   o que a plataforma registrou (a atribuição segue D6; nada foi comparado com venda real ainda).
+9. **Ponta a ponta:** compra → login → conectar WhatsApp → template aprovado → oportunidade → mensagem
    recebida pelo contato → resposta do contato encerra o caso.
 
 ## 5. Prontidão operacional (gate Web First, itens 7–11)

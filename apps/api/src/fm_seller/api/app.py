@@ -21,6 +21,7 @@ from fm_seller.api.routes import (
     plan,
     platform,
     recovery,
+    reports,
     seller,
     social,
     webhooks,
@@ -134,5 +135,6 @@ def create_app(
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(platform.router, prefix="/v1")
     app.include_router(recovery.router, prefix="/v1")
+    app.include_router(reports.router, prefix="/v1")
     app.include_router(seller.router, prefix="/v1")
     return app

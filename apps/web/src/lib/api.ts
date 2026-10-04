@@ -8,6 +8,34 @@ export type Me = {
   features: string[];
 };
 
+export type ReportRow = {
+  group: string;
+  cases: number;
+  with_message: number;
+  messages_sent: number;
+  delivered: number;
+  read: number;
+  replied: number;
+  recovered: number;
+  recovered_cents: number;
+  purchased_without_message: number;
+  stopped: number;
+  exhausted: number;
+  open: number;
+  recovery_rate: number | null;
+  reply_rate: number | null;
+};
+
+export type RecoveryReport = {
+  from: string;
+  to: string;
+  timezone: string;
+  group_by: string;
+  total: ReportRow;
+  groups: ReportRow[];
+  channels: { channel: string; conversations: number; inbound: number; outbound: number }[];
+};
+
 export type MyPlan = {
   state: "none" | "active" | "grace" | "blocked";
   plan: { key: string; name: string } | null;

@@ -36,6 +36,13 @@ pelo worker depois do `map-product`. Eventos sem e-mail não são provisionados 
 `platform_events`. **Os caminhos dos campos e os nomes de evento da Hotmart são palpites tolerantes: capture
 um evento real de cada plataforma antes de vender.**
 
+## Relatórios de recuperação
+
+Menu **Relatórios** (ou `GET /v1/reports/recovery?from=AAAA-MM-DD&to=AAAA-MM-DD&group_by=none|day|product|sequence|source`,
+com `.csv` no fim do caminho para a planilha). Período de até 366 dias no fuso do cliente; sem datas, os últimos 30
+dias. Os números são do próprio sistema: não os use em texto de venda como "resultado de mercado", e lembre que
+a recuperação por mensagem pronta é só WhatsApp (Messenger e Instagram aparecem apenas em "conversas por canal").
+
 ## Assinatura do cliente: atraso, suspensão e reativação
 
 Estados do plano (`tenant_plans.status`): `active`, `past_due` (em atraso, dentro da carência), `suspended`,
