@@ -26,10 +26,10 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 | D3 | Quem paga as mensagens da Meta | O cliente, na própria conta Meta, controlando o próprio gasto | **DECIDIDO** em 03/10/2026 |
 | D4 | Conexão do WhatsApp sem Tech Provider e sem CNPJ (cliente com CPF) | Conexão simples para o cliente; caminho depende do teste real (seção 2.2) | PENDENTE |
 | D5 | Garantia e reembolso | Segue a regra de cada plataforma onde o produto for vendido (Cakto e Hotmart); sem regra própria no código | **DECIDIDO** em 04/10/2026; o texto na política de uso e nos termos fica para depois (P8) |
-| D6 | Janela de atribuição da venda recuperada | 7 dias (hoje) | PENDENTE |
-| D7 | Sequências e textos padrão | Revisar; ajustar após a primeira reprovação real da Meta | PENDENTE |
-| D8 | Vendedor IA apresentado como "básico" no MVP | Sim | PENDENTE |
-| D9 | Hospedagem (rascunho: Render) | Confirmar e criar staging | PENDENTE |
+| D6 | Janela de atribuição da venda recuperada | Hoje: 7 dias após a última mensagem. Pesquisa (seção 2.3) sugere reduzir para 5 | PESQUISADO; aguarda decisão do Diretor |
+| D7 | Sequências e textos padrão | Tempos atuais já batem com o mercado; textos: ver seção 2.3 | PESQUISADO; aguarda decisão do Diretor |
+| D8 | Vendedor IA apresentado como "básico" no MVP | Lançar a versão básica (MVP) primeiro; a V2 vem depois com o Core | **DECIDIDO** em 04/10/2026 |
+| D9 | Hospedagem (rascunho: Render) | Render como rascunho (decisão do Diretor, 04/10/2026); falta criar o staging e validar o `render.yaml` | **DECIDIDO como rascunho**; staging PENDENTE |
 
 ### 2.1 D2: o que a pesquisa de 03/10/2026 mostrou (para decidir os demais planos)
 
@@ -59,6 +59,26 @@ Concorrentes olhados nos sites deles; preços mudam, reconferir antes de publica
   CNPJ a abrir MEI no guia; (b) verificar se o limite de 250/dia basta para começar.
 - Conexão por QR code (tipo WhatsApp Web) **não será usada**: viola a regra 7 do AGENTS.md e arrisca o
   número do cliente.
+
+### 2.3 D6 e D7: o que a pesquisa de 04/10/2026 mostrou
+
+**D6, janela de atribuição.** Nenhum concorrente brasileiro consultado (Omnifox, Unnica, SocialHub, Yampi)
+publica a janela. A única referência pública achada é a do Klaviyo (mais usado no mundo): atribui por
+**último toque**, com **5 dias após o clique** em mensagem de WhatsApp e 12 horas após a abertura.
+Diferença importante: o Klaviyo exige clique ou abertura; nós contamos pela **mensagem enviada** (não
+rastreamos clique no V1). Nossa regra atual (`ATTRIBUTION_DAYS = 7` em `recovery/engine.py`): a compra conta
+se o caso está aberto ou se encerrou há até 7 dias, com ao menos uma mensagem enviada e o mesmo produto.
+Contar só por envio é mais generoso que o mercado; janela menor protege a confiança do cliente no número.
+Sugestão: **5 dias** após a última mensagem. Mudar é uma constante e um teste; não bloqueia o lançamento.
+
+**D7, sequência e textos.** Os guias consultados convergem em **3 mensagens**: 30 min a 1 h (ajuda, sem
+desconto), 24 h (dúvida comum ou valor novo, sem só repetir) e 48 a 72 h (última chamada, com prazo real);
+parar assim que o cliente responde ou compra, e depois da terceira mensagem sem resposta. Nossos padrões
+(carrinho: 30 min, 24 h e 3 dias; Pix: 15 min e 3 h; boleto: 1 e 3 dias) já seguem isso. Os números de
+recuperação que os blogs citam (15 a 35%) são de marketing deles, não medidos: não usar em texto de venda.
+Pontos a tratar nos textos: (a) vários terminam em `{link}`; há relatos de que a Meta rejeita variável no
+começo ou no fim do corpo (não confirmado na documentação). Seguro e barato: acrescentar uma frase depois do
+link. (b) a Meta não aprova texto promocional em categoria utilidade: cupom e desconto vão em MARKETING.
 
 ## 3. Contas e ações que destravam os testes
 
