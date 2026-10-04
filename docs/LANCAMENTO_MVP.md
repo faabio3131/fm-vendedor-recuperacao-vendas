@@ -25,7 +25,7 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 | D2 | Preços e limites por plano (pesquisa de mercado) | Plano de entrada: **R$ 97,90/mês no anual** e **R$ 149,90/mês no mensal** (Diretor, 03/10/2026). Demais planos e limites de respostas de IA: ver seção 2.1 | PARCIAL: preço de entrada definido; planos acima e limites PENDENTES |
 | D3 | Quem paga as mensagens da Meta | O cliente, na própria conta Meta, controlando o próprio gasto | **DECIDIDO** em 03/10/2026 |
 | D4 | Conexão do WhatsApp sem Tech Provider e sem CNPJ (cliente com CPF) | Conexão simples para o cliente; caminho depende do teste real (seção 2.2) | PENDENTE |
-| D5 | Garantia e reembolso | Seguir a regra de cada plataforma (confirmar) | PENDENTE |
+| D5 | Garantia e reembolso | Segue a regra de cada plataforma onde o produto for vendido (Cakto e Hotmart); sem regra própria no código | **DECIDIDO** em 04/10/2026; o texto na política de uso e nos termos fica para depois (P8) |
 | D6 | Janela de atribuição da venda recuperada | 7 dias (hoje) | PENDENTE |
 | D7 | Sequências e textos padrão | Revisar; ajustar após a primeira reprovação real da Meta | PENDENTE |
 | D8 | Vendedor IA apresentado como "básico" no MVP | Sim | PENDENTE |
