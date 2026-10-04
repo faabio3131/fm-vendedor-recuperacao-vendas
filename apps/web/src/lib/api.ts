@@ -73,6 +73,25 @@ export type MyPlan = {
   number_daily_limit: number;
 };
 
+export type OnboardingStep = {
+  key: string;
+  title: string;
+  done: boolean;
+  why: string;
+  todo: string;
+  href: string;
+  action: string;
+  blocks: string[];
+};
+
+export type Onboarding = {
+  steps: OnboardingStep[];
+  done: number;
+  total: number;
+  percent: number;
+  can_enable: Record<"recuperacao" | "ia", { allowed: boolean; missing: string[] }>;
+};
+
 export type ProviderField = {
   key: string;
   label: string;

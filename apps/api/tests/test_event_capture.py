@@ -32,7 +32,7 @@ from tests.test_webhook_ingest import Recorder
 
 SECRET = "b3f1a9c2-7b4d-4a8e-9f01-2c6d5b8a4e37"
 HOTTOK = "hottok-super-secreto-123456"
-EMAIL = "maria.souza@gmail.com"
+EMAIL = "maria.souza@example.test"
 PHONE = "11987654321"
 
 
@@ -51,7 +51,7 @@ def order(**over: Any) -> dict[str, Any]:
         },
         "product": {"id": "prod-1", "name": "Curso X"},
         "offer": {"id": "a8BcHrY", "price": 97.0},
-        "pix": {"qrCode": "00020126580014br.gov.bcb.pix0136maria@gmail.com5204000053039865406"},
+        "pix": {"qrCode": "00020126580014br.gov.bcb.pix0136maria@example.test5204000053039865406"},
         "createdAt": "2026-10-04T10:00:00-03:00",
     }
     return base | over
@@ -244,10 +244,10 @@ def test_mask_hides_personal_data_but_keeps_structure_and_types() -> None:
     body = cakto()["data"]
     masked = capture.mask({"event": "x", "data": body})
     text = json.dumps(masked, ensure_ascii=False)
-    for pii in (EMAIL, PHONE, "Maria", "Souza", "12345678909", "tokensecreto123", "maria@gmail"):
+    for pii in (EMAIL, PHONE, "Maria", "Souza", "12345678909", "tokensecreto123", "maria@example"):
         assert pii not in text, pii
     assert masked["data"]["customer"]["name"] == "M••• S•••"
-    assert masked["data"]["customer"]["email"] == "m•••@gmail.com"
+    assert masked["data"]["customer"]["email"] == "m•••@example.test"
     assert masked["data"]["customer"]["phone"] == "••••4321"
     assert masked["data"]["customer"]["docNumber"] == capture.HIDDEN
     assert masked["data"]["checkoutUrl"] == "https://pay.cakto.com.br/a8BcHrY?…"

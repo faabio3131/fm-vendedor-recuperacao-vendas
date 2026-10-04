@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
+from fm_seller import onboarding
 from fm_seller.ai import usage
 from fm_seller.channels.outbound import enqueue_text
 from fm_seller.channels.outbox import WINDOW
@@ -171,6 +172,10 @@ class SellerService:
         if len(ai_persona) > 600:
             raise bad_request("invalid_persona", "O tom de voz passa de 600 caracteres.")
         with self._tx(p) as conn:
+            if ai_enabled:
+                row = conn.execute("SELECT ai_enabled FROM tenant_settings").fetchone()
+                if not (row and row["ai_enabled"]):
+                    onboarding.require_for_ai(conn)
             conn.execute(
                 "INSERT INTO tenant_settings (tenant_id, ai_enabled, ai_persona) "
                 "VALUES (%s, %s, %s) "

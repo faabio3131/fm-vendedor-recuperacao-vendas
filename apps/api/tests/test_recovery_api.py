@@ -9,7 +9,7 @@ from fm_seller.db import Database
 from fm_seller.events import normalize as n
 from fm_seller.events.normalize import CheckoutEvent
 from fm_seller.recovery.engine import handle_event
-from tests.conftest import Env, login, unique_email
+from tests.conftest import Env, connect_whatsapp, login, unique_email
 
 
 def _owner(client: TestClient, env: Env, plan: str = "fase-1") -> tuple[str, str]:
@@ -19,7 +19,8 @@ def _owner(client: TestClient, env: Env, plan: str = "fase-1") -> tuple[str, str
     return tid, email
 
 
-def _enable(client: TestClient) -> None:
+def _enable(client: TestClient, env: Env, tid: str) -> None:
+    connect_whatsapp(client, env, tid)
     res = client.put(
         "/v1/recovery/settings", json={"consent_declared": True, "recovery_enabled": True}
     )
@@ -27,12 +28,12 @@ def _enable(client: TestClient) -> None:
 
 
 def test_settings_default_off_and_consent_gate(client: TestClient, env: Env) -> None:
-    _owner(client, env)
+    tid, _ = _owner(client, env)
     s = client.get("/v1/recovery/settings").json()
     assert s["recovery_enabled"] is False and s["consent_declared"] is False
     bad = client.put("/v1/recovery/settings", json={"recovery_enabled": True})
     assert bad.status_code == 400 and bad.json()["error"]["code"] == "consent_required"
-    _enable(client)
+    _enable(client, env, tid)
     on = client.get("/v1/recovery/settings").json()
     assert on["recovery_enabled"] is True and on["consent_declared_at"] is not None
     off = client.put("/v1/recovery/settings", json={"consent_declared": False}).json()
@@ -98,7 +99,7 @@ def test_suppression_stops_open_cases_and_masks_identity(
     client: TestClient, env: Env, db: Database
 ) -> None:
     tid, _ = _owner(client, env)
-    _enable(client)
+    _enable(client, env, tid)
     tenant = uuid.UUID(tid)
     event = CheckoutEvent(
         n.ABANDONED_CART, "x", "sup-1", "Ana", "ana@example.test", "5511977776666",
@@ -122,7 +123,7 @@ def test_summary_and_readiness(client: TestClient, env: Env, db: Database) -> No
     s = client.get("/v1/recovery/summary").json()
     assert s["cases_total"] == 0 and s["readiness"]["whatsapp_connected"] is False
     assert s["readiness"]["recovery_enabled"] is False
-    _enable(client)
+    _enable(client, env, tid)
     tenant = uuid.UUID(tid)
     for ref in ("s1", "s2"):
         ev = CheckoutEvent(

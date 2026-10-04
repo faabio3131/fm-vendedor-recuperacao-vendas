@@ -143,6 +143,10 @@ Cada teste só vale se registrar o resultado real (data, o que foi enviado, o qu
 - [ ] `preflight` sem crítico e `smoke` sem crítico no ambiente que vai ao ar. *(comandos prontos e testados contra servidor simulado e banco local; falta rodar no ambiente real)*
 - [ ] CI verde (api, web, e2e) no commit que vai ao ar.
 
+**Primeiros passos (Bloco 16):** a lista que o cliente vê em "Primeiros passos" é a mesma checagem que barra ligar
+a recuperação (sem WhatsApp testado) e o vendedor IA (sem oferta ativa). Testado com simulador: o teste "conectado"
+em staging real depende de `FM_WHATSAPP_LIVE` e conta Meta (seção 4, teste 3).
+
 ## 6. Critérios de go / no-go
 
 **Go** somente se: testes 1 a 8 da seção 4 registrados · decisões D1–D6 tomadas · termos e privacidade

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from fm_seller.db import Database
 from fm_seller.recovery.cold import detect_cold_conversations
 from fm_seller.recovery.opportunities import parse_amount
-from tests.conftest import Env, login, unique_email
+from tests.conftest import Env, connect_whatsapp, login, unique_email
 from tests.test_whatsapp_inbound import PHONE as WA_PHONE
 from tests.test_whatsapp_inbound import payload, post, text
 from tests.test_whatsapp_inbound import wa as wa
@@ -31,6 +31,7 @@ def _owner(client: TestClient, env: Env, enable: bool = True) -> str:
     email = unique_email("opp")
     tid = env.tenant("Loja Oportunidades", email)
     assert login(client, email).status_code == 200
+    connect_whatsapp(client, env, tid)
     if enable:
         res = client.put(
             "/v1/recovery/settings", json={"consent_declared": True, "recovery_enabled": True}
@@ -49,11 +50,12 @@ def _create(client: TestClient, **over: Any) -> Any:
 
 
 def test_manual_needs_authorization_and_recovery_on(client: TestClient, env: Env) -> None:
-    _owner(client, env, enable=False)
+    tid = _owner(client, env, enable=False)
     off = _create(client)
     assert off.status_code == 400 and off.json()["error"]["code"] == "recovery_off"
     no_auth = client.post("/v1/recovery/opportunities", json=OK)
     assert no_auth.json()["error"]["code"] == "authorization_required"
+    connect_whatsapp(client, env, tid)
     client.put("/v1/recovery/settings", json={"consent_declared": True, "recovery_enabled": True})
     assert _create(client).status_code == 201
 
@@ -420,6 +422,7 @@ def test_customer_writing_again_stops_the_cold_case(
     db: Database,
 ) -> None:
     c, tid, pid, _ = wa
+    env.sql("UPDATE connections SET status = 'connected' WHERE tenant_id = %s", (tid,))
     assert (
         c.put(
             "/v1/recovery/settings",

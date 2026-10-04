@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from fm_seller import onboarding
 from fm_seller.db import Database
 from fm_seller.errors import AppError, bad_request, forbidden, not_found
 from fm_seller.events import normalize as n
@@ -180,6 +181,8 @@ class RecoveryService:
                 "mensagens.",
             )
         with self._tx(p) as conn:
+            if merged["recovery_enabled"] and not current["recovery_enabled"]:
+                onboarding.require_for_recovery(conn)
             conn.execute(
                 "INSERT INTO tenant_settings (tenant_id, timezone, quiet_start, quiet_end, "
                 "daily_cap, max_contacts_per_case, recovery_enabled, consent_declared_at, "
