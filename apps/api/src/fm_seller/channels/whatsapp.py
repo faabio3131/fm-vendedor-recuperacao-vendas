@@ -13,40 +13,37 @@ import json
 import logging
 import uuid
 from collections.abc import Mapping
-from datetime import UTC, datetime
 from typing import Any
 
+from fm_seller.channels.inbound import OPT_OUT_REPLY, record_inbound
+from fm_seller.channels.outbound import enqueue_text
 from fm_seller.db import Conn, Database
 from fm_seller.errors import AppError, bad_request, not_found
 from fm_seller.events.normalize import normalize_phone_br
-from fm_seller.recovery.cases import stop_cold_cases
-from fm_seller.recovery.optout import is_opt_out, suppress_identity
 from fm_seller.security.crypto import CryptoError, SecretBox
 
 log = logging.getLogger("fm_seller.whatsapp")
 PROVIDER = "whatsapp_cloud"
 MAX_BODY = 1024 * 1024
-OPT_OUT_REPLY = (
-    "Tudo certo: você não vai mais receber mensagens nossas. Se mudar de ideia, é só nos escrever."
-)
+__all__ = ["OPT_OUT_REPLY", "enqueue_text"]  # reexportados: o resto do código importa daqui
 _ORDER = ["queued", "sending", "sent", "delivered", "read"]
 
 
-def _load(
-    db: Database, box: SecretBox, public_id: str
+def load_connection(
+    db: Database, box: SecretBox, public_id: str, provider: str
 ) -> tuple[uuid.UUID, uuid.UUID, dict[str, Any], str]:
     with db.tx(system=True) as conn:
         row = conn.execute(
             "SELECT c.id, c.tenant_id, c.config_encrypted, t.status AS tenant_status "
             "FROM connections c JOIN tenants t ON t.id = c.tenant_id "
             "WHERE c.public_id = %s AND c.provider = %s",
-            (public_id, PROVIDER),
+            (public_id, provider),
         ).fetchone()
     if row is None:
         raise not_found("Conexão não encontrada.")
     try:
         config = box.decrypt(
-            row["config_encrypted"], tenant_id=str(row["tenant_id"]), provider=PROVIDER
+            row["config_encrypted"], tenant_id=str(row["tenant_id"]), provider=provider
         )
     except CryptoError:
         raise AppError(500, "credentials_unreadable", "Configuração da conexão inválida.") from None
@@ -54,10 +51,16 @@ def _load(
 
 
 def verify_handshake(
-    db: Database, box: SecretBox, public_id: str, mode: str, token: str, challenge: str
+    db: Database,
+    box: SecretBox,
+    public_id: str,
+    mode: str,
+    token: str,
+    challenge: str,
+    provider: str = PROVIDER,
 ) -> str:
     """GET de verificação da Meta: devolve o desafio só se o token bate."""
-    _, _, config, _ = _load(db, box, public_id)
+    _, _, config, _ = load_connection(db, box, public_id, provider)
     expected = str(config.get("webhook_secret", ""))
     ok = bool(expected) and hmac.compare_digest(token.encode(), expected.encode())
     if mode != "subscribe" or not ok:
@@ -82,7 +85,7 @@ def ingest_whatsapp(
 ) -> dict[str, int]:
     if len(raw_body) > MAX_BODY:
         raise AppError(413, "payload_too_large", "Corpo grande demais.")
-    connection_id, tenant_id, config, tenant_status = _load(db, box, public_id)
+    connection_id, tenant_id, config, tenant_status = load_connection(db, box, public_id, PROVIDER)
     app_secret = str(config.get("app_secret", ""))
     if not app_secret:
         raise AppError(401, "app_secret_missing", "Informe o segredo do app Meta na conexão.")
@@ -165,16 +168,6 @@ def upsert_conversation(
     return contact["id"], conv["id"]
 
 
-def enqueue_text(
-    conn: Conn, tenant_id: uuid.UUID, conversation_id: uuid.UUID, author: str, body: str
-) -> None:
-    conn.execute(
-        "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, status) "
-        "VALUES (%s, %s, 'out', %s, %s, 'queued')",
-        (tenant_id, conversation_id, author, body),
-    )
-
-
 def _inbound(
     conn: Conn,
     tenant_id: uuid.UUID,
@@ -189,40 +182,16 @@ def _inbound(
     contact_id, conv_id = upsert_conversation(
         conn, tenant_id, phone, names.get(str(msg.get("from")), "")
     )
-    text = _text_of(msg)
-    optout = is_opt_out(text)
-    inserted = conn.execute(
-        "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, status, "
-        "provider_message_id, handled) VALUES (%s, %s, 'in', 'customer', %s, 'received', %s, %s) "
-        "ON CONFLICT DO NOTHING RETURNING id",
-        (tenant_id, conv_id, text, message_id, optout),
-    ).fetchone()
-    if inserted is None:
-        counts["duplicates"] += 1
-        return
-    counts["messages"] += 1
-    suppressed = conn.execute(
-        "SELECT 1 FROM suppressions WHERE tenant_id = %s AND identity = %s", (tenant_id, phone)
-    ).fetchone()
-    if optout:
-        suppress_identity(conn, tenant_id, phone, "opt_out")
-        conn.execute(
-            "UPDATE conversations SET status = 'closed', last_inbound_at = now(), "
-            "last_message_at = now() WHERE id = %s",
-            (conv_id,),
-        )
-        enqueue_text(conn, tenant_id, conv_id, "system", OPT_OUT_REPLY)
-        counts["opt_outs"] += 1
-        return
-    stop_cold_cases(conn, tenant_id, contact_id, datetime.now(UTC))
-    # Quem escreveu reabre a conversa; o vendedor IA só volta a falar se a pessoa não foi bloqueada.
-    conn.execute(
-        "UPDATE conversations SET last_inbound_at = now(), last_message_at = now(), "
-        "status = CASE WHEN status = 'closed' THEN 'bot' ELSE status END WHERE id = %s",
-        (conv_id,),
+    record_inbound(
+        conn,
+        tenant_id,
+        contact_id=contact_id,
+        conv_id=conv_id,
+        identity=phone,
+        text=_text_of(msg),
+        message_id=message_id,
+        counts=counts,
     )
-    if suppressed:
-        conn.execute("UPDATE messages SET handled = true WHERE id = %s", (inserted["id"],))
 
 
 def _status(

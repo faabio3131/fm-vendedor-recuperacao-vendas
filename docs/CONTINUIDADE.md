@@ -22,8 +22,8 @@ documentos listados abaixo) e continuar a partir do estado descrito aqui.
 
 ## Estado em 04/10/2026 (tarde)
 
-- No `main`: Blocos 1 a 10C. Último merge: PR #14 (Bloco 10B, adaptadores Cakto e Gemini alinhados à
-  documentação oficial), aprovada pelo Fábio.
+- No `main`: Blocos 1 a 10C e 11 (Messenger e Instagram, contra servidor falso). Os blocos 12 a 15 seguem
+  o prompt mestre `docs/PROMPT_MESTRE_BLOCOS_11_A_15.md`; o estado de cada um é atualizado aqui ao fechar.
 - Ainda **nada** foi validado com conta real (Render, Google, Meta, Gemini, Cakto, Hotmart).
 - **Render em suspenso, por decisão do Fábio:** construir primeiro, sem gastar, e subir ao servidor só no
   final para os testes. O blueprint `atendevendeia-construcao` foi criado no Render, mas o banco grátis não
@@ -51,8 +51,8 @@ de venda" (PR #15) foi um erro de leitura e foi fechada sem merge.
 
 ## Próximos passos
 
-Construção (sem custo): Messenger e Instagram, cobrança própria e anúncios (fases seguintes), e o que o
-Fábio priorizar. Testes só com simuladores até a subida.
+Construção (sem custo): blocos 12 a 15 do prompt mestre (assinatura, relatórios, captura de eventos reais,
+prontidão de subida); depois o que o Fábio priorizar (cobrança própria e anúncios ficam fora por ora). Testes só com simuladores até a subida.
 
 Do Fábio, na subida ao servidor: escolher o banco; retomar ou recriar o ambiente no Render pelo guia
 `docs/STAGING_RENDER.md`; registrar `atendevendeia.com.br`; criar o Client ID do Google; colar a documentação

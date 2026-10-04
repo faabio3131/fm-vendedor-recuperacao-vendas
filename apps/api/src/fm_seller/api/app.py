@@ -21,6 +21,7 @@ from fm_seller.api.routes import (
     platform,
     recovery,
     seller,
+    social,
     webhooks,
     whatsapp,
 )
@@ -126,6 +127,8 @@ def create_app(
     app.include_router(me.router, prefix="/v1")
     app.include_router(connections.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")  # antes do genérico: rota específica
+    for social_router in social.routers:
+        app.include_router(social_router, prefix="/v1")
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(platform.router, prefix="/v1")
     app.include_router(recovery.router, prefix="/v1")

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError, type Connection, type Provider } from "@/lib/api";
+import { MetaChannelGuide } from "@/components/MetaChannelGuide";
 import { WhatsAppGuide } from "@/components/WhatsAppGuide";
 
 const STATUS: Record<Connection["status"], string> = {
@@ -93,6 +94,9 @@ export function ProviderCard({ provider, connection, canEdit, onChange }: Props)
       {open && !locked && (
         <div>
           {provider.key === "whatsapp_cloud" && <WhatsAppGuide />}
+          {(provider.key === "messenger" || provider.key === "instagram_dm") && (
+            <MetaChannelGuide provider={provider.key} />
+          )}
           {provider.fields.map((f) => (
             <div key={f.key}>
               <label htmlFor={`${provider.key}-${f.key}`}>

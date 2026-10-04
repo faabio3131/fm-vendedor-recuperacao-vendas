@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Shell } from "@/components/Shell";
-import { api, type ConversationDetail, type ConversationRow } from "@/lib/api";
+import { api, type Channel, type ConversationDetail, type ConversationRow } from "@/lib/api";
+
+const CHANNEL: Record<Channel, string> = { whatsapp: "WhatsApp", messenger: "Messenger", instagram: "Instagram" };
 
 const STATUS: Record<ConversationRow["status"], string> = {
   bot: "Vendedor IA",
@@ -34,6 +36,8 @@ const DELIVERY: Record<string, string> = {
 };
 const FAILURE: Record<string, string> = {
   janela_24h_fechada: "Passou de 24 h desde a última mensagem do cliente",
+  sem_id: "Contato sem identificação no canal",
+  canal_sem_adaptador: "Canal sem envio habilitado",
   nao_contatar: "Contato pediu para não receber mensagens",
   canal_nao_conectado: "WhatsApp não conectado",
 };
@@ -63,7 +67,8 @@ function Detail({ id, onChange }: { id: string; onChange: () => void }) {
     <div className="card">
       <div className="top" style={{ marginBottom: 8 }}>
         <div>
-          <strong>{d.name || "Sem nome"}</strong> <span className="muted">{d.phone}</span>
+          <strong>{d.name || "Sem nome"}</strong> <span className="muted">{d.phone}</span>{" "}
+          <span className="badge">{CHANNEL[d.channel]}</span>
         </div>
         <span className={`badge ${d.status === "human" ? "pending" : ""}`}>{STATUS[d.status]}</span>
       </div>
@@ -86,7 +91,10 @@ function Detail({ id, onChange }: { id: string; onChange: () => void }) {
           <label htmlFor="reply">Responder como equipe</label>
           <textarea id="reply" value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} disabled={!d.window_open} />
           {!d.window_open && (
-            <div className="muted">Passou de 24 h desde a última mensagem do cliente: só é possível enviar template aprovado.</div>
+            <div className="muted">
+              Passou de 24 h desde a última mensagem do cliente:{" "}
+              {d.channel === "whatsapp" ? "só é possível enviar template aprovado." : "a Meta não permite resposta livre."}
+            </div>
           )}
         </>
       )}
@@ -140,7 +148,8 @@ function Inbox() {
               aria-expanded={open === r.id}
               onClick={() => setOpen(open === r.id ? null : r.id)}
             >
-              <strong>{r.name || r.phone}</strong> <span className={`badge ${r.status === "human" ? "pending" : ""}`}>{STATUS[r.status]}</span>
+              <strong>{r.name || r.phone}</strong> <span className="badge">{CHANNEL[r.channel]}</span>{" "}
+              <span className={`badge ${r.status === "human" ? "pending" : ""}`}>{STATUS[r.status]}</span>
               <div className="muted">
                 {r.handoff_reason && r.status === "human" ? `${REASON[r.handoff_reason] ?? r.handoff_reason} · ` : ""}
                 {r.preview}

@@ -182,8 +182,11 @@ export type AiUsage = {
   percent: number | null;
 };
 
+export type Channel = "whatsapp" | "messenger" | "instagram";
+
 export type ConversationRow = {
   id: string;
+  channel: Channel;
   status: "bot" | "human" | "closed";
   handoff_reason: string | null;
   name: string;
@@ -205,6 +208,7 @@ export type ChatMessage = {
 
 export type ConversationDetail = {
   status: ConversationRow["status"];
+  channel: Channel;
   name: string;
   phone: string;
   window_open: boolean;

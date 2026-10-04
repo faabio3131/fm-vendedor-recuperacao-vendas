@@ -6,7 +6,7 @@ marca **o que prova** que está pronto. Aprovação final de lançamento é do D
 
 ## 1. Escopo do MVP (proposta, aguarda confirmação)
 
-Dentro: WhatsApp oficial (Meta) · recuperação (carrinho, PIX, boleto, recusa, orçamento, conversa que
+Dentro: WhatsApp, Messenger e Instagram oficiais (Meta; a recuperação por template é só WhatsApp) · recuperação (carrinho, PIX, boleto, recusa, orçamento, conversa que
 esfriou, registro avulso, planilha) · templates enviados e sincronizados pela Meta · vendedor IA básico
 com limite mensal por plano · painel web · login Google · compra do SaaS na Cakto/Hotmart cria a conta.
 
@@ -14,7 +14,7 @@ Texto de venda do V1: "atende e recupera, conduzindo a venda até o link de paga
 montagem de pedido na conversa, geração/cobrança de Pix, estoque, entrega nem confirmação automática de
 pagamento (exceto a que vem da Cakto/Hotmart).
 
-Fora (V2 ou depois): checkout na conversa, Pix, endereço e entrega (Assistant/Core), Messenger, Instagram, cobrança própria, anúncios (Google/Meta Ads), Tech Provider /
+Fora (V2 ou depois): checkout na conversa, Pix, endereço e entrega (Assistant/Core), cobrança própria, anúncios (Google/Meta Ads), Tech Provider /
 Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 
 ## 2. Decisões do Diretor que bloqueiam
@@ -113,7 +113,9 @@ Cada teste só vale se registrar o resultado real (data, o que foi enviado, o qu
 2. **Login Google real** em staging; e-mail não verificado é recusado.
 3. **Conexão do WhatsApp:** com `FM_WHATSAPP_LIVE=true` em staging, "Testar conexão" confirma token,
    número e conta. Token errado deve falhar sem vazar o token.
-4. **Webhook de entrada:** handshake, assinatura, mensagem recebida, status de entrega, "SAIR".
+4. **Webhook de entrada:** handshake, assinatura, mensagem recebida, status de entrega, "SAIR". Repetir para
+   **Messenger e Instagram** (página e conta de teste; mensagem recebida, resposta dentro de 24 h, entrega e leitura,
+   "SAIR"; conferir o formato do envio, o ID de quem escreve e se a janela é mesmo de 24 h).
 5. **Templates:** enviar `pix_1` pelo painel, conferir status na Meta, categoria devolvida, motivo de
    reprovação (atenção: texto que começa ou termina com variável) e corrigir os textos padrão.
 6. **Envio:** texto dentro da janela de 24 h e template fora dela, com parâmetros; conferir que o

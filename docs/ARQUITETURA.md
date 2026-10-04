@@ -84,6 +84,22 @@ parâmetros na ordem das variáveis) ou texto (janela de 24 h). Os textos do cli
 depois, para perceber pausa/desativação). O adaptador real só é escolhido com `FM_WHATSAPP_LIVE=true` e nunca
 em `FM_ENV=test`.
 
+## Messenger e Instagram (Bloco 11)
+
+- Contato de rede social não tem telefone nem e-mail: é `contacts.channel_only` com o ID do canal em
+  `contact_channels` (PSID no Messenger, IGSID no Instagram), isolado por cliente com RLS forçada. A conversa
+  guarda o `channel` (`whatsapp`, `messenger`, `instagram`).
+- Entrada (`channels/social.py`): mesma regra do WhatsApp: segredo do app obrigatório, assinatura
+  `X-Hub-Signature-256`, mensagem repetida não duplica, eco das nossas mensagens ignorado, entrega e leitura
+  vêm do provedor e nunca andam para trás. O registro da mensagem, o opt-out e a reabertura da conversa são
+  comuns a todos os canais (`channels/inbound.py`).
+- Bloqueio de contato: a identidade em `suppressions` é `canal:id` (no WhatsApp continua o telefone).
+- Saída: a fila é uma só (`channels/outbox.py`), com remetente por canal. Um ID de rede social **nunca** passa
+  pelo remetente do WhatsApp; sem remetente para o canal a mensagem fica na fila ou falha com motivo.
+  Janela de 24 h, no máximo uma vez e resultado incerto vira falha, como no WhatsApp. Estes canais não têm
+  templates: a recuperação por template e a detecção de conversa fria seguem só no WhatsApp.
+- Vendedor IA e painel de Conversas funcionam igual nos três canais; o painel mostra o canal e mascara o ID.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.
