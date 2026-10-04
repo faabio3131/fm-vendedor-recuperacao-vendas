@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from fm_seller import privacy
 from fm_seller.errors import AppError, bad_request, not_found
 from fm_seller.events import normalize as n
 from fm_seller.recovery.cases import close_case
@@ -167,6 +168,7 @@ class OpportunityService(RecoveryService):
                 target=str(case_id),
                 detail={"source": "manual"},
             )
+            privacy.record_consent(conn, p.tenant_id, p.user_id, "registered", "registro_avulso")
         return {"id": str(case_id)}
 
     # ---- planilha
@@ -213,6 +215,10 @@ class OpportunityService(RecoveryService):
                 action="recovery.import",
                 detail={"rows": len(rows), "created": created},
             )
+            if created:
+                privacy.record_consent(
+                    conn, p.tenant_id, p.user_id, "registered", "importacao", created
+                )
         return {
             "total": len(rows),
             "created": created,

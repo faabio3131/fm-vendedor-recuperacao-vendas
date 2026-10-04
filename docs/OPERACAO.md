@@ -60,6 +60,16 @@ com `.csv` no fim do caminho para a planilha). Período de até 366 dias no fuso
 dias. Os números são do próprio sistema: não os use em texto de venda como "resultado de mercado", e lembre que
 a recuperação por mensagem pronta é só WhatsApp (Messenger e Instagram aparecem apenas em "conversas por canal").
 
+## Privacidade (LGPD)
+
+Menu **Privacidade** (dono e administrador): prazo de retenção (30 a 3650 dias; padrão 365, provisório), baixar os dados de uma
+pessoa (telefone, e-mail ou ID de canal), apagar os dados dela (com confirmação; "também não contatar mais" guarda só o
+telefone ou ID), registro de consentimento e, só para o dono, exclusão da conta. O worker aplica a retenção a cada ciclo
+(campo `retencao` no log) e apaga as contas cuja carência acabou (`clientes_excluidos`); `FM_TENANT_DELETION_GRACE_DAYS`
+(padrão 30) é a carência. Para o titular: baixe o arquivo, entregue com cuidado (tem dado pessoal) e, se ele pedir, apague.
+Eventos brutos de checkout não são achados por contato: saem pela retenção. Pedido de exclusão de conta feito por engano
+se cancela no mesmo menu até o fim da carência; depois disso não há volta (só restaurando backup).
+
 ## Assinatura do cliente: atraso, suspensão e reativação
 
 Estados do plano (`tenant_plans.status`): `active`, `past_due` (em atraso, dentro da carência), `suspended`,

@@ -18,7 +18,7 @@ de conexões de cada cliente.
 | P5 | Backups do banco e alertas (webhook parado, fila, falha de envio) | PENDENTE | Operar com clientes | Restaurar um backup em banco de teste |
 | P6 | Cakto: cadastrar o produto SaaS (assinatura), segredo do webhook (`FM_PLATFORM_CAKTO_SECRET`), `map-product` | PENDENTE | Venda automática do SaaS na Cakto | Compra de teste cria cliente, plano e convite; conferir se a assinatura `X-Cakto-Signature` valida com o evento real (formato já alinhado à documentação); capturar um ciclo real de assinatura (atraso, recuperação, cancelamento, reembolso) e conferir nomes e ordem dos eventos |
 | P7 | Hotmart: idem (`FM_PLATFORM_HOTMART_HOTTOK`) | PENDENTE | Venda automática do SaaS na Hotmart | Idem; a documentação oficial da Hotmart não pôde ser lida: colar a página de webhook ou um evento real e **confirmar cabeçalho, nomes de evento e campos** (hoje são suposições) |
-| P8 | Termos de uso, política de privacidade e papel de operador de dados (LGPD) em texto jurídico | PENDENTE | Vender legalmente | Revisão de advogado; link no login e na área de conexões |
+| P8 | Termos de uso, política de privacidade e papel de operador de dados (LGPD) em texto jurídico | PENDENTE | Vender legalmente | Revisão de advogado; link no login e na área de conexões. A tela Privacidade já tem o espaço (hoje diz "PENDENTE"); exportar, apagar, retenção e exclusão da conta já existem e foram testados só com dados sintéticos |
 | P9 | Contador: obrigações do Fábio como pessoa física com as vendas do SaaS; quando abrir CNPJ | PENDENTE | Segurança fiscal | Orientação por escrito |
 | P10 | CNPJ + verificação de empresa na Meta | PENDENTE (não bloqueia) | Futuro: Tech Provider / Embedded Signup | Só necessário para conectar o WhatsApp do cliente com poucos cliques |
 | P11 | `FM_WHATSAPP_LIVE=true` (API e worker) e versão da Graph API (`FM_META_GRAPH_VERSION`) | PENDENTE | Envio real, teste real da conexão e templates na Meta | Só depois dos testes 1 a 3 abaixo, com conta real |
@@ -48,6 +48,7 @@ de conexões de cada cliente.
 
 - Janela de atribuição de venda recuperada: decidida em 5 dias (D6, 04/10/2026).
 - Carência em atraso antes de suspender (D10): 3 dias provisórios; o prazo certo é decisão do Diretor.
+- Privacidade (Bloco 18), decisões do Diretor e do advogado: prazo de retenção das conversas (365 dias provisório), carência da exclusão da conta (30 dias provisório), e se o bloqueio de contato deve ser guardado só como hash com chave própria (hoje fica o telefone ou ID, sem nome nem mensagens, para não correr o risco de esquecer o bloqueio na rotação da chave).
 - Limites e preços por plano (valores atuais de `plans.limits`, 1000 respostas de IA por mês, são **provisórios**; custo real por resposta só se sabe após o `ai-check`).
 - Sequências e textos padrão da recuperação.
 - Quando buscar Tech Provider (exige CNPJ).

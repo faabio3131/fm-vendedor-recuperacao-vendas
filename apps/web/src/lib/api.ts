@@ -316,3 +316,19 @@ export type HandoffReport = {
   total: number;
   items: { reason: string; label: string; tip: string; count: number }[];
 };
+
+export type Privacy = {
+  retention_days: number;
+  retention_default: number;
+  retention_min: number;
+  retention_max: number;
+  deletion: { requested_at: string | null; due_at: string | null; grace_days: number };
+  consents: { action: string; origin: string; count: number; at: string; by: string | null }[];
+  terms: string;
+};
+
+export type EraseResult = {
+  found: boolean;
+  erased?: { mensagens: number; conversas: number; casos: number };
+  block_kept?: boolean;
+};

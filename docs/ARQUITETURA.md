@@ -174,6 +174,25 @@ vez" são da fila de saída e continuam cobertos pelos testes dela, não pela av
 `GET /v1/seller/handoffs?days=` agrupa as conversas que foram para uma pessoa por motivo, com o que o cliente pode fazer;
 o texto livre que o modelo escreve como motivo nunca é exibido (vira "Outro motivo").
 
+## Privacidade e LGPD (Bloco 18)
+
+`privacy.py`, `api/routes/privacy.py` e a migration `0011`. **Exportar** (`POST /v1/privacy/contacts/export`) devolve tudo o que o
+sistema guarda do contato (dados, canais, conversas com mensagens, casos de recuperação, se está bloqueado); **apagar**
+(`/contacts/erase`, exige `confirm`) remove conversas (e mensagens), casos (e passos), canais e o contato, e repetir o pedido não
+dá erro. Busca por telefone, e-mail ou ID de canal (`messenger:...`), sempre dentro do cliente (RLS). A auditoria guarda o id
+interno do contato e contagens, nunca telefone, e-mail, nome ou texto. O bloqueio de contato **sobrevive**: fica só o
+identificador e o motivo, sem nome, sem mensagens e sem ligação com o contato. Não foi possível guardá-lo de forma não
+reversível sem arriscar esquecer o bloqueio quando a chave de cifragem girar; é decisão aberta (hash com chave própria).
+
+**Retenção** (`tenant_settings.retention_days`, 30 a 3650, padrão 365 PROVISÓRIO): o worker apaga, em lotes e com o prazo de
+cada cliente, conversas, casos já encerrados, eventos brutos recebidos e contatos que ficaram sem nada; caso em andamento
+nunca. **Consentimento**: `consent_events` registra declarar/retirar (painel) e a confirmação de autorização em registro avulso
+e planilha (só contagem). **Exclusão da conta** (só o dono, digitando `EXCLUIR`): pausa o serviço (plano `suspended`, o login
+continua) e agenda a exclusão para `FM_TENANT_DELETION_GRACE_DAYS` dias depois (padrão 30); cancelar devolve o plano ao estado
+anterior. Vencida a carência, o worker apaga o cliente, os eventos de compra dele e os usuários que não pertencem a nenhum outro
+cliente, e grava só o id e as datas em `deletion_log`. A trava de somente-inserção da auditoria só cede para as linhas do
+cliente que está sendo excluído (`app.purge_tenant`).
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.
