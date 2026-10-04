@@ -53,16 +53,60 @@ def render_reply(reply: AiReply, offers: dict[str, tuple[str, str, str]]) -> str
     raw = reply.text.strip()
     if not raw or len(raw) > 1000 or _FORBIDDEN.search(raw):
         return None
-    wanted = set(_PLACEHOLDER.findall(raw))
-    if wanted:
+    if "{" in _PLACEHOLDER.sub("", raw) or "}" in _PLACEHOLDER.sub("", raw):
+        return None  # marcador desconhecido ou chave solta: nunca vai para o cliente
+    if _PLACEHOLDER.search(raw):
         if reply.offer_id is None or reply.offer_id not in offers:
             return None
         name, price, link = offers[reply.offer_id]
         values = {"oferta": name, "preco": price, "link": link}
         raw = _PLACEHOLDER.sub(lambda m: values[m.group(1)], raw)
-    elif "{" in raw or "}" in raw:
-        return None
     return raw
+
+
+@dataclass(frozen=True)
+class Proposal:
+    """O que o vendedor faria com a conversa, sem efeito colateral (nada é gravado nem enviado).
+
+    `failed` = o modelo não respondeu (rede, cota, formato); `kind` é "reply" ou "handoff".
+    Usada pelo vendedor de verdade, pela avaliação (`ai-eval`) e pela tela "Testar conversa".
+    """
+
+    kind: str
+    text: str = ""
+    reason: str | None = None
+    failed: bool = False
+    tokens_in: int = 0
+    tokens_out: int = 0
+
+
+def propose(model: AiModel, ctx: AiContext, registry: dict[str, tuple[str, str, str]]) -> Proposal:
+    """Chama o modelo e aplica as travas do sistema: só texto sem URL/valor livre, com os dados da
+    oferta vindos do cadastro (`registry`: id -> nome, preço formatado, link)."""
+    try:
+        reply = model.reply(ctx)
+    except Exception as exc:
+        # Sem isto a transação voltaria e a mesma mensagem seria tentada para sempre, sem resposta.
+        log.warning(
+            "modelo falhou", extra={"ctx": {"erro": type(exc).__name__, "motivo": str(exc)[:120]}}
+        )
+        return Proposal("handoff", reason="erro_do_modelo", failed=True)
+    if reply.handoff:
+        return Proposal(
+            "handoff",
+            reason=reply.handoff_reason or "modelo_pediu",
+            tokens_in=reply.tokens_in,
+            tokens_out=reply.tokens_out,
+        )
+    text = render_reply(reply, registry)
+    if text is None:
+        return Proposal(
+            "handoff",
+            reason="resposta_invalida",
+            tokens_in=reply.tokens_in,
+            tokens_out=reply.tokens_out,
+        )
+    return Proposal("reply", text=text, tokens_in=reply.tokens_in, tokens_out=reply.tokens_out)
 
 
 def _handoff(
@@ -199,26 +243,18 @@ def _handle_conversation(
             for h in reversed(history)
         ),
     )
-    try:
-        reply = model.reply(ctx)
-    except Exception as exc:
-        # Sem isto a transação voltaria e a mesma mensagem seria tentada para sempre, sem resposta.
-        log.warning(
-            "modelo falhou", extra={"ctx": {"erro": type(exc).__name__, "motivo": str(exc)[:120]}}
-        )
+    proposal = propose(model, ctx, registry)
+    if proposal.failed:
         usage.record(conn, tenant_id, tz, ok=False)
         _handoff(conn, tenant_id, conv_id, "erro_do_modelo", notify=True)
         return "handoffs"
     usage.record(
-        conn, tenant_id, tz, ok=True, tokens_in=reply.tokens_in, tokens_out=reply.tokens_out
+        conn, tenant_id, tz, ok=True, tokens_in=proposal.tokens_in, tokens_out=proposal.tokens_out
     )
-    if reply.handoff:
-        _handoff(conn, tenant_id, conv_id, reply.handoff_reason or "modelo_pediu", notify=True)
+    if proposal.kind == "handoff":
+        _handoff(conn, tenant_id, conv_id, proposal.reason or "modelo_pediu", notify=True)
         return "handoffs"
-    text = render_reply(reply, registry)
-    if text is None:
-        _handoff(conn, tenant_id, conv_id, "resposta_invalida", notify=True)
-        return "handoffs"
+    text = proposal.text
     enqueue_text(conn, tenant_id, conv_id, "bot", text)
     conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
     return "replied"

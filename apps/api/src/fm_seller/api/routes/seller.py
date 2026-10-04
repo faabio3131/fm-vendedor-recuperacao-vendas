@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
@@ -34,6 +34,15 @@ class OfferIn(BaseModel):
 class SettingsIn(BaseModel):
     ai_enabled: bool
     ai_persona: str = Field(default="", max_length=600)
+
+
+class TurnIn(BaseModel):
+    role: Literal["customer", "assistant"]
+    text: str = Field(max_length=500)
+
+
+class SandboxIn(BaseModel):
+    messages: list[TurnIn] = Field(min_length=1, max_length=12)
 
 
 class ReplyIn(BaseModel):
@@ -80,6 +89,16 @@ def usage(s: Svc, p: Who) -> dict[str, Any]:
 @router.put("/seller/settings")
 def put_settings(body: SettingsIn, s: Svc, p: Who) -> dict[str, Any]:
     return s.put_settings(p, body.ai_enabled, body.ai_persona)
+
+
+@router.post("/seller/sandbox")
+def sandbox(body: SandboxIn, s: Svc, p: Who) -> dict[str, Any]:
+    return s.sandbox(p, [(m.role, m.text) for m in body.messages])
+
+
+@router.get("/seller/handoffs")
+def handoffs(s: Svc, p: Who, days: Annotated[int, Query(ge=1, le=365)] = 30) -> dict[str, Any]:
+    return s.handoffs(p, days)
 
 
 @router.get("/inbox")

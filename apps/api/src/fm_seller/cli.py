@@ -340,6 +340,43 @@ def ai_check(settings: Settings) -> int:
     return 1 if failed else 0
 
 
+def ai_eval_command(settings: Settings, real: bool) -> int:
+    """Roda as conversas de avaliação do vendedor IA. Sem `--real`: simulador, sem custo."""
+    from fm_seller.ai.evaluation import evaluate
+    from fm_seller.ai.gemini import GeminiModel
+    from fm_seller.ai.model import SimulatedAiModel
+
+    model: AiModel
+    if real:
+        key = settings.ai_api_key.get_secret_value()
+        if not key:
+            print("FM_AI_API_KEY não está definida; `--real` precisa da chave.")
+            return 2
+        model = GeminiModel(
+            key,
+            model=settings.ai_model,
+            base_url=settings.ai_base_url,
+            timeout=settings.ai_timeout_seconds,
+            thinking_level=settings.ai_thinking_level,
+        )
+        print(f"modelo REAL: {settings.ai_model} (chamadas pagas)")
+    else:
+        model = SimulatedAiModel()
+        print("modelo: simulador (não prova o comportamento do modelo real)")
+    report = evaluate(model)
+    for r in report.results:
+        bad = r.critical_failures + r.warnings
+        mark = "CRÍTICO" if r.critical_failures else ("aviso" if bad else "ok")
+        reason = f" ({r.reason})" if r.reason else ""
+        print(f"[{mark}] {r.scenario.title}: {r.outcome}{reason}")
+        for c in bad:
+            print(f"    - {c.name}: {c.detail}")
+    total = len(report.results)
+    print(f"{total} cenários · {report.critical} falhas de segurança · {report.warnings} avisos")
+    print("RESULTADO:", {0: "OK", 1: "COM AVISOS", 2: "NÃO LIGUE A IA"}[report.exit_code])
+    return report.exit_code
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fm-seller")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -393,6 +430,13 @@ def main(argv: list[str] | None = None) -> int:
     wk.add_argument("--interval", type=int, default=30, help="segundos entre ciclos")
     wk.add_argument("--once", action="store_true", help="roda um ciclo e sai")
     sub.add_parser("ai-check", help="Testa a chave e o modelo de IA com uma chamada real")
+    ae = sub.add_parser(
+        "ai-eval",
+        help="Avalia o vendedor IA com conversas sintéticas (0 ok, 1 avisos, 2 falha de segurança)",
+    )
+    ae.add_argument(
+        "--real", action="store_true", help="usa a chave real do Gemini (chamadas pagas)"
+    )
     oc = sub.add_parser(
         "ops-check",
         help="Verifica worker, filas e sincronização; sai com 0 (ok), 1 (aviso), 2 (crítico)",
@@ -440,6 +484,8 @@ def main(argv: list[str] | None = None) -> int:
         run_worker(args.interval, args.once)
     elif args.cmd == "ai-check":
         return ai_check(settings)
+    elif args.cmd == "ai-eval":
+        return ai_eval_command(settings, args.real)
     elif args.cmd == "ops-check":
         return ops_check_command(settings, require_worker=not args.no_worker)
     return 0

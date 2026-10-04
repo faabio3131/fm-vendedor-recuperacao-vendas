@@ -12,7 +12,7 @@ de conexões de cada cliente.
 | # | Item | Status | Destrava | Como validar |
 |---|---|---|---|---|
 | P1 | Google Cloud: tela de consentimento + OAuth Client ID (web). Variável `FM_GOOGLE_CLIENT_ID` e `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | PENDENTE | Login real (hoje só simulado em dev) | Entrar com conta Google em staging; e-mail não verificado deve ser recusado |
-| P2 | Chave do Gemini (`FM_AI_API_KEY`, API e worker) e modelo (`FM_AI_MODEL`) | PENDENTE | Vendedor IA real | `python -m fm_seller.cli ai-check` termina com `RESULTADO: OK`; conferir tokens por resposta (o `ai-check` imprime) e o preço em `docs/LANCAMENTO_MVP.md` §2.4 (sobe em 01/01/2027) |
+| P2 | Chave do Gemini (`FM_AI_API_KEY`, API e worker) e modelo (`FM_AI_MODEL`) | PENDENTE | Vendedor IA real | `python -m fm_seller.cli ai-check` termina com `RESULTADO: OK` e `ai-eval --real` sem falha de segurança; conferir tokens por resposta (o `ai-check` imprime) e o preço em `docs/LANCAMENTO_MVP.md` §2.4 (sobe em 01/01/2027) |
 | P3 | Hospedagem (Render): API, worker, painel, Postgres gerenciado, domínio e HTTPS (`render.yaml` é rascunho; **suspenso de propósito até o fim da construção**) | PENDENTE | Ambiente de staging/produção | `cli preflight` e `cli smoke` sem crítico, `/health` ok, migrations aplicadas, `FM_ENV=staging` sobe sem erro de configuração |
 | P4 | Papéis do Postgres de produção (`fm_owner`, `fm_app`) e chave de cifragem (`gen-key`) guardada em cofre, com cópia de segurança separada | PENDENTE | Credenciais de clientes seguras | Perder a chave perde as credenciais: testar restauração antes de ter cliente |
 | P5 | Backups do banco e alertas (webhook parado, fila, falha de envio) | PENDENTE | Operar com clientes | Restaurar um backup em banco de teste |

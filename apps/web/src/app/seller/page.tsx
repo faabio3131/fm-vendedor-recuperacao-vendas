@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { HandoffReportCard, SandboxCard } from "@/components/SellerTools";
 import { Shell, useMe } from "@/components/Shell";
 import { api, brl, type AiUsage, type Offer, type SellerSettings } from "@/lib/api";
 
@@ -123,6 +124,9 @@ function Seller() {
           </div>
         )}
       </div>
+
+      <SandboxCard />
+      <HandoffReportCard />
 
       <h2>Ofertas</h2>
       {offers.length === 0 && <p className="muted">Nenhuma oferta ainda.</p>}

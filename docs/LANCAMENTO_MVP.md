@@ -109,8 +109,9 @@ em 3 meses: ao definir limites e planos (D2), usar o valor de 2027.
 
 Cada teste só vale se registrar o resultado real (data, o que foi enviado, o que voltou).
 
-1. **Gemini:** `python -m fm_seller.cli ai-check` termina com `RESULTADO: OK`; anotar nome do modelo aceito,
-   formato de resposta e custo por resposta (revisar `plans.limits`).
+1. **Gemini:** `python -m fm_seller.cli ai-check` termina com `RESULTADO: OK`; depois `python -m fm_seller.cli ai-eval --real`
+   (12 conversas de avaliação, sem falha de segurança); anotar nome do modelo aceito, formato de resposta e custo por
+   resposta (revisar `plans.limits`). O `ai-eval` sem `--real` só prova as travas do sistema, não o modelo.
 2. **Login Google real** em staging; e-mail não verificado é recusado.
 3. **Conexão do WhatsApp:** com `FM_WHATSAPP_LIVE=true` em staging, "Testar conexão" confirma token,
    número e conta. Token errado deve falhar sem vazar o token.
