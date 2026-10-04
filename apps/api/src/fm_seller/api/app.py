@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from fm_seller import __version__
 from fm_seller.api.routes import (
     auth,
+    captures,
     connections,
     health,
     me,
@@ -129,6 +130,7 @@ def create_app(
     app.include_router(me.router, prefix="/v1")
     app.include_router(plan.router, prefix="/v1")
     app.include_router(connections.router, prefix="/v1")
+    app.include_router(captures.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")  # antes do genérico: rota específica
     for social_router in social.routers:
         app.include_router(social_router, prefix="/v1")

@@ -6,7 +6,7 @@ endereço e entrega são V2 (ADR-0002). Produto comercial da F&M Tecnologia, **W
 
 ## Estado
 
-Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo), 7 (WhatsApp real e templates da Meta), 8 (guia de conexão e checklist de lançamento) 9 (alertas, backup e restauração), 11 (Messenger e Instagram), 12 (ciclo de vida da assinatura) e 13 (relatórios de recuperação) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
+Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo), 7 (WhatsApp real e templates da Meta), 8 (guia de conexão e checklist de lançamento) 9 (alertas, backup e restauração), 11 (Messenger e Instagram), 12 (ciclo de vida da assinatura), 13 (relatórios de recuperação) e 14 (captura de eventos reais) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
 
 | Peça | Estado |
 |---|---|
@@ -28,6 +28,7 @@ Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA),
 | WhatsApp Cloud API real: envio de template/texto, envio de templates para aprovação, sincronização de status, teste real da conexão | Feito e testado contra **servidor falso** (formato da documentação da Meta); **desligado por padrão; falta validar com conta real** |
 | Messenger e Instagram (mensagens diretas): entrada com assinatura, conversa, vendedor IA, opt-out, fila de saída, teste de conexão | Feito e testado contra **servidor falso** (formato da documentação da Meta); envio real **desligado por padrão** (`FM_WHATSAPP_LIVE`); **não testado com conta real**. A recuperação por template segue só no WhatsApp |
 | Relatórios de recuperação: funil, valor recuperado, por período, produto, sequência, origem e dia; planilha CSV | Feito e testado com dados **sintéticos**; são números do próprio sistema, não medidos em produção |
+| Captura segura de eventos reais da Cakto/Hotmart (desligada por padrão, cifrada, sem segredos, expira) e conferência campo a campo com o normalizador (CLI e tela) | Feito e testado com eventos **sintéticos**; **nenhum evento real foi capturado ainda**; Hotmart segue com suposições |
 | Cobrança própria, anúncios | **Não feito** (fora do escopo atual) |
 
 Contas e configurações externas ainda pendentes: ver `docs/PENDENCIAS_EXTERNAS.md`. Roteiro e critérios de lançamento: `docs/LANCAMENTO_MVP.md`. Criar o staging no Render: `docs/STAGING_RENDER.md`. Encaixe futuro com o Core: `docs/adr/0002-encaixe-com-o-core-v2.md`.

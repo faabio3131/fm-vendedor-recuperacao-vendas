@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ProviderCard } from "@/components/ProviderCard";
 import { Shell, useMe } from "@/components/Shell";
@@ -37,6 +38,9 @@ function Connections() {
       <h1>Conexões</h1>
       <p className="muted">
         Informe aqui as credenciais da sua operação. Elas ficam cifradas e não aparecem de novo depois de salvas.
+      </p>
+      <p className="muted">
+        <Link href="/captures">Ver eventos capturados (diagnóstico da Cakto e da Hotmart)</Link>
       </p>
       {error && <div className="alert bad">{error}</div>}
       {GROUPS.map((g) => {

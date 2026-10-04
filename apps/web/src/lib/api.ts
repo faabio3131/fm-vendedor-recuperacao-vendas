@@ -36,6 +36,29 @@ export type RecoveryReport = {
   channels: { channel: string; conversations: number; inbound: number; outbound: number }[];
 };
 
+export type CaptureList = {
+  enabled: boolean;
+  ttl_hours: number;
+  items: { id: string; provider: string; event_type: string; auth_method: string | null; captured_at: string }[];
+};
+
+export type CaptureDetail = {
+  id: string;
+  provider: string;
+  event_type: string;
+  auth_method: string | null;
+  captured_at: string;
+  expires_at: string;
+  payload: unknown;
+  comparison: {
+    known_event: boolean;
+    kind: string | null;
+    fields: { field: string; label: string; status: string; found_at: string | null; type: string | null; tried: string[] }[];
+    extras: { path: string; type: string }[];
+    problems: string[];
+  };
+};
+
 export type MyPlan = {
   state: "none" | "active" | "grace" | "blocked";
   plan: { key: string; name: string } | null;

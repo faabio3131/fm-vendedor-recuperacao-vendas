@@ -1,0 +1,20 @@
+{
+  "provider": "hotmart",
+  "event": "PURCHASE_APPROVED",
+  "origem": "sintetico",
+  "payload": {
+    "event": "PURCHASE_APPROVED",
+    "data": {
+      "buyer": {"name": "Cliente Exemplo", "email": "cliente.exemplo@example.test", "checkout_phone": "11999990001"},
+      "product": {"id": 123456, "name": "Produto Teste"},
+      "purchase": {"transaction": "HP00000000000000", "price": {"value": 97.0}}
+    }
+  },
+  "expect": {
+    "known_event": true,
+    "kind": "purchase_approved",
+    "has_email": true,
+    "has_phone": true,
+    "amount_cents": 9700
+  }
+}

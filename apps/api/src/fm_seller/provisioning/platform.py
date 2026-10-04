@@ -21,7 +21,8 @@ from fm_seller.config import Settings
 from fm_seller.db import Conn, Database
 from fm_seller.errors import AppError, bad_request, not_found
 from fm_seller.events import normalize as n
-from fm_seller.events.ingest import MAX_BODY, dedupe_key, secret_ok
+from fm_seller.events.capture import CaptureConfig, safe_record
+from fm_seller.events.ingest import MAX_BODY, auth_method, dedupe_key
 from fm_seller.events.normalize import NORMALIZERS, CheckoutEvent
 from fm_seller.provisioning import lifecycle
 from fm_seller.security.crypto import SecretBox
@@ -157,8 +158,19 @@ def ingest_platform_event(
         raise bad_request("invalid_json", "Corpo não é JSON válido.") from exc
     if not isinstance(body, dict):
         raise bad_request("invalid_json", "Corpo precisa ser um objeto JSON.")
-    if not secret_ok(provider, headers, body, expected, raw_body):
+    method = auth_method(provider, headers, body, expected, raw_body)
+    if method is None:
         raise AppError(401, "invalid_secret", "Segredo do webhook inválido.")
+    safe_record(
+        db,
+        box,
+        CaptureConfig(settings.capture_events, settings.capture_ttl_hours, settings.capture_keep),
+        tenant_id=None,
+        provider=provider,
+        headers=headers,
+        body=body,
+        auth_method=method,
+    )
 
     ev = NORMALIZERS[provider](body)
     event_type = str(body.get("event", ""))[:100] or "unknown"
