@@ -20,12 +20,19 @@ documentos listados abaixo) e continuar a partir do estado descrito aqui.
 4. `docs/STAGING_RENDER.md`: criar o ambiente de construção (Render grátis).
 5. `docs/OPERACAO.md` e `docs/ARQUITETURA.md`.
 
-## Estado em 04/10/2026 (fim da manhã)
+## Estado em 04/10/2026 (tarde)
 
-- No `main`: Blocos 1 a 10C. Último merge: PR #16 (Render em modo construção, `cli bootstrap`).
-- Aberto: PR #14 (Bloco 10B, adaptadores Cakto e Gemini alinhados à documentação oficial), CI verde,
-  aguardando aprovação do Fábio.
+- No `main`: Blocos 1 a 10C. Último merge: PR #14 (Bloco 10B, adaptadores Cakto e Gemini alinhados à
+  documentação oficial), aprovada pelo Fábio.
 - Ainda **nada** foi validado com conta real (Render, Google, Meta, Gemini, Cakto, Hotmart).
+- **Render em suspenso, por decisão do Fábio:** construir primeiro, sem gastar, e subir ao servidor só no
+  final para os testes. O blueprint `atendevendeia-construcao` foi criado no Render, mas o banco grátis não
+  foi criado (o Render permite um banco grátis por workspace e a vaga já está ocupada por outro projeto do
+  Fábio). `fm-seller-api` ficou em falha de deploy e `fm-seller-web` subiu; **os dois foram suspensos**
+  (retomar com "Resume Web Service"). Não há URL pública em uso. O banco e o painel de outro projeto no mesmo
+  workspace não devem ser tocados.
+- Para subir de verdade, decidir o banco: pago (a partir de cerca de US$ 6/mês) ou Postgres grátis fora do
+  Render (precisaria permitir criar o papel `fm_app`; não testado).
 - Cópia da documentação no Google Drive: pasta "AtendeVendeIA (cópia do projeto)". É um retrato; refazer
   quando um bloco fechar.
 
@@ -44,9 +51,13 @@ de venda" (PR #15) foi um erro de leitura e foi fechada sem merge.
 
 ## Próximos passos
 
-Do Fábio: aprovar o PR #14; criar o ambiente no Render pelo guia; registrar `atendevendeia.com.br`; criar o
-Client ID do Google; colar a documentação ou um evento de exemplo da Hotmart (a página oficial deu 403 e
-não foi contornada). Depois, com as contas: testes reais da seção 4 de `docs/LANCAMENTO_MVP.md`.
+Construção (sem custo): Messenger e Instagram, cobrança própria e anúncios (fases seguintes), e o que o
+Fábio priorizar. Testes só com simuladores até a subida.
+
+Do Fábio, na subida ao servidor: escolher o banco; retomar ou recriar o ambiente no Render pelo guia
+`docs/STAGING_RENDER.md`; registrar `atendevendeia.com.br`; criar o Client ID do Google; colar a documentação
+ou um evento de exemplo da Hotmart (a página oficial deu 403 e não foi contornada). Depois, com as contas:
+testes reais da seção 4 de `docs/LANCAMENTO_MVP.md`.
 
 ## Combinados de trabalho
 
