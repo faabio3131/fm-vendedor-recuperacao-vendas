@@ -133,6 +133,17 @@ dúvida da chave do HMAC da Cakto. `events/compare.py` confere o evento contra o
 tipos (nunca valores): nome conhecido, cada campo achado e onde, o que o evento traz e ninguém lê, e os problemas.
 `mask` esconde dados pessoais ao exibir; `anonymize` troca por valores de exemplo válidos para virar fixture.
 
+## Prontidão de subida (Bloco 15)
+
+`ops/preflight.py` (`cli preflight`) confere o ambiente que a API vai usar: a validação de staging/produção, chave de
+cifragem, Client ID provisório, usuários de banco distintos, papel do app sem superusuário e sem bypass de RLS, migrations
+pendentes e RLS forçada, com saída 0/1/2 e sem imprimir segredo (só motivo e nome do campo). `ops/smoke.py` (`cli smoke`)
+testa um ambiente no ar só pelo lado de fora (saúde, prontidão, `/v1/me` fechado, CORS, guarda de origem, webhooks sem
+segredo, login do painel e repasse de `/v1`). `scripts/ops/rehearsal.sh` ensaia backup, subida, rollback pelo backup e nova
+subida em Postgres local (`migrate --until` aplica só até uma migration). Os blueprints do Render são conferidos por
+teste contra o código: toda variável `FM_*` existe em `Settings` e no `.env.example`, segredos nunca são literais, os
+comandos existem na CLI, o plano grátis não tem worker nem cron e o pago tem os dois.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.

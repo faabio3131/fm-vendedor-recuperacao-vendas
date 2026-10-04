@@ -89,6 +89,11 @@ pedir a liberação ao suporte do Render. Ainda não sabemos se o Render deixa o
 
 ## Passo 5: conferir (cole aqui só os resultados, nunca segredos)
 
+Antes de abrir o painel, rode o teste de fumaça (ele espera a instância grátis acordar e não manda cookie nem segredo):
+`python -m fm_seller.cli smoke --api https://<api> --web https://<painel>`. Deve terminar em `RESULTADO: OK`
+(`COM AVISOS` é aceitável em construção; `NÃO SUBA` não). Os itens abaixo continuam valendo à mão, para o que o smoke
+não cobre.
+
 1. No log da API, procure `papel fm_app: created`, `migrations: 0001_core.sql, …, 0007_operacao.sql` e
    `primeiro cliente: criado`.
 2. `https://<api>/v1/health` → `{"status":"ok",…}` e `https://<api>/v1/ready` → `{"status":"ready"}`.
@@ -96,6 +101,12 @@ pedir a liberação ao suporte do Render. Ainda não sabemos se o Render deixa o
    `API_PROXY_TARGET` ao build do painel e o login não vai funcionar: me avise.
 4. `https://<painel>/login` abre.
 5. Com o Client ID real e o seu e-mail como usuário de teste, entrar pelo painel.
+
+## Antes da subida de verdade (conferência de ambiente)
+
+Com as variáveis do ambiente (as mesmas que você preencheu no Render) exportadas na sua máquina, ou no Shell do serviço
+pago, rode `python -m fm_seller.cli preflight`. `RESULTADO: NÃO SUBA` lista o que corrigir, por nome, sem mostrar
+segredo. Ensaie também o rollback do banco com `scripts/ops/rehearsal.sh` (ver `docs/OPERACAO.md`).
 
 ## Para sair do modo construção
 

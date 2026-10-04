@@ -14,6 +14,7 @@ import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import psycopg
 
@@ -98,6 +99,31 @@ def plan_status_command(settings: Settings, tenant_id: str, status: str) -> int:
         db.close()
     print("Estado do plano:" if ok else "ERRO: cliente sem plano.", status if ok else "")
     return 0 if ok else 1
+
+
+def preflight_command(settings: Settings, args: argparse.Namespace) -> int:
+    """Confere o ambiente antes de subir. 0 = ok, 1 = avisos, 2 = crítico (não suba)."""
+    from fm_seller.ops.preflight import run as run_preflight
+
+    report = run_preflight(Settings, check_database=not args.no_db)
+    return _print_report(report)
+
+
+def smoke_command(args: argparse.Namespace) -> int:
+    """Teste de fumaça de um ambiente no ar. 0 = ok, 1 = avisos, 2 = crítico."""
+    from fm_seller.ops.smoke import run as run_smoke
+
+    return _print_report(run_smoke(args.api, args.web, wait=args.wait))
+
+
+def _print_report(report: Any) -> int:
+    for line in report.passed:
+        print("  [ok]", line)
+    for f in report.findings:
+        print(f"  [{'CRÍTICO' if f.level == 'critical' else 'aviso'}] {f.code}: {f.message}")
+    code = exit_code(report.findings)
+    print({0: "RESULTADO: OK", 1: "RESULTADO: COM AVISOS", 2: "RESULTADO: NÃO SUBA"}[code])
+    return code
 
 
 def capture_command(settings: Settings, args: argparse.Namespace) -> int:
@@ -317,7 +343,8 @@ def ai_check(settings: Settings) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fm-seller")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("migrate", help="Aplica as migrations pendentes")
+    mg = sub.add_parser("migrate", help="Aplica as migrations pendentes")
+    mg.add_argument("--until", help="para na migration de prefixo igual ou menor (só ensaio)")
     sub.add_parser(
         "bootstrap",
         help="Primeira subida sem terminal: papel do app, migrations, primeiro cliente",
@@ -337,6 +364,18 @@ def main(argv: list[str] | None = None) -> int:
     pg = sub.add_parser("plan-grace", help="Define os dias de carência em atraso de um plano")
     pg.add_argument("--plan", required=True)
     pg.add_argument("--days", required=True, type=int)
+    pf = sub.add_parser(
+        "preflight", help="Confere o ambiente antes de subir (0 ok, 1 avisos, 2 crítico)"
+    )
+    pf.add_argument("--no-db", action="store_true", help="não conecta ao banco")
+    sk = sub.add_parser(
+        "smoke", help="Teste de fumaça de um ambiente no ar (0 ok, 1 avisos, 2 crítico)"
+    )
+    sk.add_argument(
+        "--api", required=True, help="endereço da API, ex.: https://fm-seller-api.onrender.com"
+    )
+    sk.add_argument("--web", help="endereço do painel (confere login e repasse de /v1)")
+    sk.add_argument("--wait", type=float, default=90, help="segundos esperando a instância acordar")
     cp = sub.add_parser(
         "capture", help="Eventos reais de checkout capturados (exige FM_CAPTURE_EVENTS=true)"
     )
@@ -363,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
 
     settings = get_settings()
     if args.cmd == "migrate":
-        applied = apply_migrations(settings.database_admin_url)
+        applied = apply_migrations(settings.database_admin_url, until=args.until)
         print("Aplicadas:", ", ".join(applied) if applied else "nenhuma (já em dia)")
     elif args.cmd == "bootstrap":
         from fm_seller.bootstrap import BootstrapError, run_bootstrap
@@ -391,6 +430,10 @@ def main(argv: list[str] | None = None) -> int:
             print("ERRO: plano inexistente ou dias fora de 0 a 60.")
             return 1
         print("Carência definida.")
+    elif args.cmd == "preflight":
+        return preflight_command(settings, args)
+    elif args.cmd == "smoke":
+        return smoke_command(args)
     elif args.cmd == "capture":
         return capture_command(settings, args)
     elif args.cmd == "worker":
