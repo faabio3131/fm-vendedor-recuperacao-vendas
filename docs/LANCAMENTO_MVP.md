@@ -6,13 +6,18 @@ marca **o que prova** que está pronto. Aprovação final de lançamento é do D
 
 ## 1. Escopo do MVP (proposta, aguarda confirmação)
 
-Dentro: WhatsApp oficial (Meta) · recuperação (carrinho, PIX, boleto, recusa, orçamento, conversa que
-esfriou, registro avulso, planilha) · templates enviados e sincronizados pela Meta · vendedor IA básico
-com limite mensal por plano · painel web · login Google · compra do SaaS na Cakto/Hotmart cria a conta.
+Dentro: WhatsApp oficial (Meta) · recuperação a partir do que nasce no próprio produto (orçamento em aberto,
+conversa que esfriou, registro avulso, planilha) · templates enviados e sincronizados pela Meta · vendedor IA
+básico com limite mensal por plano · painel web · login Google · **o SaaS é vendido como produto na Cakto e na
+Hotmart**, e a compra cria a conta do comprador (D10).
 
 Texto de venda do V1: "atende e recupera, conduzindo a venda até o link de pagamento". Não prometer
 montagem de pedido na conversa, geração/cobrança de Pix, estoque, entrega nem confirmação automática de
 pagamento (exceto a que vem da Cakto/Hotmart).
+
+Fora do MVP por decisão do Diretor (D10, 04/10/2026): receber eventos de checkout das lojas dos clientes
+(carrinho abandonado, Pix, boleto e recusa vindos da Cakto/Hotmart do cliente). O código existe e está testado,
+mas não é oferecido nem divulgado no MVP.
 
 Fora (V2 ou depois): checkout na conversa, Pix, endereço e entrega (Assistant/Core), Messenger, Instagram, cobrança própria, anúncios (Google/Meta Ads), Tech Provider /
 Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
@@ -30,6 +35,13 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 | D7 | Sequências e textos padrão | Tempos mantidos (batem com o mercado); textos ajustados para não começar nem terminar com variável (seção 2.3) | **DECIDIDO** em 04/10/2026 e aplicado; a primeira reprovação real da Meta ainda pode pedir novo ajuste |
 | D8 | Vendedor IA apresentado como "básico" no MVP | Lançar a versão básica (MVP) primeiro; a V2 vem depois com o Core | **DECIDIDO** em 04/10/2026 |
 | D9 | Hospedagem (rascunho: Render) | Render como rascunho (decisão do Diretor, 04/10/2026); falta criar o staging e validar o `render.yaml` | **DECIDIDO como rascunho**; staging PENDENTE |
+
+**D10 (04/10/2026), decisão do Diretor:** a Cakto e a Hotmart entram só como **lugares onde vendemos o AtendeVendeIA**.
+O produto não se integra, no MVP, ao checkout das lojas dos clientes. Efeito: a recuperação do MVP vem de orçamento,
+conversa que esfriou, registro avulso e planilha; carrinho, Pix, boleto e recusa ficam para depois.
+Mantido: a compra do SaaS na Cakto/Hotmart cria cliente, plano e convite (sem isso cada venda exigiria criar a
+conta à mão). Pendente do Diretor: confirmar se os cartões "Cakto" e "Hotmart" da central de conexões do cliente
+devem sair da tela no MVP.
 
 ### 2.1 D2: o que a pesquisa de 03/10/2026 mostrou (para decidir os demais planos)
 
