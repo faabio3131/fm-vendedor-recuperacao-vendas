@@ -1,0 +1,93 @@
+# VERSÃO PAGA (produção): copie para a raiz como render.yaml quando sair do modo construção. Ver docs/STAGING_RENDER.md.
+# RASCUNHO de blueprint para o Render (decisão de hospedagem do Fábio, 03/10/2026).
+# NÃO foi validado contra o Render: siga docs/STAGING_RENDER.md e, se o Render recusar o arquivo,
+# o erro dele diz qual linha ajustar. Segredos usam `sync: false`: preenchidos no painel do Render,
+# nunca no repositório.
+# Região: o Render não tem região no Brasil (oregon, ohio, virginia, frankfurt, singapore);
+# virginia é a mais próxima. Banco e serviços ficam na MESMA região (rede interna).
+# O nome do plano do banco segue a lista da documentação do Render (0.1c-256mb = menor pago);
+# `free` expira e não serve para staging com dados reais.
+databases:
+  - name: fm-seller-db
+    plan: 0.1c-256mb
+    region: virginia
+    databaseName: fm_seller
+
+services:
+  - type: web
+    name: fm-seller-api
+    region: virginia
+    runtime: docker
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: apps/api
+    preDeployCommand: python -m fm_seller.cli migrate
+    healthCheckPath: /v1/health
+    envVars:
+      - { key: FM_ENV, value: staging }
+      - { key: FM_COOKIE_SECURE, value: "true" }
+      - { key: FM_DATABASE_URL, sync: false }        # papel fm_app
+      - { key: FM_DATABASE_ADMIN_URL, sync: false }  # papel fm_owner (só migrations)
+      - { key: FM_SECRETS_KEYS, sync: false }
+      - { key: FM_GOOGLE_CLIENT_ID, sync: false }
+      - { key: FM_WEB_ORIGIN, sync: false }
+      - { key: FM_PUBLIC_BASE_URL, sync: false }
+      - { key: FM_PLATFORM_CAKTO_SECRET, sync: false }
+      - { key: FM_PLATFORM_HOTMART_HOTTOK, sync: false }
+      - { key: FM_AI_API_KEY, sync: false }
+      - { key: FM_WHATSAPP_LIVE, value: "false" }
+
+  # Worker de recuperação. RASCUNHO: sem FM_WHATSAPP_LIVE o envio real fica desligado e ele só
+  # reprocessa eventos. Ligue FM_WHATSAPP_LIVE=true (API e worker) só depois de validar com conta real.
+  - type: worker
+    name: fm-seller-worker
+    region: virginia
+    runtime: docker
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: apps/api
+    dockerCommand: python -m fm_seller.cli worker --interval 30
+    envVars:
+      - { key: FM_ENV, value: staging }
+      - { key: FM_COOKIE_SECURE, value: "true" }
+      - { key: FM_DATABASE_URL, sync: false }
+      - { key: FM_DATABASE_ADMIN_URL, sync: false }
+      - { key: FM_SECRETS_KEYS, sync: false }
+      - { key: FM_GOOGLE_CLIENT_ID, sync: false }
+      - { key: FM_WEB_ORIGIN, sync: false }
+      - { key: FM_PUBLIC_BASE_URL, sync: false }
+      - { key: FM_AI_API_KEY, sync: false }
+      - { key: FM_WHATSAPP_LIVE, value: "false" }
+
+  # Verificação de alertas a cada 5 min (RASCUNHO, não validado no Render): sai com código 1 (aviso)
+  # ou 2 (crítico) e imprime o motivo. Ligue a notificação de falha de cron do Render a um e-mail.
+  - type: cron
+    name: fm-seller-ops-check
+    region: virginia
+    runtime: docker
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: apps/api
+    schedule: "*/5 * * * *"
+    dockerCommand: python -m fm_seller.cli ops-check
+    envVars:
+      - { key: FM_ENV, value: staging }
+      - { key: FM_COOKIE_SECURE, value: "true" }
+      - { key: FM_DATABASE_URL, sync: false }
+      - { key: FM_DATABASE_ADMIN_URL, sync: false }
+      - { key: FM_SECRETS_KEYS, sync: false }
+      - { key: FM_GOOGLE_CLIENT_ID, sync: false }
+      - { key: FM_WEB_ORIGIN, sync: false }
+      - { key: FM_PUBLIC_BASE_URL, sync: false }
+      - { key: FM_WHATSAPP_LIVE, value: "false" }
+
+  - type: web
+    name: fm-seller-web
+    region: virginia
+    runtime: docker
+    dockerfilePath: apps/web/Dockerfile
+    dockerContext: apps/web
+    healthCheckPath: /login
+    envVars:
+      # Painel chama /v1 no próprio endereço e o Next repassa à API (cookie de mesmo site).
+      # NEXT_PUBLIC_API_URL fica VAZIO; API_PROXY_TARGET é o endereço público da API.
+      - { key: NEXT_PUBLIC_API_URL, value: "" }
+      - { key: API_PROXY_TARGET, sync: false }
+      - { key: NEXT_PUBLIC_GOOGLE_CLIENT_ID, sync: false }

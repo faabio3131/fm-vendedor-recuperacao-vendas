@@ -6,7 +6,7 @@ Ver `apps/api/.env.example`. Segredos entram pelo painel do provedor de hospedag
 
 ## Primeiro ambiente
 
-Staging no Render: siga `docs/STAGING_RENDER.md` (banco com um usuário só usa `scripts/db/bootstrap_app_role.sql`).
+Staging no Render: siga `docs/STAGING_RENDER.md` (modo construção grátis; banco com um usuário só: `cli bootstrap`, ou `scripts/db/bootstrap_app_role.sql` à mão).
 Os passos abaixo valem para um Postgres onde você cria os dois papéis.
 
 1. Criar o banco e rodar `scripts/db/bootstrap_roles.sql` com um usuário administrador.
@@ -118,7 +118,7 @@ também precisam estar aprovados na Meta antes de qualquer envio.
 
 `python -m fm_seller.cli ops-check` lê o banco e imprime o que está parado ou falhando. Código de saída:
 **0** em ordem, **1** só avisos, **2** crítico (também se houver migration pendente). Agende a cada 5 minutos
-(`render.yaml` tem um cron de rascunho) e ligue a falha do job a um e-mail ou ao WhatsApp de quem opera.
+(`docs/render.pago.yaml` tem um cron de rascunho; o `render.yaml` grátis não tem worker nem cron) e ligue a falha do job a um e-mail ou ao WhatsApp de quem opera.
 
 | Achado | Nível | Quando |
 |---|---|---|
