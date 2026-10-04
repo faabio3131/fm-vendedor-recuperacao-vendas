@@ -22,14 +22,43 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 | # | Decisão | Sugestão | Estado |
 |---|---|---|---|
 | D1 | Nome comercial, domínio e marca | **AtendeVendeIA** (`atendevendeia.com.br`) | NOME DECIDIDO em 03/10/2026; registro do domínio, consulta de marca e perfis sociais pendentes (ação do Diretor) |
-| D2 | Preços e limites por plano (pesquisa de mercado) | Valores atuais são provisórios | PENDENTE |
-| D3 | Quem paga as mensagens da Meta | O cliente, na própria conta Meta | PENDENTE |
-| D4 | Conexão do WhatsApp sem Tech Provider | Guia no painel + configuração assistida opcional | PENDENTE |
+| D2 | Preços e limites por plano (pesquisa de mercado) | Plano de entrada: **R$ 97,90/mês no anual** e **R$ 149/mês no mensal** (Diretor, 03/10/2026). Demais planos e limites de respostas de IA: ver seção 2.1 | PARCIAL: preço de entrada definido; planos acima e limites PENDENTES |
+| D3 | Quem paga as mensagens da Meta | O cliente, na própria conta Meta, controlando o próprio gasto | **DECIDIDO** em 03/10/2026 |
+| D4 | Conexão do WhatsApp sem Tech Provider e sem CNPJ (cliente com CPF) | Conexão simples para o cliente; caminho depende do teste real (seção 2.2) | PENDENTE |
 | D5 | Garantia e reembolso | Seguir a regra de cada plataforma (confirmar) | PENDENTE |
 | D6 | Janela de atribuição da venda recuperada | 7 dias (hoje) | PENDENTE |
 | D7 | Sequências e textos padrão | Revisar; ajustar após a primeira reprovação real da Meta | PENDENTE |
 | D8 | Vendedor IA apresentado como "básico" no MVP | Sim | PENDENTE |
 | D9 | Hospedagem (rascunho: Render) | Confirmar e criar staging | PENDENTE |
+
+### 2.1 D2: o que a pesquisa de 03/10/2026 mostrou (para decidir os demais planos)
+
+Concorrentes olhados nos sites deles; preços mudam, reconferir antes de publicar.
+
+| Concorrente | Preço | Limite | Mensagens da Meta |
+|---|---|---|---|
+| Atendente.AI | R$ 99, 499 e 999/mês (anual) | 1.000, 5.000 e 10.000 créditos de resposta de IA/mês | não cobra à parte |
+| Chat Inteligente | R$ 149, 390, 690 e 1.490/mês | não informa | pode cobrar à parte |
+| WiiChat | grátis (sem API) e R$ 379/mês | 1.000 contatos; implantação de R$ 2.999 | cobradas à parte |
+| Clint | R$ 149 por usuário/mês (anual) | créditos por sessão, com teto de gasto | cobradas à parte |
+
+- O padrão é limitar por **resposta de IA por mês**, igual ao `plans.limits` que já existe.
+- Faltam: planos acima do de entrada, e o limite de respostas por plano. Dependem do custo real por
+  resposta do Gemini (teste 1 da seção 4). Os valores no código seguem **provisórios**.
+- Leitura adotada: R$ 97,90 é o valor mensal cobrado no plano anual; o plano mensal é R$ 149.
+
+### 2.2 D3 e D4: custo da Meta e conexão
+
+- Desde 01/07/2025 a Meta cobra **por mensagem** (não por conversa): template de marketing é cobrado a
+  cada envio; texto livre e template de utilidade dentro da janela de 24 h aberta pelo cliente são grátis.
+  Tarifas do Brasil não foram conferidas; consultar a tabela da Meta antes de orientar o cliente.
+- Portfólio Meta novo: limite de **250 contatos únicos por 24 h** (documentação da Meta).
+- **Não confirmado** (só blogs de terceiros, nada na documentação da Meta): se pessoa com só CPF consegue
+  criar e aprovar template de marketing; se a verificação da empresa no Brasil exige cartão CNPJ.
+  Só a conta de teste da Meta (C1/C2) responde. Opções a avaliar nesse teste: (a) orientar quem não tem
+  CNPJ a abrir MEI no guia; (b) verificar se o limite de 250/dia basta para começar.
+- Conexão por QR code (tipo WhatsApp Web) **não será usada**: viola a regra 7 do AGENTS.md e arrisca o
+  número do cliente.
 
 ## 3. Contas e ações que destravam os testes
 
