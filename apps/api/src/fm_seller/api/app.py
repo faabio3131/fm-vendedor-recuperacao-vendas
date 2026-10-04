@@ -19,6 +19,7 @@ from fm_seller.api.routes import (
     connections,
     health,
     me,
+    onboarding,
     plan,
     platform,
     recovery,
@@ -128,6 +129,7 @@ def create_app(
     app.include_router(health.router, prefix="/v1")
     app.include_router(auth.router, prefix="/v1")
     app.include_router(me.router, prefix="/v1")
+    app.include_router(onboarding.router, prefix="/v1")
     app.include_router(plan.router, prefix="/v1")
     app.include_router(connections.router, prefix="/v1")
     app.include_router(captures.router, prefix="/v1")

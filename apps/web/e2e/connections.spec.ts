@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { connectWhatsapp } from "./helpers";
 
 const EMAIL = process.env.E2E_EMAIL ?? "demo@example.test";
 const SECRET = "EAAGsegredo-e2e-1234567890";
@@ -131,6 +132,7 @@ test("oportunidades: registro exige autorização, aparece na lista e pode ser m
   await page.goto("/login");
   await page.getByLabel("Login de desenvolvimento (e-mail)").fill(EMAIL);
   await page.getByRole("button", { name: "Entrar (simulado)" }).click();
+  await connectWhatsapp(page); // ligar a recuperação exige WhatsApp conectado (Bloco 16)
   await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Recuperação" }).click();
   await expect(page.getByRole("heading", { name: "Recuperação de vendas" })).toBeVisible();
 

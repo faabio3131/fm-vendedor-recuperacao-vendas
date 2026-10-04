@@ -144,6 +144,17 @@ subida em Postgres local (`migrate --until` aplica só até uma migration). Os b
 teste contra o código: toda variável `FM_*` existe em `Settings` e no `.env.example`, segredos nunca são literais, os
 comandos existem na CLI, o plano grátis não tem worker nem cron e o pago tem os dois.
 
+## Primeiros passos (Bloco 16)
+
+`onboarding.py` e `GET /v1/onboarding` (qualquer papel, só leitura, na transação do cliente: a RLS restringe tudo):
+cada passo (WhatsApp conectado e **testado**, oferta ativa, consentimento, mensagem aprovada, tom de voz, plataforma de
+vendas, vendedor IA ligado, recuperação ligada) é calculado de uma consulta ao estado real, nada é marcado à mão, então
+a lista não envelhece. Os passos trazem o motivo, o que fazer e a tela certa; `blocks` diz o que cada um impede de ligar.
+Os serviços usam as mesmas funções para **barrar o "ligar"**: recuperação sem WhatsApp conectado e vendedor IA sem oferta
+ativa respondem 400 `setup_incomplete` com o que falta (consentimento continua com a mensagem própria
+`consent_required`). A trava vale só na passagem de desligado para ligado: quem já está ligado pode ajustar e desligar
+mesmo que uma conexão tenha caído depois. Conexão apenas salva ("aguardando teste") não conta.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Shell, useMe } from "@/components/Shell";
-import { api, brl, type Connection, type RecoverySummary } from "@/lib/api";
+import { api, brl, type Connection, type Onboarding, type RecoverySummary } from "@/lib/api";
 
 const STATUS: Record<Connection["status"], string> = {
   pending: "Aguardando teste",
@@ -16,9 +16,11 @@ function Overview() {
   const me = useMe();
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [recovery, setRecovery] = useState<RecoverySummary | null>(null);
+  const [onboarding, setOnboarding] = useState<Onboarding | null>(null);
 
   useEffect(() => {
     api<RecoverySummary>("/v1/recovery/summary").then(setRecovery).catch(() => setRecovery(null));
+    api<Onboarding>("/v1/onboarding").then(setOnboarding).catch(() => setOnboarding(null));
     api<Connection[]>("/v1/connections").then(setConnections).catch(() => setConnections([]));
   }, []);
 
@@ -28,6 +30,28 @@ function Overview() {
     <>
       <h1>Visão geral</h1>
       <p className="muted">Seu plano e o estado das conexões.</p>
+
+      {onboarding && onboarding.done < onboarding.total && (
+        <div className="card" aria-label="Progresso dos primeiros passos">
+          <strong>
+            Primeiros passos: {onboarding.done} de {onboarding.total}
+          </strong>
+          <div
+            className="progress"
+            role="progressbar"
+            aria-label="Progresso geral"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={onboarding.percent}
+          >
+            <span style={{ width: `${onboarding.percent}%` }} />
+          </div>
+          <div className="muted">
+            Próximo: {onboarding.steps.find((s) => !s.done)?.title}.{" "}
+            <Link href="/onboarding">Ver o que falta</Link>
+          </div>
+        </div>
+      )}
 
       <div className="grid">
         <div className="card">

@@ -102,3 +102,19 @@ def login(client: TestClient, email: str, verified: bool = True) -> Any:
 
 def unique_email(prefix: str = "u") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}@example.test"
+
+
+def connect_whatsapp(client: TestClient, env: Env, tenant_id: str) -> None:
+    """Deixa o WhatsApp do cliente conectado (cadastro pela API e teste dado como feito)."""
+    res = client.put(
+        "/v1/connections/whatsapp_cloud",
+        json={
+            "values": {
+                "phone_number_id": "1055550001",
+                "waba_id": "2077770002",
+                "access_token": "EAAG" + "x" * 40,
+            }
+        },
+    )
+    assert res.status_code == 200, res.text
+    env.sql("UPDATE connections SET status = 'connected' WHERE tenant_id = %s", (tenant_id,))
