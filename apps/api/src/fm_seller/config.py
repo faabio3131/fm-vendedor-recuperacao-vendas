@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     meta_graph_version: str = "v26.0"
     meta_timeout_seconds: float = Field(default=15.0, ge=1, le=60)
 
+    # Primeira subida sem terminal (docs/STAGING_RENDER.md): `cli bootstrap`. Tudo opcional.
+    bootstrap_app_password: SecretStr = SecretStr("")
+    bootstrap_owner_email: str = ""
+    bootstrap_tenant_name: str = ""
+
     session_ttl_hours: int = Field(default=24 * 14, ge=1)
     cookie_secure: bool = False
 

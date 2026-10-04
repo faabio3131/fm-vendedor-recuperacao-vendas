@@ -228,6 +228,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fm-seller")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("migrate", help="Aplica as migrations pendentes")
+    sub.add_parser(
+        "bootstrap",
+        help="Primeira subida sem terminal: papel do app, migrations, primeiro cliente",
+    )
     sub.add_parser("gen-key", help="Gera uma chave de cifragem (FM_SECRETS_KEYS)")
     ct = sub.add_parser("create-tenant", help="Cria um cliente e convida o e-mail do dono")
     ct.add_argument("--name", required=True)
@@ -252,6 +256,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "migrate":
         applied = apply_migrations(settings.database_admin_url)
         print("Aplicadas:", ", ".join(applied) if applied else "nenhuma (já em dia)")
+    elif args.cmd == "bootstrap":
+        from fm_seller.bootstrap import BootstrapError, run_bootstrap
+
+        try:
+            for line in run_bootstrap(settings):
+                print(line)
+        except BootstrapError as exc:
+            print("ERRO:", exc)
+            return 1
     elif args.cmd == "gen-key":
         print(SecretBox.generate_key_spec())
     elif args.cmd == "create-tenant":

@@ -1,93 +1,111 @@
-# Staging no Render: passo a passo
+# Staging no Render: passo a passo (modo construção, plano grátis)
 
-Para quem cria o ambiente (Fábio). Atualizado em 04/10/2026. **Nada aqui foi validado no Render ainda**:
-o `render.yaml` é rascunho, e cada passo diz o que conferir. Se algo não bater, pare e me mande a mensagem
-de erro (nunca senha, chave ou token: a conversa não é cofre).
+Para quem cria o ambiente (Fábio), inclusive pelo celular. Atualizado em 04/10/2026. **Nada aqui foi
+validado no Render ainda**: o `render.yaml` é rascunho, e cada passo diz o que conferir. Se algo não bater,
+pare e me mande a mensagem de erro (nunca senha, chave ou token: a conversa não é cofre).
 
-## O que será criado (todos na região Virginia)
+## Modo construção: o que o plano grátis permite e o que não
 
-| Recurso | Tipo no Render | Para quê |
-|---|---|---|
-| `fm-seller-db` | Postgres | banco |
-| `fm-seller-api` | Web Service (Docker) | API; roda as migrations antes de subir |
-| `fm-seller-worker` | Background Worker | envia a recuperação, sincroniza templates, bate o batimento |
-| `fm-seller-web` | Web Service (Docker) | painel |
-| `fm-seller-ops-check` | Cron Job | alertas a cada 5 minutos |
+Decisão do Fábio (04/10/2026): enquanto construímos, tudo no grátis, **sem dado real de cliente**. Limites
+segundo a documentação do Render (consultada em 04/10/2026):
+
+| Limite | Efeito para nós |
+|---|---|
+| Serviço web grátis dorme após 15 min sem tráfego; acordar leva cerca de 1 minuto | Primeira abertura do painel é lenta. **Antes de testar um webhook da Cakto/Hotmart, abra `/v1/health` para acordar a API**: a Hotmart desativa o webhook se a URL der erro, e a Cakto espera resposta em 8 s |
+| 750 horas grátis por mês por workspace | Dois serviços ligados o mês todo estouram; o Render suspende até o mês seguinte |
+| Banco grátis **expira 30 dias após a criação** (14 dias de carência para virar pago), sem backup, um por workspace | Servem para construir. Antes do prazo, ou se torna pago ou se recria. Nada de dado real |
+| Sem Shell nos serviços grátis | Por isso existe o `cli bootstrap` (passo 4) em vez de comandos manuais |
+| **Não existe plano grátis para worker nem cron** | Ficam fora: sem recuperação enviada, sem sincronização de templates, sem `ops-check`. Servem para testar login, painel e recebimento de webhooks |
+
+Preço quando passar para o pago (página oficial do Render, 04/10/2026): web a partir de US$ 7/mês, Postgres
+a partir de US$ 6/mês; com API, painel e worker e o banco, cerca de US$ 27/mês. Conferir no painel antes de
+confirmar.
 
 O Render não tem região no Brasil (Oregon, Ohio, Virginia, Frankfurt, Singapore). Os dados ficam fora do
-país: levar isso à revisão de LGPD com o advogado (P8). Confira o preço de cada recurso no painel antes de
-confirmar; não tenho como ver o seu plano.
+país: levar isso à revisão de LGPD com o advogado (P8).
 
-## Passo 1: banco
+## O que será criado (região Virginia)
 
-1. Render → New → PostgreSQL. Nome `fm-seller-db`, região **Virginia**, database `fm_seller`, plano pago
-   menor (o `free` expira). Anote em cofre (não no chat): a URL **Internal** e a **External**.
-2. Crie o papel do app, rodando no seu computador com a URL **External** do usuário padrão do Render:
+| Recurso | Tipo | Para quê |
+|---|---|---|
+| `fm-seller-db` | Postgres (free) | banco |
+| `fm-seller-api` | Web Service Docker (free) | API; no início roda o `bootstrap` |
+| `fm-seller-web` | Web Service Docker (free) | painel |
 
-   ```bash
-   psql "<URL External do usuário padrão>" -v app_pw="<senha forte NOVA>" -f scripts/db/bootstrap_app_role.sql
-   ```
+## Passo 1: chave de cifragem e senha do app
 
-   O resultado deve mostrar `fm_app | f | f` (não é superusuário e não ignora RLS).
-3. Se aparecer **`permission denied to create role`**, **pare**: o usuário padrão do Render não pode criar
-   papéis. Não rode a API como dono do banco (isso desliga o isolamento entre clientes). Me avise: a saída é
-   outro Postgres gerenciado ou pedir a liberação ao suporte do Render.
+Preciso de dois segredos, que você guarda em cofre (nunca no chat nem no git):
 
-## Passo 2: chave de cifragem
+- **Chave de cifragem** `FM_SECRETS_KEYS`: o formato é `k1:` seguido de 32 bytes aleatórios em base64. Gerar
+  em qualquer computador com `echo "k1:$(openssl rand -base64 32)"`. Se só tiver o celular, me diga e
+  eu explico outro jeito. Perder a chave = perder as credenciais dos clientes (guarde uma cópia separada).
+- **Senha do papel do app** `FM_BOOTSTRAP_APP_PASSWORD`: uma senha forte nova, só letras e números
+  (símbolos como `@` ou `/` quebram a URL do banco).
 
-```bash
-echo "k1:$(openssl rand -base64 32)"
-```
+## Passo 2: Google (login)
 
-Guarde o resultado em cofre, **com uma cópia separada**. Perder a chave = perder as credenciais dos
-clientes. Ela vai em `FM_SECRETS_KEYS` e nunca no git nem no chat.
-
-## Passo 3: Google (login)
-
-Sem `FM_GOOGLE_CLIENT_ID` a API **não sobe** em staging. Para criar: Google Cloud Console → APIs e serviços
-→ Credenciais → Criar credenciais → ID do cliente OAuth → Aplicativo da Web. Em **Origens JavaScript
+Sem `FM_GOOGLE_CLIENT_ID` a API **não sobe**. Para criar: Google Cloud Console → APIs e serviços →
+Credenciais → Criar credenciais → ID do cliente OAuth → Aplicativo da Web. Em **Origens JavaScript
 autorizadas** ponha o endereço do painel (passo 4). Em tela de consentimento "Em teste", só e-mails
-cadastrados como usuário de teste conseguem entrar. Se ainda não quiser criar agora, use
+cadastrados como usuário de teste entram. Se ainda não quiser criar agora, use
 `pendente.apps.googleusercontent.com`: a API sobe e o login simplesmente não funciona até você trocar.
 
-## Passo 4: serviços (Blueprint)
+## Passo 3: criar pelo Blueprint
 
-Render → New → Blueprint → repositório `faabio3131/fm-vendedor-recuperacao-vendas`, branch `main`. Ele lê o
-`render.yaml` e pede os valores marcados `sync: false`:
+Render → New → Blueprint → repositório `faabio3131/fm-vendedor-recuperacao-vendas`, branch `main`. O
+Render lê o `render.yaml` e cria o banco, a API e o painel. Ele pede os valores marcados `sync: false`:
 
 | Variável | Valor |
 |---|---|
-| `FM_DATABASE_URL` | URL **Internal**, trocando usuário e senha pelos de `fm_app` |
-| `FM_DATABASE_ADMIN_URL` | URL **Internal** do usuário padrão (dono; só migrations e backup) |
-| `FM_SECRETS_KEYS` | a chave do passo 2 |
-| `FM_GOOGLE_CLIENT_ID` e `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | o Client ID do passo 3 |
+| `FM_DATABASE_ADMIN_URL` | URL **Internal** do banco (usuário padrão do Render: dono; só migrations) |
+| `FM_DATABASE_URL` | a mesma URL **Internal**, trocando o usuário por `fm_app` e a senha pela do passo 1 |
+| `FM_BOOTSTRAP_APP_PASSWORD` | a senha do passo 1 (a mesma usada em `FM_DATABASE_URL`) |
+| `FM_BOOTSTRAP_OWNER_EMAIL` | seu Gmail |
+| `FM_BOOTSTRAP_TENANT_NAME` | nome do primeiro cliente (ex.: `F&M Teste`) |
+| `FM_SECRETS_KEYS` | a chave do passo 1 |
+| `FM_GOOGLE_CLIENT_ID` e `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | o Client ID do passo 2 |
 | `FM_PUBLIC_BASE_URL` e `API_PROXY_TARGET` | endereço público da API (`https://fm-seller-api….onrender.com`) |
 | `FM_WEB_ORIGIN` | endereço público do painel (`https://fm-seller-web….onrender.com`) |
 | `FM_PLATFORM_CAKTO_SECRET`, `FM_PLATFORM_HOTMART_HOTTOK`, `FM_AI_API_KEY` | deixe vazio por enquanto |
 
-Os endereços só são conhecidos depois da criação (o Render pode acrescentar um sufixo ao nome). Se
-precisar, deixe em branco, crie, copie os endereços e preencha em *Environment* de cada serviço; depois
-redeploy. O Render só pergunta os `sync: false` na criação: variável nova depois entra manualmente.
-`FM_WHATSAPP_LIVE` fica `false` até a conta de teste da Meta existir.
+Como o banco é criado junto, a URL dele só existe depois: deixe `FM_DATABASE_URL` e
+`FM_DATABASE_ADMIN_URL` em branco, crie, copie a URL **Internal** do banco, preencha em *Environment* da
+API e faça *Manual Deploy*. O mesmo vale para os endereços da API e do painel. O Render só pergunta os
+`sync: false` na criação: variável nova depois entra manualmente. `FM_WHATSAPP_LIVE` fica `false`.
 
 Se o Render **recusar** o arquivo, ele diz a linha. Mande a mensagem que eu corrijo.
 
+## Passo 4: o que o `bootstrap` faz sozinho
+
+A cada subida da API, antes de abrir a porta, o comando `cli bootstrap` (idempotente):
+
+1. cria o papel `fm_app` (sem superusuário e sem bypass de RLS), se ainda não existir;
+2. aplica as migrations pendentes;
+3. cria o primeiro cliente e o convite para o seu Gmail, só se o banco ainda não tem nenhum cliente.
+
+Se o log mostrar **`O usuário padrão deste banco não pode criar papéis`**, **pare**: não rode a API como
+dono do banco (isso desliga o isolamento entre clientes). Me avise: a saída é outro Postgres gerenciado ou
+pedir a liberação ao suporte do Render. Ainda não sabemos se o Render deixa o usuário padrão criar papéis.
+
 ## Passo 5: conferir (cole aqui só os resultados, nunca segredos)
 
-1. Deploy da API: no log deve aparecer `Aplicadas: 0001_core.sql, …, 0007_operacao.sql`.
+1. No log da API, procure `papel fm_app: created`, `migrations: 0001_core.sql, …, 0007_operacao.sql` e
+   `primeiro cliente: criado`.
 2. `https://<api>/v1/health` → `{"status":"ok",…}` e `https://<api>/v1/ready` → `{"status":"ready"}`.
 3. **`https://<painel>/v1/health` deve devolver o mesmo JSON.** Se der 404, o Render não passou
    `API_PROXY_TARGET` ao build do painel e o login não vai funcionar: me avise.
 4. `https://<painel>/login` abre.
-5. Criar o primeiro cliente, no Shell da API (Render → fm-seller-api → Shell):
-   `python -m fm_seller.cli create-tenant --name "Minha Loja" --email <seu Gmail> --plan fase-1`
-6. Com o Client ID real e o seu e-mail como usuário de teste, entrar pelo painel.
-7. No Shell do worker ou do cron: `python -m fm_seller.cli ops-check` → `OK: nada a reportar.`
-   (com o worker ligado há mais de 1 minuto).
-8. Ligar a notificação de falha do cron `fm-seller-ops-check` a um e-mail.
+5. Com o Client ID real e o seu e-mail como usuário de teste, entrar pelo painel.
+
+## Para sair do modo construção
+
+Antes de qualquer dado real: trocar para os planos pagos (banco e serviços), copiar `docs/render.pago.yaml`
+sobre `render.yaml` (traz worker e cron), ligar o `ops-check` e testar backup e restauração
+(`docs/OPERACAO.md`). Banco grátis não tem backup.
 
 ## O que continua sem prova
 
-Blueprint e nomes de plano (rascunho); repasse de variável de build do Render para o Docker; envio real,
-templates e teste de conexão da Meta, Gemini, Cakto e Hotmart (dependem das contas, ver
-`docs/LANCAMENTO_MVP.md`). Nada disso deve ser dado como funcionando antes do teste real.
+Blueprint e nomes de plano (rascunho); o `dockerCommand` com `sh -c` e `$PORT`; criação de papel pelo
+usuário padrão do Render; repasse de variável de build do Render para o Docker; envio real, templates e
+teste de conexão da Meta, Gemini, Cakto e Hotmart (dependem das contas, ver `docs/LANCAMENTO_MVP.md`).
+Nada disso deve ser dado como funcionando antes do teste real.
