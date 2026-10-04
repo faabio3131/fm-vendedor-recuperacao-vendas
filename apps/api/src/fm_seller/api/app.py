@@ -22,6 +22,7 @@ from fm_seller.api.routes import (
     onboarding,
     plan,
     platform,
+    privacy,
     recovery,
     reports,
     seller,
@@ -131,6 +132,7 @@ def create_app(
     app.include_router(me.router, prefix="/v1")
     app.include_router(onboarding.router, prefix="/v1")
     app.include_router(plan.router, prefix="/v1")
+    app.include_router(privacy.router, prefix="/v1")
     app.include_router(connections.router, prefix="/v1")
     app.include_router(captures.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")  # antes do genérico: rota específica

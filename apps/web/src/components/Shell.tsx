@@ -13,7 +13,7 @@ export function useMe(): Me {
   return me;
 }
 
-const NAV = [
+const NAV: { href: string; label: string; roles?: string[] }[] = [
   { href: "/", label: "Visão geral" },
   { href: "/onboarding", label: "Primeiros passos" },
   { href: "/inbox", label: "Conversas" },
@@ -22,6 +22,7 @@ const NAV = [
   { href: "/reports", label: "Relatórios" },
   { href: "/connections", label: "Conexões" },
   { href: "/plan", label: "Meu plano" },
+  { href: "/privacy", label: "Privacidade", roles: ["owner", "admin"] },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -65,7 +66,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <aside className="side">
           <div className="brand">AtendeVendeIA</div>
           <nav className="nav" aria-label="Principal">
-            {NAV.map((item) => (
+            {NAV.filter((item) => !item.roles || item.roles.includes(me.tenant.role)).map((item) => (
               <Link key={item.href} href={item.href} aria-current={path === item.href ? "page" : undefined}>
                 {item.label}
               </Link>

@@ -18,6 +18,7 @@ from typing import Any
 
 import psycopg
 
+from fm_seller import privacy
 from fm_seller.ai.model import AiModel, build_ai_model
 from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.outbox import flush_outbox
@@ -213,6 +214,8 @@ def _cycle(
 ) -> None:
     suspended = lifecycle.enforce_grace(db)
     captures.purge_expired(db)
+    retention = privacy.purge_retention(db)
+    excluded = privacy.purge_due_tenants(db)
     redone = reprocess_failed(db, box, handle_event)
     redone_platform = reprocess_platform(db, box)
     cold = detect_cold_conversations(db)
@@ -225,6 +228,8 @@ def _cycle(
         extra={
             "ctx": {
                 "assinaturas_suspensas": suspended,
+                "retencao": retention,
+                "clientes_excluidos": excluded,
                 "reprocessados": redone,
                 "compras": redone_platform,
                 "conversas_frias": cold,

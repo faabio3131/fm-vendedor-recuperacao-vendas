@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     # padrão; guarda o corpo cifrado, sem segredos, e apaga sozinha depois do prazo.
     capture_events: bool = False
     capture_ttl_hours: int = Field(default=72, ge=1, le=720)
+    # Dias entre o pedido de exclusão da conta e o apagamento de tudo (o dono pode cancelar antes).
+    tenant_deletion_grace_days: int = Field(default=30, ge=0, le=365)
     capture_keep: int = Field(default=100, ge=1, le=1000)
 
     # Primeira subida sem terminal (docs/STAGING_RENDER.md): `cli bootstrap`. Tudo opcional.
