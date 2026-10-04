@@ -65,9 +65,7 @@ def create_app(
         if db is None:
             database.close()
 
-    app = FastAPI(
-        title="AtendeVendeIA", version=__version__, lifespan=lifespan
-    )
+    app = FastAPI(title="AtendeVendeIA", version=__version__, lifespan=lifespan)
     app.state.settings = cfg
     app.state.db = database
     app.state.verifier = google
