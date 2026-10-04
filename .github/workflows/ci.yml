@@ -87,7 +87,9 @@ jobs:
       - name: Painel
         working-directory: apps/web
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:8000
+          # Mesmo modo do staging: o painel chama /v1 no próprio endereço e o Next repassa à API.
+          NEXT_PUBLIC_API_URL: ""
+          API_PROXY_TARGET: http://localhost:8000
           NEXT_PUBLIC_DEV_LOGIN: "1"
         run: |
           npm ci

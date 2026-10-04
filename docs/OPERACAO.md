@@ -6,6 +6,9 @@ Ver `apps/api/.env.example`. Segredos entram pelo painel do provedor de hospedag
 
 ## Primeiro ambiente
 
+Staging no Render: siga `docs/STAGING_RENDER.md` (banco com um usuário só usa `scripts/db/bootstrap_app_role.sql`).
+Os passos abaixo valem para um Postgres onde você cria os dois papéis.
+
 1. Criar o banco e rodar `scripts/db/bootstrap_roles.sql` com um usuário administrador.
 2. `python -m fm_seller.cli gen-key` e guardar a chave em cofre. **Perder a chave = perder as
    credenciais dos clientes** (elas precisariam ser digitadas de novo).

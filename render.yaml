@@ -1,14 +1,21 @@
 # RASCUNHO de blueprint para o Render (decisão de hospedagem do Fábio, 03/10/2026).
-# NÃO foi validado contra o Render. Conferir antes do primeiro deploy.
-# Segredos usam `sync: false`: são preenchidos no painel do Render, nunca no repositório.
+# NÃO foi validado contra o Render: siga docs/STAGING_RENDER.md e, se o Render recusar o arquivo,
+# o erro dele diz qual linha ajustar. Segredos usam `sync: false`: preenchidos no painel do Render,
+# nunca no repositório.
+# Região: o Render não tem região no Brasil (oregon, ohio, virginia, frankfurt, singapore);
+# virginia é a mais próxima. Banco e serviços ficam na MESMA região (rede interna).
+# O nome do plano do banco segue a lista da documentação do Render (0.1c-256mb = menor pago);
+# `free` expira e não serve para staging com dados reais.
 databases:
   - name: fm-seller-db
-    plan: basic-256mb
+    plan: 0.1c-256mb
+    region: virginia
     databaseName: fm_seller
 
 services:
   - type: web
     name: fm-seller-api
+    region: virginia
     runtime: docker
     dockerfilePath: apps/api/Dockerfile
     dockerContext: apps/api
@@ -32,6 +39,7 @@ services:
   # reprocessa eventos. Ligue FM_WHATSAPP_LIVE=true (API e worker) só depois de validar com conta real.
   - type: worker
     name: fm-seller-worker
+    region: virginia
     runtime: docker
     dockerfilePath: apps/api/Dockerfile
     dockerContext: apps/api
@@ -52,6 +60,7 @@ services:
   # ou 2 (crítico) e imprime o motivo. Ligue a notificação de falha de cron do Render a um e-mail.
   - type: cron
     name: fm-seller-ops-check
+    region: virginia
     runtime: docker
     dockerfilePath: apps/api/Dockerfile
     dockerContext: apps/api
@@ -70,10 +79,14 @@ services:
 
   - type: web
     name: fm-seller-web
+    region: virginia
     runtime: docker
     dockerfilePath: apps/web/Dockerfile
     dockerContext: apps/web
     healthCheckPath: /login
     envVars:
-      - { key: NEXT_PUBLIC_API_URL, sync: false }
+      # Painel chama /v1 no próprio endereço e o Next repassa à API (cookie de mesmo site).
+      # NEXT_PUBLIC_API_URL fica VAZIO; API_PROXY_TARGET é o endereço público da API.
+      - { key: NEXT_PUBLIC_API_URL, value: "" }
+      - { key: API_PROXY_TARGET, sync: false }
       - { key: NEXT_PUBLIC_GOOGLE_CLIENT_ID, sync: false }
