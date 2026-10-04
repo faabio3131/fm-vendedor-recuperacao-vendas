@@ -109,10 +109,10 @@ Cada teste só vale se registrar o resultado real (data, o que foi enviado, o qu
 ## 5. Prontidão operacional (gate Web First, itens 7–11)
 
 - [ ] Staging com `FM_ENV=staging` subindo sem erro de configuração; `/health` ok; migrations aplicadas.
-- [ ] Worker rodando (um ciclo por 30 s) e log do ciclo visível.
-- [ ] Backup diário com teste de restauração em banco separado (a chave de cifragem também, em separado).
-- [ ] Alertas mínimos: webhook parado, fila de saída crescendo, falha de envio, falha de sincronização.
-- [ ] Rollback definido (reverter imagem e migrations compatíveis).
+- [ ] Worker rodando (um ciclo por 30 s) e log do ciclo visível. *(batimento e `ops-check` prontos; falta rodar no staging)*
+- [ ] Backup diário com teste de restauração em banco separado (a chave de cifragem também, em separado). *(scripts prontos e testados localmente; falta agendar, guardar fora do servidor e restaurar no ambiente real)*
+- [ ] Alertas mínimos: webhook parado, fila de saída crescendo, falha de envio, falha de sincronização. *(`ops-check` cobre tudo menos webhook parado e API fora do ar: ver OPERACAO.md; falta ligar o aviso ao e-mail)*
+- [ ] Rollback definido (reverter imagem e migrations compatíveis). *(regra documentada em OPERACAO.md; falta ensaiar no staging)*
 - [ ] CI verde (api, web, e2e) no commit que vai ao ar.
 
 ## 6. Critérios de go / no-go

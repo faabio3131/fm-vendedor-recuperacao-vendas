@@ -6,7 +6,7 @@ endereço e entrega são V2 (ADR-0002). Produto comercial da F&M Tecnologia, **W
 
 ## Estado
 
-Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo) e 7 (WhatsApp real e templates da Meta) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
+Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo), 7 (WhatsApp real e templates da Meta), 8 (guia de conexão e checklist de lançamento) e 9 (alertas, backup e restauração) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
 
 | Peça | Estado |
 |---|---|
