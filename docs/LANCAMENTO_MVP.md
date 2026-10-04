@@ -29,6 +29,7 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 | D6 | Janela de atribuição da venda recuperada | **5 dias** após o fim da sequência (era 7); pesquisa na seção 2.3 | **DECIDIDO** em 04/10/2026 e aplicado no código |
 | D7 | Sequências e textos padrão | Tempos mantidos (batem com o mercado); textos ajustados para não começar nem terminar com variável (seção 2.3) | **DECIDIDO** em 04/10/2026 e aplicado; a primeira reprovação real da Meta ainda pode pedir novo ajuste |
 | D8 | Vendedor IA apresentado como "básico" no MVP | Lançar a versão básica (MVP) primeiro; a V2 vem depois com o Core | **DECIDIDO** em 04/10/2026 |
+| D10 | Carência em atraso antes de suspender | 3 dias (dado em `plans.grace_days`, muda com `plan-grace`); vale para todos os planos até o Diretor decidir | **PROVISÓRIO**: confirmar o prazo |
 | D9 | Hospedagem (rascunho: Render) | Render como rascunho (decisão do Diretor, 04/10/2026); falta criar o staging e validar o `render.yaml` | **DECIDIDO como rascunho**; staging PENDENTE |
 
 ### 2.1 D2: o que a pesquisa de 03/10/2026 mostrou (para decidir os demais planos)
@@ -123,7 +124,9 @@ Cada teste só vale se registrar o resultado real (data, o que foi enviado, o qu
 7. **Compra de teste Cakto/Hotmart:** cria cliente, plano e convite; capturar o evento real e comparar com a
    seção 2.4. Cakto: o código já segue a documentação; conferir se a assinatura `X-Cakto-Signature` valida
    (se não, só o `secret` do corpo está valendo). Hotmart: **corrigir os caminhos de campos** de
-   `events/normalize.py` (ainda são suposições).
+   `events/normalize.py` (ainda são suposições). Conferir também os eventos de **assinatura** (atraso, recuperação,
+   cancelamento, reembolso): nomes, ordem e repetição reais; o ciclo de vida (`provisioning/lifecycle.py`) só
+   aceita as transições previstas e ignora o resto.
 8. **Ponta a ponta:** compra → login → conectar WhatsApp → template aprovado → oportunidade → mensagem
    recebida pelo contato → resposta do contato encerra o caso.
 

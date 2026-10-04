@@ -6,7 +6,7 @@ endereço e entrega são V2 (ADR-0002). Produto comercial da F&M Tecnologia, **W
 
 ## Estado
 
-Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo), 7 (WhatsApp real e templates da Meta), 8 (guia de conexão e checklist de lançamento) 9 (alertas, backup e restauração) e 11 (Messenger e Instagram) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
+Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA), 4 (oportunidades próprias) 5 (adaptador Gemini), 6 (limites e custo), 7 (WhatsApp real e templates da Meta), 8 (guia de conexão e checklist de lançamento) 9 (alertas, backup e restauração), 11 (Messenger e Instagram) e 12 (ciclo de vida da assinatura) concluídos, tudo contra simuladores ou servidor falso. Ver `docs/00_GATE_WEB_FIRST.md` para o que está pronto e o que falta.
 
 | Peça | Estado |
 |---|---|
@@ -18,6 +18,7 @@ Blocos 1 (fundação), 2 (eventos e recuperação), 3 (conversas e vendedor IA),
 | Recebimento de eventos Cakto/Hotmart (segredo, dedupe, reprocesso) | Cakto: assinatura, dedupe e campos conforme a documentação oficial, testados com payloads de exemplo dela; Hotmart: **suposições** (documentação inacessível). Nada visto com evento real |
 | Motor de recuperação (carrinho, PIX, boleto, recusa), worker, opt-out, janela de silêncio, limite diário | Feito e testado; envio real pelo WhatsApp existe mas fica **desligado** (`FM_WHATSAPP_LIVE`); simulador em dev/teste |
 | Compra do próprio SaaS cria cliente, plano e convite | Feito e testado com payloads sintéticos |
+| Ciclo de vida da assinatura: ativa, em atraso (carência configurável), suspensa, cancelada, reembolsada; pausa de envios e vendedor IA sem apagar dado; tela "Meu plano" | Feito e testado com eventos **sintéticos**; nomes e ordem dos eventos reais de assinatura **não confirmados**; carência padrão de 3 dias é **provisória** |
 | Tela "Recuperação" (ajustes com consentimento, sequências, templates, bloqueios, casos) | Feito; testado em celular, tablet e desktop |
 | Entrada do WhatsApp (assinatura, mensagens, status de entrega, "SAIR"), fila de saída, conversas | Feito e testado com payloads sintéticos no formato documentado pela Meta; **não testado com conta real** |
 | Vendedor IA: ofertas do cliente, porta de modelo, limites (preço/link só do cadastro), transferência para pessoa | Feito e testado com **simulador**; adaptador do Gemini feito e testado contra servidor falso; **falta validar com a chave real (`ai-check`)** |

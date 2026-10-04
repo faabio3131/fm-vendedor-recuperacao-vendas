@@ -23,6 +23,7 @@ from fm_seller.errors import AppError, bad_request, not_found
 from fm_seller.events import normalize as n
 from fm_seller.events.ingest import MAX_BODY, dedupe_key, secret_ok
 from fm_seller.events.normalize import NORMALIZERS, CheckoutEvent
+from fm_seller.provisioning import lifecycle
 from fm_seller.security.crypto import SecretBox
 from fm_seller.services import audit
 
@@ -30,13 +31,7 @@ log = logging.getLogger("fm_seller.platform")
 INVITE_DAYS = 30
 RETRY_OUTCOMES = ("unmapped_product", "failed")
 
-ACTIVATING = (n.PURCHASE_APPROVED, n.SUBSCRIPTION_ACTIVE)
-STATUS_BY_KIND = {
-    n.SUBSCRIPTION_LATE: "past_due",
-    n.SUBSCRIPTION_RECOVERED: "active",
-    n.SUBSCRIPTION_CANCELED: "canceled",
-    n.REFUNDED: "canceled",
-}
+ACTIVATING = lifecycle.ACTIVATING
 
 
 def _expected_secret(settings: Settings, provider: str) -> str:
@@ -96,23 +91,27 @@ def _apply(conn: Conn, provider: str, ev: CheckoutEvent) -> tuple[str, uuid.UUID
             audit(conn, tenant_id=tenant_id, actor=None, action="tenant.created", target=ev.email)
             return "tenant_created", tenant_id
         conn.execute(
-            "UPDATE tenant_plans SET plan_key = %s, status = 'active', source = %s, "
-            "external_ref = %s WHERE tenant_id = %s",
+            "UPDATE tenant_plans SET plan_key = %s, source = %s, external_ref = %s "
+            "WHERE tenant_id = %s",
             (plan["plan_key"], provider, ev.external_ref, tenant_id),
         )
+        lifecycle.set_status(conn, tenant_id, lifecycle.ACTIVE, target=ev.email)
         audit(
             conn, tenant_id=tenant_id, actor=None, action="plan.activated", target=plan["plan_key"]
         )
         return "plan_updated", tenant_id
 
-    status = STATUS_BY_KIND.get(ev.kind)
-    if status is None:
+    if ev.kind not in (
+        n.SUBSCRIPTION_LATE,
+        n.SUBSCRIPTION_RECOVERED,
+        n.SUBSCRIPTION_CANCELED,
+        n.REFUNDED,
+    ):
         return "ignored", None
     if tenant_id is None:
         return "tenant_not_found", None
-    conn.execute("UPDATE tenant_plans SET status = %s WHERE tenant_id = %s", (status, tenant_id))
-    audit(conn, tenant_id=tenant_id, actor=None, action=f"plan.{status}", target=ev.email)
-    return "plan_status_changed", tenant_id
+    changed = lifecycle.apply_event(conn, tenant_id, ev.kind, ev.email)
+    return ("plan_status_changed" if changed else "plan_status_unchanged"), tenant_id
 
 
 def _run(db: Database, event_id: uuid.UUID, provider: str, ev: CheckoutEvent) -> str:

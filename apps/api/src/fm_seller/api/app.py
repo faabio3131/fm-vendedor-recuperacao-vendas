@@ -18,6 +18,7 @@ from fm_seller.api.routes import (
     connections,
     health,
     me,
+    plan,
     platform,
     recovery,
     seller,
@@ -125,6 +126,7 @@ def create_app(
     app.include_router(health.router, prefix="/v1")
     app.include_router(auth.router, prefix="/v1")
     app.include_router(me.router, prefix="/v1")
+    app.include_router(plan.router, prefix="/v1")
     app.include_router(connections.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")  # antes do genérico: rota específica
     for social_router in social.routers:

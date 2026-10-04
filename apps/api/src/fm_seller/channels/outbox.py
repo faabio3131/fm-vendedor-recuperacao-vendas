@@ -21,6 +21,7 @@ from typing import Any
 
 from fm_seller.channels.social import BY_CHANNEL, identity_of
 from fm_seller.db import Database
+from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.senders import MessageSender, SendError
 from fm_seller.security.crypto import CryptoError, SecretBox
 
@@ -107,10 +108,11 @@ def _send_one(
     with db.tx(tenant_id=tenant_id) as conn:
         ctx = conn.execute(
             "SELECT cv.channel, cv.last_inbound_at, ct.phone, cc.external_id, "
-            "t.status AS tenant_status FROM conversations cv "
+            "t.status AS tenant_status, tp.status AS plan_status FROM conversations cv "
             "JOIN contacts ct ON ct.id = cv.contact_id "
             "LEFT JOIN contact_channels cc ON cc.contact_id = ct.id AND cc.channel = cv.channel "
-            "JOIN tenants t ON t.id = cv.tenant_id WHERE cv.id = %s",
+            "JOIN tenants t ON t.id = cv.tenant_id "
+            "LEFT JOIN tenant_plans tp ON tp.tenant_id = cv.tenant_id WHERE cv.id = %s",
             (row["conversation_id"],),
         ).fetchone()
         reason: str | None = None
@@ -131,6 +133,8 @@ def _send_one(
             reason = "canal_sem_adaptador"
         elif ctx["tenant_status"] != "active":
             reason = "cliente_suspenso"
+        elif row["author"] != "system" and blocks_service(ctx["plan_status"]):
+            reason = "assinatura_inativa"  # só a confirmação de "SAIR" ainda sai
         elif ctx["last_inbound_at"] is None or now - ctx["last_inbound_at"] > WINDOW:
             reason = "janela_24h_fechada"
         elif (

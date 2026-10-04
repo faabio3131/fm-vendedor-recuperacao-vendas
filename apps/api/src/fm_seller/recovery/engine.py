@@ -25,6 +25,7 @@ from fm_seller.db import Conn, Database
 from fm_seller.events import normalize as n
 from fm_seller.events.normalize import CheckoutEvent
 from fm_seller.money import format_brl
+from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.cases import close_case as _close_case
 from fm_seller.recovery.defaults import default_steps
 from fm_seller.recovery.senders import MessageSender, OutboundMessage, SendError
@@ -448,15 +449,19 @@ class _Ready:
 def _check(conn: Conn, box: SecretBox, step: _Step, now: datetime) -> _Decision | _Ready:
     ctx = conn.execute(
         "SELECT rc.status AS case_status, rc.product_name, rc.amount_cents, rc.payment_url, "
-        "rc.contact_id, ct.name, ct.phone, ct.email, t.status AS tenant_status "
+        "rc.contact_id, ct.name, ct.phone, ct.email, t.status AS tenant_status, "
+        "tp.status AS plan_status "
         "FROM recovery_cases rc JOIN contacts ct ON ct.id = rc.contact_id "
-        "JOIN tenants t ON t.id = rc.tenant_id WHERE rc.id = %s",
+        "JOIN tenants t ON t.id = rc.tenant_id "
+        "LEFT JOIN tenant_plans tp ON tp.tenant_id = rc.tenant_id WHERE rc.id = %s",
         (step.case_id,),
     ).fetchone()
     if ctx is None or ctx["case_status"] != "open":
         return ("canceled", "canceled", "caso_encerrado", None)
     if ctx["tenant_status"] != "active":
         return ("skipped", "skipped", "cliente_suspenso", None)
+    if blocks_service(ctx["plan_status"]):
+        return ("skipped", "skipped", "assinatura_inativa", None)
     settings = load_settings(conn, step.tenant_id)
     if not settings.may_send:
         return ("skipped", "skipped", "recuperacao_desligada", None)
