@@ -528,3 +528,32 @@ def test_rehearsal_refuses_to_run_without_a_database_url() -> None:
         check=False,
     )
     assert done.returncode != 0 and "FM_DATABASE_ADMIN_URL" in done.stderr
+
+
+def test_cli_preflight_with_invalid_config_reports_instead_of_crashing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regressão: `cli preflight` quebrava com traceback se a configuração era inválida."""
+    from fm_seller import cli
+
+    secret = "valor-secreto-que-nao-pode-aparecer"
+    monkeypatch.setenv("FM_ENV", "staging")
+    monkeypatch.setenv("FM_SECRETS_KEYS", secret)
+    monkeypatch.setenv("FM_DATABASE_URL", f"postgresql://fm_app:{secret}@localhost/x")
+    monkeypatch.setenv("FM_DATABASE_ADMIN_URL", f"postgresql://fm_owner:{secret}@localhost/x")
+    monkeypatch.setenv("FM_COOKIE_SECURE", "false")
+    assert cli.main(["preflight", "--no-db"]) == 2
+    out = capsys.readouterr().out
+    assert "RESULTADO: NÃO SUBA" in out and "settings_invalid" in out
+    assert secret not in out and "Traceback" not in out
+
+
+def test_cli_gen_key_works_without_valid_config(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from fm_seller import cli
+
+    monkeypatch.setenv("FM_ENV", "staging")  # config inválida de propósito
+    monkeypatch.setenv("FM_COOKIE_SECURE", "false")
+    assert cli.main(["gen-key"]) == 0
+    assert capsys.readouterr().out.startswith("k1:")

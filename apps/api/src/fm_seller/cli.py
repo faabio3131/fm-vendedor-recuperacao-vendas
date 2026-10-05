@@ -102,7 +102,7 @@ def plan_status_command(settings: Settings, tenant_id: str, status: str) -> int:
     return 0 if ok else 1
 
 
-def preflight_command(settings: Settings, args: argparse.Namespace) -> int:
+def preflight_command(_settings: Settings | None, args: argparse.Namespace) -> int:
     """Confere o ambiente antes de subir. 0 = ok, 1 = avisos, 2 = crítico (não suba)."""
     from fm_seller.ops.preflight import run as run_preflight
 
@@ -520,6 +520,18 @@ def main(argv: list[str] | None = None) -> int:
     oc.add_argument("--no-worker", action="store_true", help="não exige batimento do worker")
     args = parser.parse_args(argv)
 
+    # Estes comandos não dependem de configuração válida: o preflight existe para dizer o que está
+    # errado nela (sem traceback e sem eco de valores), então não carregamos Settings aqui.
+    if args.cmd == "preflight":
+        return preflight_command(None, args)
+    if args.cmd == "smoke":
+        return smoke_command(args)
+    if args.cmd == "gen-key":
+        print(SecretBox.generate_key_spec())
+        return 0
+    if args.cmd == "loadtest":
+        return loadtest_command(args)
+
     settings = get_settings()
     if args.cmd == "migrate":
         applied = apply_migrations(settings.database_admin_url, until=args.until)
@@ -533,8 +545,6 @@ def main(argv: list[str] | None = None) -> int:
         except BootstrapError as exc:
             print("ERRO:", exc)
             return 1
-    elif args.cmd == "gen-key":
-        print(SecretBox.generate_key_spec())
     elif args.cmd == "create-tenant":
         tenant_id = create_tenant(settings.database_admin_url, args.name, args.email, args.plan)
         print("Cliente criado:", tenant_id)
@@ -550,10 +560,6 @@ def main(argv: list[str] | None = None) -> int:
             print("ERRO: plano inexistente ou dias fora de 0 a 60.")
             return 1
         print("Carência definida.")
-    elif args.cmd == "preflight":
-        return preflight_command(settings, args)
-    elif args.cmd == "smoke":
-        return smoke_command(args)
     elif args.cmd == "capture":
         return capture_command(settings, args)
     elif args.cmd == "worker":
@@ -562,8 +568,6 @@ def main(argv: list[str] | None = None) -> int:
         return platform_admin_command(settings, args)
     elif args.cmd == "metrics":
         return metrics_command(settings)
-    elif args.cmd == "loadtest":
-        return loadtest_command(args)
     elif args.cmd == "ai-check":
         return ai_check(settings)
     elif args.cmd == "ai-eval":
