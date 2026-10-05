@@ -29,8 +29,8 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 | D6 | Janela de atribuição da venda recuperada | **5 dias** após o fim da sequência (era 7); pesquisa na seção 2.3 | **DECIDIDO** em 04/10/2026 e aplicado no código |
 | D7 | Sequências e textos padrão | Tempos mantidos (batem com o mercado); textos ajustados para não começar nem terminar com variável (seção 2.3) | **DECIDIDO** em 04/10/2026 e aplicado; a primeira reprovação real da Meta ainda pode pedir novo ajuste |
 | D8 | Vendedor IA apresentado como "básico" no MVP | Lançar a versão básica (MVP) primeiro; a V2 vem depois com o Core | **DECIDIDO** em 04/10/2026 |
-| D10 | Carência em atraso antes de suspender | 3 dias (dado em `plans.grace_days`, muda com `plan-grace`); vale para todos os planos até o Diretor decidir | **PROVISÓRIO**: confirmar o prazo |
-| D11 | Retenção das conversas e carência da exclusão da conta | 365 dias de retenção (30 a 3650, por cliente) e 30 dias de carência (`FM_TENANT_DELETION_GRACE_DAYS`); o bloqueio de contato guarda o identificador sem hash | **PROVISÓRIO**: confirmar com o Diretor e o advogado (P8) |
+| D10 | Carência em atraso antes de suspender | 3 dias (dado em `plans.grace_days`, muda com `plan-grace`); vale para todos os planos até o Diretor decidir | **DECIDIDO** em 05/10/2026: 3 dias (Diretor) |
+| D11 | Retenção das conversas e carência da exclusão da conta | 365 dias de retenção (30 a 3650, por cliente) e 30 dias de carência (`FM_TENANT_DELETION_GRACE_DAYS`); o bloqueio de contato guarda o identificador sem hash | **PARCIAL**: carência da exclusão de 30 dias **DECIDIDA** em 05/10/2026; retenção de 365 dias e bloqueio sem hash seguem provisórios (advogado, P8) |
 | D9 | Hospedagem (rascunho: Render) | Render como rascunho (decisão do Diretor, 04/10/2026); falta criar o staging e validar o `render.yaml` | **DECIDIDO como rascunho**; staging PENDENTE |
 
 ### 2.1 D2: o que a pesquisa de 03/10/2026 mostrou (para decidir os demais planos)
