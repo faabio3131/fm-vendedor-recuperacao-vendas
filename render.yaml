@@ -9,12 +9,17 @@
 # Para produção use `docs/render.pago.yaml` (plano pago, worker e cron) no lugar deste arquivo.
 # NÃO foi validado contra o Render: se ele recusar o arquivo, o erro diz qual linha ajustar.
 # Segredos usam `sync: false`: preenchidos no painel do Render, nunca no repositório.
-# Região: o Render não tem região no Brasil; virginia é a mais próxima. Banco e serviços na MESMA região.
-databases:
-  - name: fm-seller-db
-    plan: free
-    region: virginia
-    databaseName: fm_seller
+# Região: o Render não tem região no Brasil; virginia é a mais próxima, e o banco do Neon também está em US East 1.
+# Banco: NÃO é criado pelo Render. Decisão do Fábio (05/10/2026): o banco do staging é um Postgres grátis do
+# Neon (projeto `atendevendeia-staging`, região US East 1, conexão direta), porque a vaga do banco grátis do
+# workspace do Render já está ocupada por outro projeto. As URLs entram nas variáveis FM_DATABASE_ADMIN_URL
+# (dono do banco) e FM_DATABASE_URL (papel fm_app) no painel do Render. Ver docs/STAGING_RENDER.md.
+# Para voltar a usar um banco do Render, descomente:
+# databases:
+#   - name: fm-seller-db
+#     plan: free
+#     region: virginia
+#     databaseName: fm_seller
 
 services:
   - type: web
@@ -40,6 +45,7 @@ services:
       - { key: FM_PLATFORM_CAKTO_SECRET, sync: false }
       - { key: FM_PLATFORM_HOTMART_HOTTOK, sync: false }
       - { key: FM_AI_API_KEY, sync: false }
+      - { key: FM_FMCC_CONTROL_PLANE_TOKEN, sync: false }  # token do FM Command (vazio = conexão desligada)
       - { key: FM_WHATSAPP_LIVE, value: "false" }
       - { key: FM_BOOTSTRAP_APP_PASSWORD, sync: false }  # senha NOVA do papel fm_app
       - { key: FM_BOOTSTRAP_OWNER_EMAIL, sync: false }   # seu Gmail (dono do primeiro cliente)

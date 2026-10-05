@@ -446,6 +446,18 @@ def test_blueprint_env_vars_exist_in_settings_and_secrets_are_not_literal(path: 
     )  # vazio: painel usa o proxy
 
 
+def test_free_blueprint_uses_an_external_database_and_the_fm_command_token() -> None:
+    live = "\n".join(live_lines(blueprint(FREE)))
+    assert (
+        "databases:" not in live
+    )  # staging usa o Neon: o Render não cria banco (docs/STAGING_RENDER.md)
+    assert "FM_FMCC_CONTROL_PLANE_TOKEN" in keys_of(blueprint(FREE))
+    assert "sync: false" in next(
+        line for line in live_lines(blueprint(FREE)) if "FM_FMCC_CONTROL_PLANE_TOKEN" in line
+    )  # o token é segredo: nunca valor literal
+    assert {"FM_DATABASE_URL", "FM_DATABASE_ADMIN_URL"} <= keys_of(blueprint(FREE))
+
+
 def test_blueprint_commands_are_real_cli_commands() -> None:
     cli_source = (ROOT / "apps/api/src/fm_seller/cli.py").read_text(encoding="utf-8")
     known = set(re.findall(r'add_parser\(\s*"([a-z-]+)"', cli_source))
