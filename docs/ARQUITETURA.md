@@ -213,6 +213,14 @@ dono mascarado), métricas do sistema (worker, fila de saída, recuperação, ev
 system nunca em rota de usuário" e vem cercada (ADR-0003). Toda resposta leva `x-request-id` (o do cliente só vale se for curto e
 simples) e o log estruturado em JSON o traz; nada pessoal vai para o log. `ops/loadtest.py` mede a API local.
 
+## Conexão com o FM Command
+
+`control_plane.py`, `api/routes/control_plane.py` e `docs/adr/0004-conexao-com-o-fm-command.md`. O FM Command (centro de controle da F&M) puxa daqui, por HTTP e
+token de serviço, `GET /v1/control-plane/fmcc/health` e `/snapshot` (`schema_version` `atendevendeia.fmcc.v1`): contagens de assinatura, fatos
+`subscription.active` e `subscription.cancelled` com identificador opaco, um bloco de operação (modelo de leitura) e o mapa `coverage` com o que não existe
+aqui (cobrança, pagamentos, custos, leads, suporte: nunca zero). Só leitura, só agregados, desligada sem token. O conector do lado do FM Command ainda não existe:
+`docs/FM_COMMAND_INTEGRACAO.md`.
+
 ## Portas (para os próximos blocos)
 
 `GoogleVerifier`, `ConnectionTester`, `MessageSender`, `AiModel` e, a seguir, canais de mensagem, IA, checkout e pagamento.
