@@ -75,6 +75,14 @@ comando, sessão e papel validados antes de qualquer consulta, colunas escolhida
 ações auditadas no cliente afetado, escrita sujeita à guarda de origem e ao limite sensível. Ver `docs/adr/0003-administracao-da-plataforma.md`.
 **Não provado:** revisão independente das consultas do administrador (um erro ali seria vazamento entre clientes).
 
+## Conexão com o FM Command
+
+`/v1/control-plane/fmcc/*` (só `GET`, ADR-0004) é a segunda superfície que lê vários clientes (modo `system`), agora por **token de serviço** e não por
+pessoa. Cercas: desligada por padrão (404 sem `FM_FMCC_CONTROL_PLANE_TOKEN`, mínimo 32 caracteres), token comparado em tempo constante, sessão de pessoa
+não vale, falhas repetidas travam o IP, só agregados e fatos opacos (testado: nenhum e-mail, telefone, nome de cliente, conversa nem credencial),
+sem escrita. **Não provado:** revisão independente das consultas, o comportamento atrás do proxy do Render (cabeçalho `Authorization` e IP) e qualquer
+chamada real do FM Command. Contrato em `docs/FM_COMMAND_INTEGRACAO.md`.
+
 ## SSRF, injeção e log
 
 - **SSRF:** nenhuma URL escrita pelo cliente é buscada. Links de pagamento são só guardados e enviados. Só cinco módulos falam com

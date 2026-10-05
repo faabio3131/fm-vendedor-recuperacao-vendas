@@ -20,7 +20,7 @@ from fm_seller.config import Settings
 from fm_seller.security.ratelimit import RateLimiter
 
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
-WEBHOOKS = ("/v1/webhooks/", "/v1/platform/webhooks/")
+WEBHOOKS = ("/v1/webhooks/", "/v1/platform/webhooks/", "/v1/control-plane/")
 FAILED_WEBHOOK = {400, 401, 403, 404}
 Scope = MutableMapping[str, Any]
 Receive = Callable[[], Awaitable[MutableMapping[str, Any]]]

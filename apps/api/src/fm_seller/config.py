@@ -72,6 +72,15 @@ class Settings(BaseSettings):
     rate_sensitive_per_10min: int = Field(default=20, ge=1)
     rate_webhook_per_min: int = Field(default=1200, ge=1)
     rate_webhook_fail_per_10min: int = Field(default=30, ge=1)
+    # Conexão com o FM Command (docs/FM_COMMAND_INTEGRACAO.md). Vazio = desligada (rotas dão 404).
+    # Se preenchido, precisa ter ao menos 32 caracteres; valor aleatório próprio, nunca no git.
+    fmcc_control_plane_token: str = ""
+
+    @model_validator(mode="after")
+    def _control_plane_token_is_strong(self) -> Settings:
+        if self.fmcc_control_plane_token and len(self.fmcc_control_plane_token) < 32:
+            raise ValueError("FM_FMCC_CONTROL_PLANE_TOKEN precisa ter ao menos 32 caracteres")
+        return self
 
     @model_validator(mode="after")
     def _require_real_config_outside_dev(self) -> Settings:

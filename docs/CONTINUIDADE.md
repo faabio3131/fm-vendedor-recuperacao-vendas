@@ -43,6 +43,9 @@ documentos listados abaixo) e continuar a partir do estado descrito aqui.
   (staging no Render grátis e testes com contas reais) só com o "go" do Fábio, item a item. Decisão: Render grátis só para o staging; produção em
   outro provedor com região em São Paulo, escolhido depois. O plano grátis **não tem worker**: o que depende dele (vendedor IA, recuperação,
   fila de saída) não é testável ali (ver `docs/STAGING_RENDER.md`).
+- **FM Command (05/10/2026):** o Fábio tem um centro de controle próprio (repositório `FM-CONTROL-CENTER`, só lido por este agente). O AtendeVendeIA expõe
+  `/v1/control-plane/fmcc/*` (ADR-0004, `docs/FM_COMMAND_INTEGRACAO.md`); o conector do lado do FM Command precisa ser feito no repositório dele, com a
+  autorização do Fábio. Nada conectado de verdade ainda.
 - Textos jurídicos em rascunho em `docs/juridico/` (P8); faltam o advogado e o provedor em São Paulo.
 - Cópia da documentação no Google Drive: pasta "AtendeVendeIA (cópia do projeto)", **só os documentos do
   repositório** (prompts mestres não vão). É um retrato; refazer quando um bloco fechar.

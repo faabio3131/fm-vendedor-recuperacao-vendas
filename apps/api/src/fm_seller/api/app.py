@@ -18,6 +18,7 @@ from fm_seller.api.routes import (
     auth,
     captures,
     connections,
+    control_plane,
     health,
     me,
     onboarding,
@@ -105,7 +106,9 @@ def create_app(
     async def request_guard(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        request_id = request_id_for(request.headers.get("x-request-id"))
+        request_id = request_id_for(
+            request.headers.get("x-request-id") or request.headers.get("x-correlation-id")
+        )
         started = time.perf_counter()
         limited = guards.before(request)
         if limited is not None:
@@ -158,6 +161,7 @@ def create_app(
     app.include_router(auth.router, prefix="/v1")
     app.include_router(me.router, prefix="/v1")
     app.include_router(admin.router, prefix="/v1")
+    app.include_router(control_plane.router, prefix="/v1")
     app.include_router(onboarding.router, prefix="/v1")
     app.include_router(plan.router, prefix="/v1")
     app.include_router(privacy.router, prefix="/v1")
