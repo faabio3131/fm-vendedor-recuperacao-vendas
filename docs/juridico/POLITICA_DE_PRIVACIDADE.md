@@ -31,11 +31,11 @@ cabeçalhos de segurança. Detalhes técnicos em `docs/SEGURANCA.md`. Nenhum sis
 
 - **Meta** (WhatsApp, Messenger, Instagram): entrega das mensagens, sob os termos da Meta.
 - **Google** (login) e **Google Gemini** (IA): o texto da conversa e o cadastro de ofertas são enviados ao modelo para gerar a resposta sugerida. **Credenciais nunca vão para a IA.**
-- **Hospedagem e banco de dados**: **[confirmar provedor]; banco e servidores na região de São Paulo, Brasil (a confirmar na contratação)**.
+- **Hospedagem e banco de dados**: hoje previstos no **Render**, que não tem região no Brasil (regiões nos EUA, Alemanha e Singapura). **Se a hospedagem for trocada para um provedor em São Paulo, trocar esta linha e a de transferência internacional abaixo.**
 - Plataformas de venda (Cakto, Hotmart): recebemos delas os eventos de compra do Cliente.
 - Autoridades, quando a lei exigir.
 
-Transferência internacional: alguns suboperadores podem tratar dados fora do Brasil **[confirmar locais e salvaguardas]**.
+Transferência internacional: os dados podem ser tratados fora do Brasil pela hospedagem e pelos suboperadores acima (Meta, Google), com as salvaguardas contratuais desses provedores **[advogado: confirmar base legal do art. 33 da LGPD]**.
 
 ## 5. Por quanto tempo guardamos
 
