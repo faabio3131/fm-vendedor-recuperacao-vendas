@@ -5,7 +5,7 @@
 
 ## 1. Quem somos e o que é o serviço
 
-O AtendeVendeIA ("Serviço") é um software como serviço da **F&M Tecnologia [confirmar razão social], CNPJ 07.109.248/0001-57** ("F&M Tecnologia", "nós"),
+O AtendeVendeIA ("Serviço") é um software como serviço da **F&M Tecnologia, CNPJ 07.109.248/0001-57** ("F&M Tecnologia", "nós"),
 que ajuda o cliente ("Cliente", "você") a atender pessoas e recuperar vendas por WhatsApp, Messenger e Instagram, usando as
 **ferramentas oficiais da Meta**, e a conduzir a conversa até o link de pagamento que o próprio Cliente cadastra.
 

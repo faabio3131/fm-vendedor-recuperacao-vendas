@@ -6,7 +6,7 @@
 ## 1. Papéis (LGPD, Lei 13.709/2018)
 
 - **Cliente do AtendeVendeIA** (a loja ou empresa): **controlador** dos dados das pessoas que ele atende (contatos).
-- **F&M Tecnologia** ([confirmar razão social], CNPJ 07.109.248/0001-57): **operador** desses dados, tratando-os só para prestar o Serviço e conforme as instruções do Cliente.
+- **F&M Tecnologia** (CNPJ 07.109.248/0001-57): **operador** desses dados, tratando-os só para prestar o Serviço e conforme as instruções do Cliente.
 - Dos dados do **próprio Cliente** (nome, e-mail da conta, uso do painel), a F&M é **controladora**.
 - Encarregado (DPO) / contato de privacidade: **privacidadeatendevendeia@gmail.com**.
 
@@ -31,7 +31,7 @@ cabeçalhos de segurança. Detalhes técnicos em `docs/SEGURANCA.md`. Nenhum sis
 
 - **Meta** (WhatsApp, Messenger, Instagram): entrega das mensagens, sob os termos da Meta.
 - **Google** (login) e **Google Gemini** (IA): o texto da conversa e o cadastro de ofertas são enviados ao modelo para gerar a resposta sugerida. **Credenciais nunca vão para a IA.**
-- **Hospedagem e banco de dados**: hoje previstos no **Render**, que não tem região no Brasil (regiões nos EUA, Alemanha e Singapura). **Se a hospedagem for trocada para um provedor em São Paulo, trocar esta linha e a de transferência internacional abaixo.**
+- **Hospedagem e banco de dados**: região de **São Paulo, Brasil** (decisão do Diretor, 05/10/2026). **[Provedor a definir: o Render, previsto hoje no rascunho, não tem região no Brasil; só publicar esta frase depois de contratar um provedor que tenha.]**
 - Plataformas de venda (Cakto, Hotmart): recebemos delas os eventos de compra do Cliente.
 - Autoridades, quando a lei exigir.
 
@@ -42,7 +42,7 @@ Transferência internacional: os dados podem ser tratados fora do Brasil pela ho
 - **Conversas, casos encerrados, eventos brutos e contatos sem atividade:** apagados automaticamente após o prazo de retenção do Cliente (configurável de 30 a 3650 dias; padrão **365 dias** **[confirmar]**). Casos em andamento não são apagados.
 - **Pedido de saída (opt-out):** guardamos só o identificador (telefone ou ID) e o motivo, **sem nome nem mensagens**, para **não voltar a contatar a pessoa**. É mantido enquanto o Cliente usar o Serviço.
 - **Exclusão da conta:** após o pedido, **30 dias de carência** (dá para cancelar); depois, apagamos a conta, usuários exclusivos e eventos de compra, mantendo apenas o registro mínimo de que a exclusão ocorreu (id e datas).
-- **Backups:** podem conter dados por **[•] dias** além disso, até a rotação do backup.
+- **Backups:** podem conter dados por **90 dias (3 meses)** além disso, até a rotação do backup.
 - **Auditoria e registros legais:** pelo prazo exigido em lei.
 
 ## 6. Direitos do titular (contato do cliente final)
