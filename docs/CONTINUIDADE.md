@@ -39,6 +39,11 @@ documentos listados abaixo) e continuar a partir do estado descrito aqui.
   workspace não devem ser tocados.
 - Para subir de verdade, decidir o banco: pago (a partir de cerca de US$ 6/mês) ou Postgres grátis fora do
   Render (precisaria permitir criar o papel `fm_app`; não testado).
+- **Fase atual (05/10/2026):** `docs/PLANO_FASE_STAGING.md`. Parte A (documentos, registro de testes, ensaio local) sem conta e sem custo; Parte B
+  (staging no Render grátis e testes com contas reais) só com o "go" do Fábio, item a item. Decisão: Render grátis só para o staging; produção em
+  outro provedor com região em São Paulo, escolhido depois. O plano grátis **não tem worker**: o que depende dele (vendedor IA, recuperação,
+  fila de saída) não é testável ali (ver `docs/STAGING_RENDER.md`).
+- Textos jurídicos em rascunho em `docs/juridico/` (P8); faltam o advogado e o provedor em São Paulo.
 - Cópia da documentação no Google Drive: pasta "AtendeVendeIA (cópia do projeto)", **só os documentos do
   repositório** (prompts mestres não vão). É um retrato; refazer quando um bloco fechar.
 
@@ -57,8 +62,8 @@ de venda" (PR #15) foi um erro de leitura e foi fechada sem merge.
 
 ## Próximos passos
 
-Agora: seguir o prompt mestre dos Blocos 16 a 20 (cada PR só entra com o CI verde); depois, o que o Fábio
-priorizar (cobrança própria e anúncios ficam fora por ora). Testes só com simuladores até a subida.
+Agora: seguir `docs/PLANO_FASE_STAGING.md` (cada PR só entra com o CI verde). Cobrança própria e anúncios ficam fora por ora.
+Testes só com simuladores até o item B1 do plano, e só com o "go" do Fábio.
 
 Do Fábio, na subida ao servidor: escolher o banco; retomar ou recriar o ambiente no Render pelo guia
 `docs/STAGING_RENDER.md`; registrar `atendevendeia.com.br`; criar o Client ID do Google; colar a documentação
