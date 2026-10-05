@@ -18,7 +18,7 @@ Reconhece-se que **não houve teste de invasão independente** até a data deste
 
 ## 4. Suboperadores
 
-O Cliente autoriza os suboperadores listados na Política de Privacidade (Meta, Google/Gemini, hospedagem e banco **[•]**). O Operador avisará sobre novos suboperadores com **[15]** dias de antecedência, podendo o Cliente se opor ou encerrar o contrato.
+O Cliente autoriza os suboperadores listados na Política de Privacidade (Meta, Google/Gemini, hospedagem e banco em São Paulo, Brasil). O Operador avisará sobre novos suboperadores com **[15]** dias de antecedência, podendo o Cliente se opor ou encerrar o contrato.
 
 ## 5. Direitos dos titulares
 
