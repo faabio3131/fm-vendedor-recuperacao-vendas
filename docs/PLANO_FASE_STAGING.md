@@ -1,6 +1,6 @@
 # Plano mestre: fase de staging e testes com contas reais (AtendeVendeIA)
 
-> Fonte única da verdade desta fase. Formato de `docs/MODELO_PLANO_MESTRE.md` do kit padrão (campos fixos por item). Nada aqui é
+> Fonte única da verdade desta fase. Formato do kit padrão de plano mestre (campos fixos por item; o kit não está neste repositório). Nada aqui é
 > segredo; o repositório é público. **Nunca** colocar chave, senha, token, URL real de ambiente, e-mail ou telefone no git.
 
 ## Cabeçalho
