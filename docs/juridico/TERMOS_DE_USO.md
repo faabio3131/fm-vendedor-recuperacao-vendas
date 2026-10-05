@@ -64,4 +64,4 @@ Concedemos licença limitada, revogável e não exclusiva de uso do Serviço dur
 
 Podemos atualizar estes Termos, avisando com antecedência razoável pelo painel ou e-mail. Aplica-se a lei brasileira. Foro: **[comarca]**, salvo regra de consumo que determine outro.
 
-Contato: **[e-mail de suporte]**.
+Contato: **privacidadeatendevendeia@gmail.com**.

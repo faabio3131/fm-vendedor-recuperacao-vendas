@@ -8,7 +8,7 @@
 - **Cliente do AtendeVendeIA** (a loja ou empresa): **controlador** dos dados das pessoas que ele atende (contatos).
 - **F&M Tecnologia** ([razão social], CPF/CNPJ [•]): **operador** desses dados, tratando-os só para prestar o Serviço e conforme as instruções do Cliente.
 - Dos dados do **próprio Cliente** (nome, e-mail da conta, uso do painel), a F&M é **controladora**.
-- Encarregado (DPO) / contato de privacidade: **[nome e e-mail]**.
+- Encarregado (DPO) / contato de privacidade: **privacidadeatendevendeia@gmail.com**.
 
 ## 2. Que dados tratamos
 
@@ -48,7 +48,7 @@ Transferência internacional: alguns suboperadores podem tratar dados fora do Br
 ## 6. Direitos do titular (contato do cliente final)
 
 Você pode pedir confirmação de tratamento, acesso, correção, anonimização/eliminação, portabilidade, informação sobre compartilhamento e revogação de consentimento (art. 18 da LGPD).
-Como somos operadores, **peça primeiro à loja** que falou com você; ela usa o painel (menu Privacidade) para **baixar** ou **apagar** seus dados. Se não conseguir, escreva para **[e-mail do DPO]** e encaminharemos ao controlador.
+Como somos operadores, **peça primeiro à loja** que falou com você; ela usa o painel (menu Privacidade) para **baixar** ou **apagar** seus dados. Se não conseguir, escreva para **privacidadeatendevendeia@gmail.com** e encaminharemos ao controlador.
 Para parar de receber mensagens, responda **SAIR**.
 
 ## 7. Cookies
