@@ -24,6 +24,32 @@ confirmar.
 O Render não tem região no Brasil (Oregon, Ohio, Virginia, Frankfurt, Singapore). Os dados ficam fora do
 país: levar isso à revisão de LGPD com o advogado (P8).
 
+## Decisão de 05/10/2026: Render grátis só para o staging
+
+O Fábio decidiu usar o Render **grátis apenas como staging** (sem dado real de cliente). A **produção** será em outro provedor com
+região em São Paulo, escolhido depois; nessa hora este guia e os blueprints mudam (`docs/render.pago.yaml` é só ponto de partida).
+O plano de execução desta fase é `docs/PLANO_FASE_STAGING.md`.
+
+**O que o staging grátis consegue testar, e o que não:**
+
+| Teste (seção 4 de `docs/LANCAMENTO_MVP.md`) | No grátis? | Por quê |
+|---|---|---|
+| 2 Login Google real | Sim | só API e painel |
+| 3 Teste da conexão do WhatsApp (precisa `FM_WHATSAPP_LIVE=true`) | Sim | chamada da API à Meta |
+| 4 Webhook de entrada (handshake, assinatura, mensagem recebida, entrega, "SAIR") | Sim, com a API acordada | recebimento é da API; só **a resposta automática** do vendedor depende do worker |
+| 5 Templates: enviar para aprovação e ver o status | Parcial | enviar e "Atualizar status" são da API; a sincronização sozinha é do worker |
+| 6 Envio de texto e de template, fila de saída | **Não** | a fila é processada pelo worker |
+| 7 Compra de teste Cakto/Hotmart e captura de evento | Sim | recebimento é da API; o aplicar de produto sem plano mapeado é do worker |
+| 1 Gemini (`ai-check`, `ai-eval --real`) | Sim, **fora do Render** | roda pela linha de comando, em qualquer máquina com a chave |
+| Vendedor IA respondendo, recuperação de venda, `ops-check` | **Não** | dependem de worker/cron, que não existem no grátis |
+
+Para testar o que depende do worker é preciso, **com a autorização do Fábio**: plano pago do worker, ou rodar o worker numa máquina própria
+contra o banco do staging (só se o banco aceitar conexão de fora; não foi verificado).
+
+**Dois bloqueios conhecidos antes de começar:** o banco grátis é um por workspace e o do Fábio já está ocupado por outro projeto; e o usuário
+padrão do banco grátis pode não conseguir criar o papel `fm_app` (o `bootstrap` para e avisa). Se qualquer um ocorrer, **parar** e decidir com o Fábio:
+Postgres grátis de outro lugar, ou banco pago (a partir de cerca de US$ 6/mês, a confirmar no painel).
+
 ## O que será criado (região Virginia)
 
 | Recurso | Tipo | Para quê |
