@@ -26,7 +26,7 @@ O Operador auxilia o Cliente a atender pedidos de titulares: **exportar** e **ap
 
 ## 6. Incidentes
 
-O Operador comunicará o Cliente, **sem demora injustificada e em até [72] horas** após confirmar incidente de segurança que afete seus dados, com o que souber: natureza, dados afetados, medidas tomadas.
+O Operador comunicará o Cliente, **sem demora injustificada e em até 72 horas** após confirmar incidente de segurança que afete seus dados, com o que souber: natureza, dados afetados, medidas tomadas.
 
 ## 7. Retenção, devolução e eliminação
 
@@ -38,4 +38,4 @@ O Cliente pode pedir, **[uma vez por ano]**, informações razoáveis que demons
 
 ## 9. Responsabilidade e vigência
 
-Aplicam-se as limitações dos Termos de Uso. Vigora enquanto houver tratamento. Foro: **[comarca]**.
+Aplicam-se as limitações dos Termos de Uso. Vigora enquanto houver tratamento. Foro: **Comarca de Cajamar/SP**.

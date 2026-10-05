@@ -6,7 +6,7 @@
 ## 1. Papéis (LGPD, Lei 13.709/2018)
 
 - **Cliente do AtendeVendeIA** (a loja ou empresa): **controlador** dos dados das pessoas que ele atende (contatos).
-- **F&M Tecnologia** ([razão social], CPF/CNPJ [•]): **operador** desses dados, tratando-os só para prestar o Serviço e conforme as instruções do Cliente.
+- **F&M Tecnologia** ([confirmar razão social], CNPJ 07.109.248/0001-57): **operador** desses dados, tratando-os só para prestar o Serviço e conforme as instruções do Cliente.
 - Dos dados do **próprio Cliente** (nome, e-mail da conta, uso do painel), a F&M é **controladora**.
 - Encarregado (DPO) / contato de privacidade: **privacidadeatendevendeia@gmail.com**.
 
@@ -31,7 +31,7 @@ cabeçalhos de segurança. Detalhes técnicos em `docs/SEGURANCA.md`. Nenhum sis
 
 - **Meta** (WhatsApp, Messenger, Instagram): entrega das mensagens, sob os termos da Meta.
 - **Google** (login) e **Google Gemini** (IA): o texto da conversa e o cadastro de ofertas são enviados ao modelo para gerar a resposta sugerida. **Credenciais nunca vão para a IA.**
-- **Hospedagem e banco de dados**: **[provedor, país]**.
+- **Hospedagem e banco de dados**: **[confirmar provedor]; banco e servidores na região de São Paulo, Brasil (a confirmar na contratação)**.
 - Plataformas de venda (Cakto, Hotmart): recebemos delas os eventos de compra do Cliente.
 - Autoridades, quando a lei exigir.
 

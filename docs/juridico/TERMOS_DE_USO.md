@@ -5,7 +5,7 @@
 
 ## 1. Quem somos e o que é o serviço
 
-O AtendeVendeIA ("Serviço") é um software como serviço da **[razão social / nome do responsável], CPF/CNPJ [•]** ("F&M Tecnologia", "nós"),
+O AtendeVendeIA ("Serviço") é um software como serviço da **F&M Tecnologia [confirmar razão social], CNPJ 07.109.248/0001-57** ("F&M Tecnologia", "nós"),
 que ajuda o cliente ("Cliente", "você") a atender pessoas e recuperar vendas por WhatsApp, Messenger e Instagram, usando as
 **ferramentas oficiais da Meta**, e a conduzir a conversa até o link de pagamento que o próprio Cliente cadastra.
 
@@ -53,7 +53,7 @@ Concedemos licença limitada, revogável e não exclusiva de uso do Serviço dur
 
 8.1. Buscamos manter o Serviço disponível, mas **não garantimos funcionamento ininterrupto**: dependemos de terceiros (Meta, Google, plataformas de venda, hospedagem).
 8.2. Mudanças, bloqueios ou falhas de terceiros (por exemplo, a Meta reprovar um template ou restringir um número) estão fora do nosso controle.
-8.3. Na medida permitida em lei, nossa responsabilidade total limita-se ao valor pago por você nos **[12] últimos meses**, e não inclui lucros cessantes ou danos indiretos. Isto não afasta direitos que a lei do consumidor garante, quando aplicáveis.
+8.3. Na medida permitida em lei, nossa responsabilidade total limita-se ao valor pago por você nos **12 últimos meses**, e não inclui lucros cessantes ou danos indiretos. Isto não afasta direitos que a lei do consumidor garante, quando aplicáveis.
 
 ## 9. Suspensão e encerramento
 
@@ -62,6 +62,6 @@ Concedemos licença limitada, revogável e não exclusiva de uso do Serviço dur
 
 ## 10. Mudanças e foro
 
-Podemos atualizar estes Termos, avisando com antecedência razoável pelo painel ou e-mail. Aplica-se a lei brasileira. Foro: **[comarca]**, salvo regra de consumo que determine outro.
+Podemos atualizar estes Termos, avisando com antecedência razoável pelo painel ou e-mail. Aplica-se a lei brasileira. Foro: **Comarca de Cajamar/SP**, salvo regra de consumo que determine outro.
 
 Contato: **privacidadeatendevendeia@gmail.com**.
