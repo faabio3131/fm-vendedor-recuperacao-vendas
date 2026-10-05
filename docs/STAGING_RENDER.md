@@ -50,11 +50,27 @@ contra o banco do staging (só se o banco aceitar conexão de fora; não foi ver
 padrão do banco grátis pode não conseguir criar o papel `fm_app` (o `bootstrap` para e avisa). Se qualquer um ocorrer, **parar** e decidir com o Fábio:
 Postgres grátis de outro lugar, ou banco pago (a partir de cerca de US$ 6/mês, a confirmar no painel).
 
+## Banco do staging: Neon (decisão de 05/10/2026)
+
+A vaga do banco grátis do Render está ocupada por outro projeto, então o banco do staging é um **Postgres grátis do Neon**: projeto
+`atendevendeia-staging`, região **US East 1 (N. Virginia)**, só o serviço Postgres ligado (Auth, Funções, Armazenamento e Portal de IA desligados).
+O `render.yaml` **não cria banco** (o bloco `databases` ficou comentado).
+
+- Use sempre a **conexão direta** (no Neon: "Connect", desligar "Connection pooling"; o endereço **não** tem `-pooler`).
+- O dono padrão do Neon (`neondb_owner`, banco `neondb`) vai em `FM_DATABASE_ADMIN_URL`. A URL do `FM_DATABASE_URL` é a mesma, trocando o usuário por
+  `fm_app` e a senha pela do passo 1 (`FM_BOOTSTRAP_APP_PASSWORD`). Mantenha `?sslmode=require` no fim das duas.
+- O `bootstrap` cria o papel `fm_app`. **Não confirmado:** se o `neondb_owner` do plano grátis pode criar papéis; se não puder, o `bootstrap` para e avisa
+  (nunca rodar a API como dono do banco).
+- Limites do Neon grátis (busca de 05/10/2026, conferir no site): 1 GB por projeto; computação desliga após 5 min parada e a primeira consulta demora um pouco
+  mais; 100 horas de computação por mês por projeto (estourou, suspende até o mês seguinte). Sem garantia de backup: **nada de dado real**.
+- A URL e a senha do banco **nunca** vão para o git nem para o chat: só para as variáveis do Render e para o gerenciador de senhas.
+- Produção: banco e API em provedor com região em São Paulo, escolhidos depois (os textos jurídicos dizem São Paulo).
+
 ## O que será criado (região Virginia)
 
 | Recurso | Tipo | Para quê |
 |---|---|---|
-| `fm-seller-db` | Postgres (free) | banco |
+| (banco no Neon, fora do Render) | Postgres grátis | banco; ver a seção "Banco do staging: Neon" |
 | `fm-seller-api` | Web Service Docker (free) | API; no início roda o `bootstrap` |
 | `fm-seller-web` | Web Service Docker (free) | painel |
 
@@ -83,8 +99,8 @@ Render lê o `render.yaml` e cria o banco, a API e o painel. Ele pede os valores
 
 | Variável | Valor |
 |---|---|
-| `FM_DATABASE_ADMIN_URL` | URL **Internal** do banco (usuário padrão do Render: dono; só migrations) |
-| `FM_DATABASE_URL` | a mesma URL **Internal**, trocando o usuário por `fm_app` e a senha pela do passo 1 |
+| `FM_DATABASE_ADMIN_URL` | URL **direta** do Neon com o dono do banco (`neondb_owner`); só migrations |
+| `FM_DATABASE_URL` | a mesma URL direta, trocando o usuário por `fm_app` e a senha pela do passo 1 |
 | `FM_BOOTSTRAP_APP_PASSWORD` | a senha do passo 1 (a mesma usada em `FM_DATABASE_URL`) |
 | `FM_BOOTSTRAP_OWNER_EMAIL` | seu Gmail |
 | `FM_BOOTSTRAP_TENANT_NAME` | nome do primeiro cliente (ex.: `F&M Teste`) |
@@ -93,6 +109,7 @@ Render lê o `render.yaml` e cria o banco, a API e o painel. Ele pede os valores
 | `FM_PUBLIC_BASE_URL` e `API_PROXY_TARGET` | endereço público da API (`https://fm-seller-api….onrender.com`) |
 | `FM_WEB_ORIGIN` | endereço público do painel (`https://fm-seller-web….onrender.com`) |
 | `FM_PLATFORM_CAKTO_SECRET`, `FM_PLATFORM_HOTMART_HOTTOK`, `FM_AI_API_KEY` | deixe vazio por enquanto |
+| `FM_FMCC_CONTROL_PLANE_TOKEN` | token do FM Command (mín. 32 caracteres, `openssl rand -base64 48`); vazio = conexão desligada (`docs/FM_COMMAND_INTEGRACAO.md`) |
 
 Como o banco é criado junto, a URL dele só existe depois: deixe `FM_DATABASE_URL` e
 `FM_DATABASE_ADMIN_URL` em branco, crie, copie a URL **Internal** do banco, preencha em *Environment* da
