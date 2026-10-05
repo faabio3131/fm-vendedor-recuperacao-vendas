@@ -28,3 +28,26 @@ Produto comercial da F&M Tecnologia. Autoridade final: Fábio (Diretor Executivo
 
 Este repositório é o único autorizado para o agente. Alterar outros repositórios exige autorização
 expressa do Fábio.
+
+## Execução de plano mestre
+
+Vale para qualquer executor (Claude, ChatGPT/Codex, outra IA ou pessoa). O plano fica no repositório (`docs/plano/` ou
+`docs/CRONOGRAMA_MESTRE.md`), no formato de `docs/MODELO_PLANO_MESTRE.md`. A conversa **não** é a fonte do plano.
+
+1. **Leia o plano inteiro, de ponta a ponta, antes de começar**, junto de `AGENTS.md`, `README.md` e `docs/CONTINUIDADE.md`.
+   Plano com estado diferente de `APROVADO` ou `EM EXECUÇÃO` não é executado.
+2. **Siga a ordem.** Um item por vez; não pule, não reordene, não funda nem invente itens. Dúvida ou conflito entre o plano e estas regras:
+   pare e pergunte ao Fábio, não decida sozinho.
+3. **Item só é concluído com o critério de aceite cumprido e provado** (comandos rodados, saída conferida). Marque `[x]` e registre
+   a PR, o merge e o que foi verificado **depois** de verificar. Nunca marque antes, nunca marque por suposição.
+4. **Uma PR por bloco ou item**, só com o escopo dele. Merge só com os três checks do CI (api, web, e2e) verdes no commit final,
+   sem conflito, e dentro da autorização escrita no plano (regra 10). Falha de CI: corrija a causa; não pule, não enfraqueça
+   nem apague teste, não faça commit vazio, não feche e reabra a PR.
+5. **Confirme o CI do `main` verde antes de começar o item seguinte.**
+6. **Não invente.** O que o plano não diz e o repositório não mostra vira "não confirmado" e vai ao relatório. Decisão de produto, preço,
+   texto jurídico, segurança, dado de cliente, gasto, conta real ou outro repositório: pare e pergunte, ou use um padrão provisório
+   configurável e registre como pendência do Fábio.
+7. **Plano muito grande não cabe na memória: releia o item antes de executá-lo** e confira o registro de execução no arquivo,
+   não no que lembra. Se perdeu o fio, recomece pela leitura do plano e do registro.
+8. **Ao concluir:** relatório final no formato do modelo (entregas, PRs e merges, CI do `main`, verificado, não confirmado,
+   pendências do Fábio, próximo passo) e atualização de `docs/CONTINUIDADE.md`.
