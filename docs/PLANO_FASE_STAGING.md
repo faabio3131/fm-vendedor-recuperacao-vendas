@@ -7,7 +7,7 @@
 
 - **Objetivo:** subir um ambiente de staging no Render grátis e provar, com contas reais de teste, o que hoje só foi testado contra simuladores.
 - **Dono / aprovador:** Fábio (Diretor). Aprovado em 05/10/2026 para a Parte A; a Parte B exige o "go" dele por item.
-- **Estado:** APROVADO (Parte A). Parte B: aguarda o "go" do Fábio.
+- **Estado:** EM EXECUCAO. Parte A concluída em 05/10/2026. Parte B: aguarda o "go" do Fábio.
 - **Decisão de hospedagem (05/10/2026):** staging no **Render grátis**, sem dado real de cliente. Produção será em outro provedor com região em
   São Paulo, escolhido depois; os textos jurídicos só dizem "São Paulo" depois disso.
 - **Fora de escopo:** produção, dado real de cliente, cobrança própria, anúncios, e-mail/alerta externo, teste de invasão, qualquer plano pago.
@@ -24,7 +24,7 @@
 
 ### 1. A1: Atualizar os documentos para a decisão de staging
 
-- [ ] **Estado:** pendente
+- [x] **Estado:** concluído em 05/10/2026
 - **Objetivo:** `STAGING_RENDER.md`, `CONTINUIDADE.md` e `PENDENCIAS_EXTERNAS.md` refletem a decisão (Render grátis só para staging; produção em São Paulo depois).
 - **Depende de:** nada
 - **Entregar:** documentos atualizados; lista clara do que o plano grátis **não** consegue testar (tudo que depende de worker).
@@ -33,11 +33,11 @@
 - **Verificação:** `git diff` só em `docs/`; CI verde na PR.
 - **Riscos / não confirmado:** limites do Render copiados da documentação de 04/10/2026.
 - **Decisões do dono pendentes:** nenhuma.
-- **Prova:**
+- **Prova:** PR #35, merge `ee29c87` (05/10/2026). CI api, web e e2e verdes antes do merge. Só `docs/` alterado.
 
 ### 2. A2: Registro de testes reais e roteiro de cada conta
 
-- [ ] **Estado:** pendente
+- [x] **Estado:** concluído em 05/10/2026
 - **Objetivo:** modelo `docs/TESTES_REAIS_REGISTRO.md` com uma linha por teste da seção 4 de `LANCAMENTO_MVP.md` (data, ambiente, o que foi feito, resultado real, o que voltou, decisão) e um passo a passo curto, em português simples, para o Fábio criar cada conta (Google Client ID, chave do Gemini, app de teste da Meta).
 - **Depende de:** 1
 - **Entregar:** o registro vazio e os roteiros; cada roteiro diz o que NÃO colar no chat (chave, token, senha).
@@ -46,11 +46,11 @@
 - **Verificação:** conferir manualmente contra a seção 4; CI verde.
 - **Riscos / não confirmado:** telas das consoles do Google e da Meta mudam; os roteiros dizem "conferir na tela atual".
 - **Decisões do dono pendentes:** nenhuma.
-- **Prova:**
+- **Prova:** PR #37, merge `f96baa4` (05/10/2026): `docs/TESTES_REAIS_REGISTRO.md` com os 9 testes da seção 4 na ordem, todos NÃO FEITO, e roteiros das contas. CI verde antes do merge.
 
 ### 3. A3: Ensaio local completo (sem servidor externo)
 
-- [ ] **Estado:** pendente
+- [x] **Estado:** concluído em 05/10/2026
 - **Objetivo:** provar, em Postgres local, que `bootstrap`, `preflight`, `smoke` e `rehearsal.sh` funcionam em sequência como o `STAGING_RENDER.md` descreve, usando o mesmo formato de variáveis que o Render usará.
 - **Depende de:** 1
 - **Entregar:** o resultado dos comandos registrado em `docs/TESTES_REAIS_REGISTRO.md` (seção "ensaio local"); correção de qualquer falha encontrada, com teste.
@@ -59,7 +59,7 @@
 - **Verificação:** rodar os quatro comandos e colar a saída (sem segredo) no registro; ruff, mypy e pytest passam se houver código.
 - **Riscos / não confirmado:** local não prova o Render (papel `fm_app`, repasse de variável de build, `$PORT`).
 - **Decisões do dono pendentes:** nenhuma.
-- **Prova:**
+- **Prova:** Ensaio local registrado em `docs/TESTES_REAIS_REGISTRO.md` (PR #37). Rodados: `bootstrap`, `preflight` (dev e staging), `smoke` local (OK) e `rehearsal.sh` (ENSAIO OK). Achou e corrigiu um bug real do `preflight` (PR #36, merge `55e8e4c`, 2 testes novos que falham no código antigo; pytest 566 passaram, nenhum falhou ou pulado; ruff, format e mypy limpos).
 
 ### 4. B1: Banco e criação do staging no Render (PARAR: precisa do Fábio)
 
@@ -143,7 +143,9 @@
 
 | Item | PR | Merge | CI do main | Verificado como | Pendências |
 |---|---|---|---|---|---|
-| 1 | | | | | |
+| A1 (item 1) | #35 | `ee29c87` | verde (conferir execução mais recente) | só `docs/`; CI verde na PR | nenhuma |
+| A2 (item 2) | #37 | `f96baa4` | verde (conferir execução mais recente) | os 9 testes da seção 4 conferidos contra `LANCAMENTO_MVP.md` | nenhuma |
+| A3 (item 3) | #36 e #37 | `55e8e4c`, `f96baa4` | verde (conferir execução mais recente) | comandos rodados em Postgres local; bug do `preflight` corrigido com teste | o ensaio local não prova o Render |
 
 ## Relatório final (ao concluir)
 
