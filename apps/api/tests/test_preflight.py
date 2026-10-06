@@ -471,7 +471,7 @@ def test_blueprint_commands_are_real_cli_commands() -> None:
 def test_free_blueprint_has_no_worker_or_cron_and_paid_has_both() -> None:
     free_live = "\n".join(live_lines(blueprint(FREE)))
     assert "type: worker" not in free_live and "type: cron" not in free_live
-    assert "plan: free" in free_live and "cli bootstrap" in free_live
+    assert "plan: free" in free_live and "RUN_BOOTSTRAP_ON_START" in free_live
     paid_live = "\n".join(live_lines(blueprint(PAID)))
     assert "type: worker" in paid_live and "type: cron" in paid_live
     assert (
@@ -569,3 +569,68 @@ def test_cli_gen_key_works_without_valid_config(
     monkeypatch.setenv("FM_COOKIE_SECURE", "false")
     assert cli.main(["gen-key"]) == 0
     assert capsys.readouterr().out.startswith("k1:")
+
+
+def test_free_blueprint_has_no_quoted_shell_command_and_the_dockerfile_starts_the_api() -> None:
+    """Regressão: `dockerCommand: sh -c "..."` virou "not found" (status 127) no Render."""
+    api_command = [
+        line for line in live_lines(blueprint(FREE)) if "dockerCommand" in line and "sh -c" in line
+    ]
+    assert api_command == []
+    dockerfile = (ROOT / "apps/api/Dockerfile").read_text(encoding="utf-8")
+    assert 'CMD ["sh", "/app/start-api.sh"]' in dockerfile
+    assert "COPY start-api.sh" in dockerfile
+
+
+def test_start_script_bootstraps_only_when_asked_then_serves_on_the_render_port(
+    tmp_path: Path,
+) -> None:
+    """Roda o script de verdade, com `python` e `uvicorn` de mentira que só anotam os argumentos."""
+    log = tmp_path / "calls.log"
+    for name in ("python", "uvicorn"):
+        fake = tmp_path / name
+        fake.write_text(f'#!/bin/sh\necho "{name} $@" >> "{log}"\n', encoding="utf-8")
+        fake.chmod(0o755)
+    script = ROOT / "apps/api/start-api.sh"
+    base = {"PATH": f"{tmp_path}{os.pathsep}/usr/bin{os.pathsep}/bin"}
+
+    def run(**extra: str) -> list[str]:
+        log.write_text("", encoding="utf-8")
+        done = subprocess.run(  # noqa: S603 (script do repositório)
+            ["/bin/sh", str(script)],
+            env={**base, **extra},
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        assert done.returncode == 0, done.stdout + done.stderr
+        return log.read_text(encoding="utf-8").splitlines()
+
+    served = "uvicorn fm_seller.api.app:create_app --factory --host 0.0.0.0 --port 10000"
+    assert run(PORT="10000", RUN_BOOTSTRAP_ON_START="1") == [
+        "python -m fm_seller.cli bootstrap",
+        served,
+    ]
+    assert run(PORT="10000") == [served]  # sem o sinal, não faz bootstrap
+    assert run()[0].endswith("--port 8000")  # sem PORT, usa 8000
+
+
+def test_start_script_does_not_serve_when_bootstrap_fails(tmp_path: Path) -> None:
+    for name, code in (("python", 1), ("uvicorn", 0)):
+        fake = tmp_path / name
+        fake.write_text(f'#!/bin/sh\necho "{name}" >> "{tmp_path}/calls.log"\nexit {code}\n')
+        fake.chmod(0o755)
+    done = subprocess.run(  # noqa: S603 (script do repositório)
+        ["/bin/sh", str(ROOT / "apps/api/start-api.sh")],
+        env={
+            "PATH": f"{tmp_path}{os.pathsep}/usr/bin{os.pathsep}/bin",
+            "RUN_BOOTSTRAP_ON_START": "1",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert done.returncode == 1
+    assert (tmp_path / "calls.log").read_text().split() == ["python"]  # a API não abriu a porta
