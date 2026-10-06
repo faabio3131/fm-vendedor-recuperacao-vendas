@@ -57,10 +57,17 @@ A vaga do banco grátis do Render está ocupada por outro projeto, então o banc
 O `render.yaml` **não cria banco** (o bloco `databases` ficou comentado).
 
 - Use sempre a **conexão direta** (no Neon: "Connect", desligar "Connection pooling"; o endereço **não** tem `-pooler`).
-- O dono padrão do Neon (`neondb_owner`, banco `neondb`) vai em `FM_DATABASE_ADMIN_URL`. A URL do `FM_DATABASE_URL` é a mesma, trocando o usuário por
-  `fm_app` e a senha pela do passo 1 (`FM_BOOTSTRAP_APP_PASSWORD`). Mantenha `?sslmode=require` no fim das duas.
-- O `bootstrap` cria o papel `fm_app`. **Não confirmado:** se o `neondb_owner` do plano grátis pode criar papéis; se não puder, o `bootstrap` para e avisa
-  (nunca rodar a API como dono do banco).
+- **Duas URLs, dois usuários. Não são a mesma.** Erro que aconteceu no primeiro deploy: a URL do app foi colada nas duas variáveis.
+
+  | Variável | Usuário | Senha |
+  |---|---|---|
+  | `FM_DATABASE_ADMIN_URL` | `neondb_owner` (dono; banco `neondb`) | a que o Neon mostra em "Connect" (clicar em mostrar senha) |
+  | `FM_DATABASE_URL` | `fm_app` | a do passo 1 (`FM_BOOTSTRAP_APP_PASSWORD`) |
+
+  O restante (endereço direto sem `-pooler`, banco, `?sslmode=require&channel_binding=require`) é igual nas duas. Sintoma de trocar: `password authentication
+  failed for user 'fm_app'` já no `bootstrap`, porque o `fm_app` ainda nem existe e o `bootstrap` só usa a `FM_DATABASE_ADMIN_URL`.
+- O `bootstrap` cria o papel `fm_app`. **Confirmado em 06/10/2026:** o `neondb_owner` do plano grátis do Neon **pode** criar papéis. Se um banco futuro não
+  deixar, o `bootstrap` para e avisa (nunca rodar a API como dono do banco).
 - Limites do Neon grátis (busca de 05/10/2026, conferir no site): 1 GB por projeto; computação desliga após 5 min parada e a primeira consulta demora um pouco
   mais; 100 horas de computação por mês por projeto (estourou, suspende até o mês seguinte). Sem garantia de backup: **nada de dado real**.
 - A URL e a senha do banco **nunca** vão para o git nem para o chat: só para as variáveis do Render e para o gerenciador de senhas.
@@ -72,7 +79,8 @@ O `dockerCommand: sh -c "..."` do primeiro rascunho **falhou no Render**: o log 
 e `Exited with status 127` (o comando inteiro foi tratado como nome de programa). O início agora está no `Dockerfile` (`apps/api/start-api.sh`):
 com `RUN_BOOTSTRAP_ON_START=1` ele roda o `bootstrap` e depois sobe a API na porta `$PORT`; se o `bootstrap` falhar, a API **não** sobe.
 Num serviço que já existe, o campo **Docker Command** (Settings do serviço) foi gravado com o comando antigo: **apague o conteúdo** desse campo e salve, e
-adicione a variável `RUN_BOOTSTRAP_ON_START` = `1` em Environment.
+adicione a variável `RUN_BOOTSTRAP_ON_START` = `1` em Environment. Depois do merge, o deploy é manual (Auto-Deploy fica desligado ao usar "Deploy a specific
+commit"). Se o `Docker Command` ficar com o texto antigo, o erro `Exited with status 127` volta.
 
 ## O que será criado (região Virginia)
 
@@ -86,9 +94,10 @@ adicione a variável `RUN_BOOTSTRAP_ON_START` = `1` em Environment.
 
 Preciso de dois segredos, que você guarda em cofre (nunca no chat nem no git):
 
-- **Chave de cifragem** `FM_SECRETS_KEYS`: o formato é `k1:` seguido de 32 bytes aleatórios em base64. Gerar
-  em qualquer computador com `echo "k1:$(openssl rand -base64 32)"`. Se só tiver o celular, me diga e
-  eu explico outro jeito. Perder a chave = perder as credenciais dos clientes (guarde uma cópia separada).
+- **Chave de cifragem** `FM_SECRETS_KEYS`: o formato é `id:base64` com **exatamente 32 bytes** (44 caracteres em base64, terminando em `=`), por exemplo
+  `k1:` seguido do base64. Gerar com `python -m fm_seller.cli gen-key` ou, em qualquer computador, `echo "k1:$(openssl rand -base64 32)"`. Fora desse formato a
+  API cai ao iniciar com `Formato inválido em FM_SECRETS_KEYS (use id:base64)`. Colar sem espaço antes ou depois. Perder a chave = perder as credenciais dos
+  clientes (guarde uma cópia separada); **não troque a chave depois que houver credenciais guardadas**.
 - **Senha do papel do app** `FM_BOOTSTRAP_APP_PASSWORD`: uma senha forte nova, só letras e números
   (símbolos como `@` ou `/` quebram a URL do banco).
 
@@ -136,7 +145,7 @@ A cada subida da API, antes de abrir a porta, o comando `cli bootstrap` (idempot
 
 Se o log mostrar **`O usuário padrão deste banco não pode criar papéis`**, **pare**: não rode a API como
 dono do banco (isso desliga o isolamento entre clientes). Me avise: a saída é outro Postgres gerenciado ou
-pedir a liberação ao suporte do Render. Ainda não sabemos se o Render deixa o usuário padrão criar papéis.
+pedir a liberação ao suporte do provedor. No Neon grátis isso **não ocorreu** (06/10/2026).
 
 ## Passo 5: conferir (cole aqui só os resultados, nunca segredos)
 
@@ -167,7 +176,9 @@ sobre `render.yaml` (traz worker e cron), ligar o `ops-check` e testar backup e 
 
 ## O que continua sem prova
 
-Blueprint e nomes de plano (rascunho); o `dockerCommand` com `sh -c` e `$PORT`; criação de papel pelo
-usuário padrão do Render; repasse de variável de build do Render para o Docker; envio real, templates e
-teste de conexão da Meta, Gemini, Cakto e Hotmart (dependem das contas, ver `docs/LANCAMENTO_MVP.md`).
+**Provado em 06/10/2026** (commit `64441be`, ver `docs/TESTES_REAIS_REGISTRO.md`): `$PORT` e o início pelo `start-api.sh`; criação do papel `fm_app` pelo dono do Neon;
+repasse de variável de build ao painel (`/v1` chega à API); `cli smoke` com `RESULTADO: OK`.
+
+**Sem prova:** o Blueprint em si (o serviço existente foi ajustado à mão); login com Google (falta o Client ID); envio real, templates e teste de conexão da
+Meta, Gemini, Cakto e Hotmart (dependem das contas, ver `docs/LANCAMENTO_MVP.md`); tudo que precisa de processo em segundo plano (vendedor IA, recuperação, fila).
 Nada disso deve ser dado como funcionando antes do teste real.
