@@ -21,7 +21,13 @@ class Database:
             min_size=1,
             max_size=max_size,
             open=False,
-            kwargs={"row_factory": dict_row},
+            # Provedores como o Neon grátis fecham conexões paradas (suspendem o banco após 5 min).
+            # Conferir a conexão antes de entregá-la evita o 500 do primeiro pedido depois da pausa;
+            # `max_idle` troca conexões paradas antes de o provedor derrubá-las.
+            check=ConnectionPool.check_connection,
+            max_idle=240,
+            max_lifetime=1800,
+            kwargs={"row_factory": dict_row, "keepalives": 1, "keepalives_idle": 60},
         )
 
     def open(self) -> None:
