@@ -29,11 +29,13 @@ services:
     dockerfilePath: apps/api/Dockerfile
     dockerContext: apps/api
     plan: free
-    # Sem Shell e sem pre-deploy no plano grátis: o bootstrap (idempotente) cria o papel fm_app,
-    # aplica as migrations e cria o primeiro cliente, depois sobe a API.
-    dockerCommand: sh -c "python -m fm_seller.cli bootstrap && exec uvicorn fm_seller.api.app:create_app --factory --host 0.0.0.0 --port ${PORT:-8000}"
+    # Sem Shell e sem pre-deploy no plano grátis: com RUN_BOOTSTRAP_ON_START=1 o contêiner roda o bootstrap
+    # (idempotente: cria o papel fm_app, aplica as migrations e cria o primeiro cliente) e depois sobe a API.
+    # O comando fica no Dockerfile (`apps/api/start-api.sh`): NÃO usar `dockerCommand` com `sh -c "..."`, que no
+    # Render deu "not found" (status 127). Se o serviço já tem um "Docker Command" escrito à mão, apague o campo.
     healthCheckPath: /v1/health
     envVars:
+      - { key: RUN_BOOTSTRAP_ON_START, value: "1" }
       - { key: FM_ENV, value: staging }
       - { key: FM_COOKIE_SECURE, value: "true" }
       - { key: FM_DATABASE_URL, sync: false }        # papel fm_app

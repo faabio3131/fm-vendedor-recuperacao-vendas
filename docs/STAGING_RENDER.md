@@ -66,6 +66,14 @@ O `render.yaml` **não cria banco** (o bloco `databases` ficou comentado).
 - A URL e a senha do banco **nunca** vão para o git nem para o chat: só para as variáveis do Render e para o gerenciador de senhas.
 - Produção: banco e API em provedor com região em São Paulo, escolhidos depois (os textos jurídicos dizem São Paulo).
 
+## Comando de início da API (correção de 06/10/2026)
+
+O `dockerCommand: sh -c "..."` do primeiro rascunho **falhou no Render**: o log mostrou `sh: 1: python -m fm_seller.cli bootstrap && exec uvicorn ... not found`
+e `Exited with status 127` (o comando inteiro foi tratado como nome de programa). O início agora está no `Dockerfile` (`apps/api/start-api.sh`):
+com `RUN_BOOTSTRAP_ON_START=1` ele roda o `bootstrap` e depois sobe a API na porta `$PORT`; se o `bootstrap` falhar, a API **não** sobe.
+Num serviço que já existe, o campo **Docker Command** (Settings do serviço) foi gravado com o comando antigo: **apague o conteúdo** desse campo e salve, e
+adicione a variável `RUN_BOOTSTRAP_ON_START` = `1` em Environment.
+
 ## O que será criado (região Virginia)
 
 | Recurso | Tipo | Para quê |
