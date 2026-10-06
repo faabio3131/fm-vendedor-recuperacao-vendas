@@ -7,7 +7,7 @@
 
 - **Objetivo:** subir um ambiente de staging no Render grátis e provar, com contas reais de teste, o que hoje só foi testado contra simuladores.
 - **Dono / aprovador:** Fábio (Diretor). Aprovado em 05/10/2026 para a Parte A; a Parte B exige o "go" dele por item.
-- **Estado:** EM EXECUCAO. Parte A concluída em 05/10/2026. Parte B: aguarda o "go" do Fábio.
+- **Estado:** EM EXECUCAO. Parte A concluída em 05/10/2026. Parte B: B1 concluído em 06/10/2026; B2 em diante aguardam o "go" do Fábio, item a item.
 - **Decisão de hospedagem (05/10/2026):** staging no **Render grátis**, sem dado real de cliente. Produção será em outro provedor com região em
   São Paulo, escolhido depois; os textos jurídicos só dizem "São Paulo" depois disso.
 - **Fora de escopo:** produção, dado real de cliente, cobrança própria, anúncios, e-mail/alerta externo, teste de invasão, qualquer plano pago.
@@ -63,7 +63,7 @@
 
 ### 4. B1: Banco e criação do staging no Render (PARAR: precisa do Fábio)
 
-- [ ] **Estado:** pendente
+- [x] **Estado:** concluído em 06/10/2026
 - **Objetivo:** ter API e painel no ar no Render grátis, com banco, `bootstrap` rodado e `smoke` OK.
 - **Depende de:** 1, 2, 3 e do "go" escrito do Fábio
 - **Entregar:** staging no ar; log do `bootstrap`; resultado do `cli smoke --api ... --web ...`; só o que o plano grátis permite.
@@ -72,7 +72,7 @@
 - **Verificação:** `cli smoke` e a lista do Passo 5, com o resultado no registro.
 - **Riscos / não confirmado:** o banco grátis do workspace pode estar ocupado; o usuário padrão pode não criar `fm_app`. **Se qualquer um dos dois ocorrer, parar** e apresentar ao Fábio as saídas: Postgres grátis fora do Render, ou banco pago a partir de cerca de US$ 6/mês (confirmar o preço no painel).
 - **Decisões do dono pendentes:** onde fica o banco; se aceita pagar; ele cria as chaves e as guarda em cofre.
-- **Prova:**
+- **Prova:** API e painel no ar no Render grátis (região Virginia) com o banco no Neon grátis. Em 06/10/2026, commit `64441be`: o `bootstrap` criou o papel `fm_app` pelo `neondb_owner` do Neon (a dúvida "o dono do plano grátis cria papéis?" tem resposta: **sim**), as migrations 0001 a 0012 estavam aplicadas e o primeiro cliente existia; `cli smoke --api ... --web ...` terminou em `RESULTADO: OK` nos 11 pontos; `/login` do painel responde 200 e `/v1/health` pelo painel devolve o mesmo JSON da API. Detalhe e o que ainda não está provado em `docs/TESTES_REAIS_REGISTRO.md` (seção "Staging no Render"). Três tropeços reais, todos de configuração e já documentados em `docs/STAGING_RENDER.md`: Docker Command antigo (status 127, PR #41), `FM_DATABASE_ADMIN_URL` com o usuário do app, e `FM_SECRETS_KEYS` fora do formato `id:base64`.
 
 ### 5. B2: Login Google real (PARAR: precisa do Client ID)
 

@@ -19,6 +19,27 @@ Tudo em Postgres 16 local, sem conta e sem servidor externo. Prova o roteiro de 
 Limites do ensaio: o dono do banco local é superusuário (no Render não será); `smoke` não rodou contra o painel (`--web`); nada disso prova o repasse de
 variáveis de build, `$PORT` nem a criação do papel `fm_app` pelo usuário padrão do Render.
 
+## Staging no Render (item B1 do plano), 06/10/2026
+
+API e painel no Render grátis (Virginia), banco no Neon grátis (N. Virginia), commit `64441be`. Sem dado real, sem conta de terceiros, sem chave de IA.
+Prova a subida e o encanamento, **não** os testes com contas reais (tabela abaixo continua `NÃO FEITO`).
+
+| Passo | Resultado |
+|---|---|
+| Subida da API com `RUN_BOOTSTRAP_ON_START=1` (PR #41) | `bootstrap` executou antes da API; o status 127 do `dockerCommand` com aspas acabou |
+| Papel `fm_app` criado pelo dono do Neon (`neondb_owner`) | OK: o plano grátis do Neon **deixa** o dono criar o papel; a API roda como `fm_app`, sem bypass de RLS |
+| Migrations | 0001 a 0012 aplicadas (`migrations: já em dia` nas subidas seguintes); primeiro cliente já existia |
+| `cli smoke --api <api> --web <painel>` | `RESULTADO: OK`, 11 verificações: saúde; cabeçalhos de segurança; descrição da API não exposta; `/v1/ready` com banco; `/v1/me` exige login; CORS recusa origem estranha; escrita de outra origem recusada; webhooks recusam sem conexão ou segredo; painel abre o login; painel com cabeçalhos de segurança; painel repassa `/v1` até a API |
+| `<painel>/login` e `<painel>/v1/health` | HTTP 200; o segundo devolve `{"status":"ok","version":"0.1.0"}`, igual à API |
+
+Tropeços do caminho (todos de configuração, nenhum de código além da PR #41): (1) o campo "Docker Command" do serviço guardava o comando antigo e
+precisou ser apagado; (2) `FM_DATABASE_ADMIN_URL` estava com o usuário do app (`fm_app`) em vez do dono, e o Neon recusou a senha de um usuário que ainda
+não existia; (3) `FM_SECRETS_KEYS` estava fora do formato `id:base64` e a API caiu ao iniciar. Ver `docs/STAGING_RENDER.md`.
+
+Limites: o login com Google **não** foi testado (falta o Client ID, item B2); vendedor IA, recuperação, fila e sincronização de templates **não rodam** no plano
+grátis (sem processo em segundo plano); serviços dormem após 15 min parados e a primeira visita leva cerca de 50 s; a senha do dono do Neon foi exposta em
+conversa privada e deve ser trocada ao fim do staging; o plano não prova nada sobre o provedor de produção (a escolher, com região em São Paulo).
+
 ## Os 9 testes da seção 4 de `LANCAMENTO_MVP.md`
 
 | # | Teste | Como provar (de `LANCAMENTO_MVP.md`) | Onde roda | Estado | Data | Resultado real | Decisão |
