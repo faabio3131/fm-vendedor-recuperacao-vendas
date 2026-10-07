@@ -45,7 +45,7 @@ conversa privada e deve ser trocada ao fim do staging; o plano não prova nada s
 | # | Teste | Como provar (de `LANCAMENTO_MVP.md`) | Onde roda | Estado | Data | Resultado real | Decisão |
 |---|---|---|---|---|---|---|---|
 | 1 | Gemini | `ai-check` termina com `RESULTADO: OK`; `ai-eval --real` sem falha de segurança; anotar nome do modelo, formato e custo por resposta | qualquer máquina com a chave (pago, centavos) | NÃO FEITO | | | |
-| 2 | Login Google real | entrar com conta Google; e-mail não verificado é recusado | staging | NÃO FEITO | | | |
+| 2 | Login Google real | entrar com conta Google; e-mail não verificado é recusado | staging | PASSOU COM RESSALVA | 07/10/2026 | Entrou no painel com a conta de teste; a visão geral abriu com o cliente de teste e o Plano 1 ativo. Não provado: e-mail não verificado recusado e conta fora da lista de teste recusada. Falhas no caminho, já corrigidas: pool do banco (PR #43), API dormindo/502 (PR #44), segredo do cliente no lugar do ID | Seguir para o teste 1 (Gemini) só com o "go" do Fábio |
 | 3 | Conexão do WhatsApp | com `FM_WHATSAPP_LIVE=true`, "Testar conexão" confirma token, número e conta; token errado falha sem vazar | staging | NÃO FEITO | | | |
 | 4 | Webhook de entrada (WhatsApp, Messenger, Instagram) | handshake, assinatura, mensagem recebida, entrega, "SAIR"; no Messenger/Instagram, formato de envio, ID de quem escreve e janela de 24 h | staging (API acordada); resposta automática precisa de worker | NÃO FEITO | | | |
 | 5 | Templates | enviar `pix_1` pelo painel, conferir status, categoria e motivo de reprovação (atenção a variável no início/fim) | staging; sincronização automática precisa de worker | NÃO FEITO | | | |

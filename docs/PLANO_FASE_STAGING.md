@@ -76,7 +76,7 @@
 
 ### 5. B2: Login Google real (PARAR: precisa do Client ID)
 
-- [ ] **Estado:** pendente
+- [x] **Estado:** concluído com ressalva em 07/10/2026
 - **Objetivo:** entrar no staging com a conta Google do Fábio; e-mail não verificado é recusado.
 - **Depende de:** 4 e do Client ID criado pelo Fábio
 - **Entregar:** resultado no registro (teste 2 da seção 4).
@@ -85,7 +85,7 @@
 - **Verificação:** passos manuais descritos no roteiro de A2.
 - **Riscos / não confirmado:** tela de consentimento "Em teste" limita quem entra.
 - **Decisões do dono pendentes:** nenhuma.
-- **Prova:**
+- **Prova:** em 07/10/2026 o Fábio entrou no painel do staging pelo botão "Fazer login com o Google" com a conta que é usuária de teste do projeto Google Cloud `AtendeVendeIA staging` (projeto novo, separado de qualquer outro): o painel abriu a visão geral do cliente de teste, com o e-mail dele e o Plano 1 ativo. **Não provado:** e-mail não verificado recusado; conta fora da lista de teste recusada (quem barra é o Google, na tela de consentimento "Em teste"). Antes de passar, o login falhou por três causas, todas corrigidas e registradas: conexão do banco morta após a pausa do Neon grátis (PR #43, pool confere a conexão), API dormindo no plano grátis devolvendo 502 (PR #44, o login espera e tenta de novo) e o segredo do cliente colado no lugar do ID do cliente (só o ID, que termina em `.apps.googleusercontent.com`, vai no Render).
 
 ### 6. B3: Gemini real (PARAR: precisa da chave; gasto pequeno e pago)
 
