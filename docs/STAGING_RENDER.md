@@ -100,6 +100,10 @@ Neon (banco `neondb`, papel dono), rode `BEGIN; SELECT set_config('app.system', 
 **Trocar o modelo no Render:** variável `FM_AI_MODEL` no serviço da API (por exemplo `gemini-3.1-flash-lite`) e Manual Deploy da API; apagar a variável
 volta ao padrão do código. Se uma das duas chamadas mostrar `rede: ReadTimeout`, o Google demorou mais que 12 s: clique de novo depois de 30 s.
 
+## Compra do SaaS na Cakto (testado em 07/10/2026)
+
+No painel da Cakto: criar um produto de **assinatura** (a Cakto exige escolher um canal de entrega; "Link de pagamento" basta, quem entrega o acesso é o convite do nosso painel) e, em **Integrações → Webhooks → Criar Novo Webhook**, cadastrar a URL da **API** (`https://<api>/v1/platform/webhooks/cakto`), o produto, os eventos de compra e de assinatura, o disparo **Individual** e uma **chave secreta digitada por você** (a Cakto não gera). A mesma chave vai em `FM_PLATFORM_CAKTO_SECRET` no Render. Ligue o produto ao plano pelo SQL Editor do Neon (equivale ao `map-product`): `INSERT INTO plan_products (provider, external_product_id, plan_key) VALUES ('cakto', '<id do produto>', 'fase-1') ON CONFLICT (provider, external_product_id) DO UPDATE SET plan_key = EXCLUDED.plan_key;`. A Cakto espera resposta em **8 segundos** e só repete a entrega em falha de rede ou tempo esgotado: **acorde a API** (`/v1/health`) antes de cada teste. Confira no Neon: `SELECT provider, event_type, outcome, received_at FROM platform_events ORDER BY received_at DESC;` (`tenant_created` = cliente criado). Não use a lista "Minhas Vendas → Reembolso" para pedir reembolso: ela mostra os pedidos feitos pelo comprador. Ao terminar os testes, volte `FM_CAPTURE_EVENTS` para `false`.
+
 ## O que será criado (região Virginia)
 
 | Recurso | Tipo | Para quê |
