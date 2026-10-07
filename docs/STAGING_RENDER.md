@@ -94,6 +94,12 @@ plataforma; no máximo uma verificação a cada 30 s; cada chamada espera no má
 ela responde "Nenhuma chave de IA configurada" e não chama ninguém. Chave do plano gratuito do Google: só com dados inventados (nesse plano o Google
 pode usar o conteúdo para melhorar produtos); antes de conversa de cliente de verdade, ative o faturamento na chave.
 
+**Como virar administrador sem Shell (testado em 07/10/2026):** o login só aplica o convite de administrador na próxima entrada. No SQL Editor do
+Neon (banco `neondb`, papel dono), rode `BEGIN; SELECT set_config('app.system', 'on', true); INSERT INTO platform_admin_invites (email, expires_at) VALUES
+(lower('<seu e-mail do Google>'), now() + interval '2 days'); COMMIT;` (equivale a `create-platform-admin`), depois clique em **Sair** e entre de novo.
+**Trocar o modelo no Render:** variável `FM_AI_MODEL` no serviço da API (por exemplo `gemini-3.1-flash-lite`) e Manual Deploy da API; apagar a variável
+volta ao padrão do código. Se uma das duas chamadas mostrar `rede: ReadTimeout`, o Google demorou mais que 12 s: clique de novo depois de 30 s.
+
 ## O que será criado (região Virginia)
 
 | Recurso | Tipo | Para quê |
