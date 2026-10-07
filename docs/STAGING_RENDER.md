@@ -71,6 +71,7 @@ O `render.yaml` **não cria banco** (o bloco `databases` ficou comentado).
 - Limites do Neon grátis (busca de 05/10/2026, conferir no site): 1 GB por projeto; computação desliga após 5 min parada e a primeira consulta demora um pouco
   mais; 100 horas de computação por mês por projeto (estourou, suspende até o mês seguinte). Sem garantia de backup: **nada de dado real**.
 - O Neon grátis suspende o banco após 5 min parado e **derruba as conexões abertas**. Antes da correção do pool (`db.py`: `check`, `max_idle`, `keepalives`), o primeiro pedido depois da pausa dava 500 (`WARNING psycopg.pool: discarding closed connection` no log); no painel aparecia "Algo deu errado." no login. O plano grátis do Render também dorme a API após 15 min: a primeira visita leva 30 a 50 s e pode dar 502 enquanto ela acorda; tente de novo.
+- Painel e API dormem no plano grátis (15 min sem uso). A tela de login agora trata 502, 503, 504 e falha de rede como "servidor acordando": mostra o aviso e tenta de novo até 6 vezes, a cada 10 s (cerca de 1 minuto). Recusa de verdade (401, 403) continua aparecendo na hora. Para testar à mão sem esperar, abra `<api>/v1/health` antes do login.
 - A URL e a senha do banco **nunca** vão para o git nem para o chat: só para as variáveis do Render e para o gerenciador de senhas.
 - Produção: banco e API em provedor com região em São Paulo, escolhidos depois (os textos jurídicos dizem São Paulo).
 
