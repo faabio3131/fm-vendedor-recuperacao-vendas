@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from fm_seller import __version__
+from fm_seller.ai.model import AiModel, build_ai_model
 from fm_seller.api.guards import BodyLimitMiddleware, Guards, request_id_for, security_headers
 from fm_seller.api.routes import (
     admin,
@@ -57,6 +58,7 @@ def create_app(
     box: SecretBox | None = None,
     event_handler: EventHandler | None = None,
     templates: TemplateGateway | None = None,
+    ai_model: AiModel | None = None,
 ) -> FastAPI:
     cfg = settings or get_settings()
     setup_logging()
@@ -93,6 +95,8 @@ def create_app(
     app.state.box = secret_box
     app.state.event_handler = event_handler or handle_event
     app.state.templates = templates or build_template_gateway(cfg)
+    app.state.ai_model = ai_model or build_ai_model(cfg)
+    app.state.ai_check_at = None
 
     app.add_middleware(
         CORSMiddleware,

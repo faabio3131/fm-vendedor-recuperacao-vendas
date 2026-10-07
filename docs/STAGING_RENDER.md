@@ -84,6 +84,16 @@ Num serviço que já existe, o campo **Docker Command** (Settings do serviço) f
 adicione a variável `RUN_BOOTSTRAP_ON_START` = `1` em Environment. Depois do merge, o deploy é manual (Auto-Deploy fica desligado ao usar "Deploy a specific
 commit"). Se o `Docker Command` ficar com o texto antigo, o erro `Exited with status 127` volta.
 
+## Provar a chave da IA no Render (rota de diagnóstico)
+
+O plano grátis não tem Shell nem processo em segundo plano, e o quadro "Testar conversa" do painel usa só o simulador. Para provar que a chave
+`FM_AI_API_KEY` configurada no Render funciona de verdade: entre no painel com a conta de administrador da plataforma, abra `/admin` e clique em
+**Testar IA** (seção "Teste da IA"). A rota `POST /v1/admin/ai-check` faz **duas chamadas reais** ao modelo (centavos) com um cliente de exemplo,
+**não grava nada, não envia a ninguém e nunca devolve a chave**: só mostra modelo, tempo, tokens e o texto da resposta de teste. Só administrador da
+plataforma; no máximo uma verificação a cada 30 s; cada chamada espera no máximo 12 s (o repasse do painel corta em 30 s). Sem chave configurada,
+ela responde "Nenhuma chave de IA configurada" e não chama ninguém. Chave do plano gratuito do Google: só com dados inventados (nesse plano o Google
+pode usar o conteúdo para melhorar produtos); antes de conversa de cliente de verdade, ative o faturamento na chave.
+
 ## O que será criado (região Virginia)
 
 | Recurso | Tipo | Para quê |

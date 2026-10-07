@@ -366,6 +366,24 @@ export type AdminMetrics = {
   clients: { total: number; by_plan_status: Record<string, number>; deletion_pending: number };
 };
 
+export type AdminAiCheck =
+  | { status: "not_configured"; message: string }
+  | {
+      status: "ok" | "failed";
+      model: string;
+      cases: {
+        name: string;
+        ok: boolean;
+        ms: number | null;
+        verdict: string;
+        tokens_in: number;
+        tokens_out: number;
+        text: string | null;
+        error: string | null;
+        alert: string | null;
+      }[];
+    };
+
 export type AdminHealth = {
   ok: boolean;
   exit_code: number;
