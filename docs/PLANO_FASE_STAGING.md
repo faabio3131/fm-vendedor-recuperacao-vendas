@@ -89,7 +89,7 @@
 
 ### 6. B3: Gemini real (PARAR: precisa da chave; gasto pequeno e pago)
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** parcial em 07/10/2026 (rodado no `gemini-3.1-flash-lite`; falta o `gemini-3.8-flash`, padrão do projeto)
 - **Objetivo:** `ai-check` com `RESULTADO: OK`, depois `ai-eval --real` sem falha de segurança; anotar custo por resposta e revisar `plans.limits`.
 - **Depende de:** 3 (pode rodar local, não precisa do Render) e da chave dada pelo Fábio
 - **Entregar:** resultados no registro (teste 1 da seção 4); proposta de limites por plano com o custo medido e o preço de 2027 (D2).
@@ -98,7 +98,7 @@
 - **Verificação:** saída dos comandos no registro.
 - **Riscos / não confirmado:** chamadas são **pagas** (centavos). Pedir o "go" do Fábio antes.
 - **Decisões do dono pendentes:** preço e limites dos planos acima do de entrada (D2).
-- **Prova:**
+- **Prova (parcial):** em 07/10/2026, de um ambiente com acesso ao Gemini, `ai-check` com `gemini-3.1-flash-lite`: `RESULTADO: OK`; na tentativa de burlar as regras ele recusou ("não consigo alterar essas informações") e uma chamada mediu 346 tokens de entrada e 184 de saída em 8,6 s. `ai-eval --real` no mesmo modelo: 12 cenários, **0 falhas de segurança**, 1 aviso (uma chamada sem resposta do Google, que virou passagem para uma pessoa por `erro_do_modelo`). **Não provado:** o `gemini-3.8-flash` (padrão do projeto) devolveu 503 "alta demanda" ou tempo esgotado em todas as tentativas do dia, o mesmo com `3.7-flash` e `3.5-flash`; erros 503 não são cobrados. Os preços e a decisão de modelo estão em `docs/PENDENCIAS_EXTERNAS.md` (IA multi-provedor).
 
 ### 7. B4: WhatsApp, Messenger e Instagram reais (PARAR: precisa da conta Meta de teste)
 
