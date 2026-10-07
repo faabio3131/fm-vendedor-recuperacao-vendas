@@ -103,7 +103,7 @@
 
 ### 7. B4: WhatsApp, Messenger e Instagram reais (PARAR: precisa da conta Meta de teste)
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** parcial em 07/10/2026 (WhatsApp: conexão cadastrada, handshake e assinatura do webhook provados com o evento de exemplo da Meta; teste de conexão real passou; mensagem real não chegou com o app não publicado; faltam envio, templates, Messenger e Instagram)
 - **Objetivo:** testes 3 a 6 da seção 4: teste de conexão, webhook (handshake, assinatura, mensagem recebida, entrega, "SAIR"), template real e envio de texto/template.
 - **Depende de:** 4 e da conta Meta de teste criada pelo Fábio
 - **Entregar:** resultado no registro por teste; correções do código para o que a Meta devolver de diferente, cada uma com teste.
@@ -112,11 +112,11 @@
 - **Verificação:** roteiro de A2.
 - **Riscos / não confirmado:** **o envio, a recuperação, a fila e a sincronização de templates dependem do worker, que não existe no Render grátis**: ou rodar o worker local contra o banco do staging (só se o Fábio autorizar e o banco aceitar conexão externa), ou aceitar que esses testes esperam o plano pago.
 - **Decisões do dono pendentes:** como rodar o worker (local ou pago); conta e número de teste.
-- **Prova:**
+- **Prova (WhatsApp, 07/10/2026):** a conta de desenvolvedor da Meta ficou bloqueada ("Erro de usuário bloqueado") por algumas horas e depois liberou sozinha. Foi criado um app novo e separado (nome `AtendeVendeIA staging`, modo desenvolvimento; o app de outro projeto que já existia na conta não foi tocado), com o caso de uso do WhatsApp e o número de teste da própria Meta. Na Etapa 2, "Verificar e salvar" com a URL de callback e o segredo do webhook gerados pelo painel foi aceito; o teste do campo `messages` foi aceito pela API e a conexão passou a `connected` sem erro. **Dicas do caminho:** o segredo do webhook aparece uma única vez; se a página for atualizada, é preciso remover a conexão e salvar de novo (a URL e o segredo mudam). A URL de callback vai no campo "URL de callback"; o segredo do webhook (não a chave secreta do app) vai em "Verificar token". **Teste de conexão real (teste 3) passou** com `FM_WHATSAPP_LIVE=true`: token vencido recusado sem vazar (código 190) e, com token novo, "Conectado ao número +1 555-205-3393 (Test Number)". **Mensagem real não chegou:** o log da API não mostra nenhum `POST` de webhook depois do teste de exemplo, nem o aviso de entrega do modelo enviado ao celular do Fábio; vale o aviso da Meta (app não publicado só recebe webhooks de teste do painel). Para receber mensagem real falta publicar o app (exigências da Meta a verificar) ou usar produção. **Não provado:** mensagem real recebida, entrega, "SAIR", Messenger, Instagram. Nenhum token, segredo ou ID de pedido foi registrado aqui.
 
 ### 8. B5: Cakto e Hotmart reais (PARAR: precisa dos produtos de teste)
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** parcial em 07/10/2026 (Cakto: compra real criou cliente, plano e convite; falta Hotmart, o ciclo da assinatura, o login do comprador e as fixtures anonimizadas, que exigem o terminal)
 - **Objetivo:** teste 7 da seção 4: compra de teste, captura do evento real (`FM_CAPTURE_EVENTS=true`), conferência dos campos e do ciclo de assinatura.
 - **Depende de:** 4 e dos produtos de teste criados pelo Fábio
 - **Entregar:** fixtures anonimizadas em `apps/api/tests/fixtures/real_events/`; correção dos caminhos da Hotmart com teste; registro do que a Cakto validou (assinatura HMAC ou só `secret`).
@@ -125,7 +125,7 @@
 - **Verificação:** `capture show`, `capture export` e os testes novos.
 - **Riscos / não confirmado:** Hotmart sem documentação. Acordar a API antes do teste (`/v1/health`).
 - **Decisões do dono pendentes:** colar a documentação da Hotmart, se conseguir.
-- **Prova:**
+- **Prova (Cakto, 07/10/2026):** produto de assinatura de teste (R$ 5,00/mês) criado na Cakto com canal de entrega "Link de pagamento" (a Cakto exige um canal); webhook criado no painel (Integrações → Webhooks) com a URL `/v1/platform/webhooks/cakto` da API, o produto, os eventos de compra e de assinatura, disparo "Individual" e uma chave secreta digitada pelo dono (a Cakto não gera). Evento de teste: `unmapped_product`. Compra real por Pix (R$ 5,99): `tenant_created` + `plan_updated`; cliente com plano `fase-1`, origem `cakto`, 1 convite aberto. Detalhes no teste 7 do registro. **Não provado:** reembolso, atraso, recuperação, cancelamento, renovação, login do comprador, HMAC versus `secret` do corpo, Hotmart. **Captura:** `FM_CAPTURE_EVENTS` foi voltado para `false` no Render pelo dono, com novo deploy da API, em 07/10/2026 (a API respondeu `ok` depois; o valor da variável não pode ser lido daqui). Os eventos já capturados são cifrados e expiram em 72 h. **Risco aceito pelo dono:** a chave do webhook é a que a Cakto já tinha no campo (origem não confirmada) e não foi trocada; os valores gerados em 06/10/2026 (`FM_SECRETS_KEYS`, senha do app, token do plano de controle) apareceram em um print no chat privado e também não foram trocados.
 
 ### 9. C1: Relatório de prontidão e decisão de go/no-go parcial
 
