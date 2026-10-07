@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const DEV_LOGIN = process.env.NEXT_PUBLIC_DEV_LOGIN === "1";
@@ -17,21 +17,49 @@ type GoogleApi = {
   };
 };
 
+const WAKE_ATTEMPTS = 6;
+const WAKE_WAIT_MS = 10_000;
+
+/** 502/503/504 do repasse ou falha de rede: o servidor ainda está subindo, não é recusa de login. */
+function isServerWaking(e: unknown): boolean {
+  if (e instanceof ApiError) return e.status === 502 || e.status === 503 || e.status === 504;
+  return e instanceof TypeError;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const buttonRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
+  const [waking, setWaking] = useState(false);
 
   async function send(idToken: string) {
     setBusy(true);
     setError(null);
+    setWaking(false);
     try {
-      await api("/v1/auth/google", { method: "POST", body: JSON.stringify({ id_token: idToken }) });
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await api("/v1/auth/google", { method: "POST", body: JSON.stringify({ id_token: idToken }) });
+          break;
+        } catch (e) {
+          // Servidor acordando (planos grátis dormem após alguns minutos): espera e tenta de novo.
+          if (!isServerWaking(e) || attempt >= WAKE_ATTEMPTS) throw e;
+          setWaking(true);
+          await new Promise((resolve) => setTimeout(resolve, WAKE_WAIT_MS));
+        }
+      }
       router.replace("/");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível entrar.");
+      setWaking(false);
+      setError(
+        isServerWaking(e)
+          ? "O servidor não respondeu. Tente de novo em instantes."
+          : e instanceof Error
+            ? e.message
+            : "Não foi possível entrar.",
+      );
     } finally {
       setBusy(false);
     }
@@ -74,6 +102,11 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
+        )}
+        {waking && (
+          <div className="alert" role="status">
+            O servidor está acordando. Aguarde, estamos tentando de novo (pode levar até um minuto).
+          </div>
         )}
         {error && <div className="alert bad" role="alert">{error}</div>}
       </div>
