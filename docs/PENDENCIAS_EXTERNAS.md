@@ -68,4 +68,5 @@ antes de abrir para clientes.
 - Sequências e textos padrão da recuperação.
 - Quando buscar Tech Provider (exige CNPJ).
 - Senha do dono do banco do staging (`neondb_owner`, Neon): foi exposta em conversa privada em 06/10/2026. Trocar ("Reset password" no Neon) ao fim do staging e atualizar `FM_DATABASE_ADMIN_URL` no Render.
+- Segredo do cliente OAuth do Google (staging): apareceu em captura de tela enviada em conversa privada em 07/10/2026. O login não usa esse segredo; mesmo assim, criar um novo e apagar o antigo em Google Cloud, Clientes, no projeto `AtendeVendeIA staging`.
 - IA multi-provedor: hoje só existe o adaptador da Gemini, na porta `AiModel` (`ai/model.py`). Falta escolher o provedor por configuração, adaptadores da Anthropic e da OpenAI, custo medido por provedor e comparação com `ai-eval`. Fábio pediu em 06/10/2026 que isso **não** entre agora: tratar depois do staging, em bloco próprio. Antes de decidir por preço, conferir a fonte oficial de preços.
