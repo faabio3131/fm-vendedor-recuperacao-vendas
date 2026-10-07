@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   api,
   ApiError,
+  type AdminAiCheck,
   type AdminClients,
   type AdminHealth,
   type AdminMetrics,
@@ -39,6 +40,22 @@ function Admin() {
   const [health, setHealth] = useState<AdminHealth | null>(null);
   const [note, setNote] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
   const [plans, setPlans] = useState<Record<string, string>>({});
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiResult, setAiResult] = useState<AdminAiCheck | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  async function checkAi() {
+    setAiBusy(true);
+    setAiError(null);
+    setAiResult(null);
+    try {
+      setAiResult(await api<AdminAiCheck>("/v1/admin/ai-check", { method: "POST" }));
+    } catch (e) {
+      setAiError(message(e));
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   const load = useCallback(() => {
     api<AdminClients>("/v1/admin/clients?limit=100").then(setClients).catch(() => undefined);
@@ -124,6 +141,47 @@ function Admin() {
               <strong>{f.level === "critical" ? "Crítico" : "Aviso"}:</strong> {f.message}
             </div>
           ))}
+      </section>
+
+      <section className="card" aria-labelledby="ai-title" style={{ marginTop: 16 }}>
+        <h2 id="ai-title" style={{ marginTop: 0 }}>
+          Teste da IA
+        </h2>
+        <p className="muted">
+          Faz duas chamadas reais ao modelo configurado neste servidor, com um cliente de exemplo
+          (custo de centavos). Não grava nada, não envia a ninguém e não mostra a chave.
+        </p>
+        <button className="primary" onClick={() => void checkAi()} disabled={aiBusy}>
+          {aiBusy ? "Testando… (até 30 s)" : "Testar IA"}
+        </button>
+        {aiError && (
+          <div className="alert bad" role="status" style={{ marginTop: 12 }}>
+            {aiError}
+          </div>
+        )}
+        {aiResult && aiResult.status === "not_configured" && (
+          <div className="alert" role="status" style={{ marginTop: 12 }}>
+            {aiResult.message}
+          </div>
+        )}
+        {aiResult && aiResult.status !== "not_configured" && (
+          <div role="status" style={{ marginTop: 12 }}>
+            <p>
+              <strong>{aiResult.status === "ok" ? "Funcionou" : "Falhou"}</strong> · modelo{" "}
+              <code>{aiResult.model}</code>
+            </p>
+            {aiResult.cases.map((c) => (
+              <div key={c.name} className={`alert ${c.ok ? "" : "bad"}`}>
+                <strong>{c.name}:</strong>{" "}
+                {c.error
+                  ? `falhou (${c.error})`
+                  : `${c.verdict} em ${c.ms} ms, ${c.tokens_in} tokens de entrada e ${c.tokens_out} de saída`}
+                {c.text && <div className="muted">Resposta: {c.text}</div>}
+                {c.alert && <div>Alerta: {c.alert}</div>}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {metrics && (

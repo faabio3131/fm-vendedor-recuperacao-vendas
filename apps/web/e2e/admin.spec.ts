@@ -14,11 +14,17 @@ test("Administração da plataforma: saúde, números, clientes e sem rolagem ho
   await expect(page.getByRole("region", { name: "Saúde" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Números do sistema" })).toBeVisible();
 
+  // sem chave de IA neste ambiente: a verificação avisa e não chama ninguém (nenhum custo)
+  const ai = page.getByRole("region", { name: "Teste da IA" });
+  await expect(ai.getByText(/Não grava nada, não envia a ninguém/)).toBeVisible();
+  await ai.getByRole("button", { name: "Testar IA" }).click();
+  await expect(ai.getByRole("status")).toContainText("Nenhuma chave de IA configurada");
+
   const clients = page.getByRole("region", { name: /^Clientes/ });
   await expect(clients.getByRole("row", { name: /Loja Demo/ })).toBeVisible();
   // o convite do cliente de demonstração já foi aceito: renovar mostra o motivo, não quebra nada
   await clients.getByRole("button", { name: "Renovar convite de Loja Demo" }).click();
-  await expect(page.getByRole("status")).toContainText("não tem convite pendente");
+  await expect(page.getByRole("status").filter({ hasText: "não tem convite pendente" })).toBeVisible();
   // o botão de trocar plano só liga quando o plano muda
   await expect(clients.getByRole("button", { name: "Trocar plano" }).first()).toBeDisabled();
 

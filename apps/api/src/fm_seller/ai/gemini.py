@@ -154,11 +154,27 @@ class GeminiModel:
             raise ValueError("Chave do Gemini ausente.")
         self._key = api_key
         self.model = model
+        self._base_url = base_url
+        self._transport = transport
         self._url = f"{base_url.rstrip('/')}/models/{model}:generateContent"
         self._thinking_level = thinking_level
         self._retries = max(0, retries)
         self._sleep = sleep
         self._client = httpx.Client(timeout=timeout, transport=transport)
+
+    def with_limits(self, *, timeout: float, retries: int) -> GeminiModel:
+        """Cópia com a mesma chave e o mesmo modelo, mas com espera e repetições próprias
+        (usada pela verificação do painel, que precisa responder antes do corte do repasse)."""
+        return GeminiModel(
+            self._key,
+            model=self.model,
+            base_url=self._base_url,
+            timeout=timeout,
+            thinking_level=self._thinking_level,
+            retries=retries,
+            transport=self._transport,
+            sleep=self._sleep,
+        )
 
     def _payload(self, ctx: AiContext) -> dict[str, Any]:
         return {
