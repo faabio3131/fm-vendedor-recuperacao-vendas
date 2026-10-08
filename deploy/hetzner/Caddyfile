@@ -1,0 +1,22 @@
+# HTTPS automático (Let's Encrypt). Só as portas 80 e 443 ficam abertas; banco, API e painel
+# conversam pela rede interna do Docker.
+{
+	email {$ACME_EMAIL}
+}
+
+{$APP_HOST} {
+	encode zstd gzip
+	reverse_proxy web:3000
+}
+
+{$API_HOST} {
+	encode zstd gzip
+	# Webhooks (Meta, Cakto, Hotmart, Command) e API do painel. Corpo máximo de 2 MB.
+	request_body {
+		max_size 2MB
+	}
+	reverse_proxy api:8000 {
+		health_uri /v1/health
+		health_interval 15s
+	}
+}
