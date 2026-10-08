@@ -38,7 +38,7 @@
   [["f-termos", c.linkTermos], ["f-privacidade", c.linkPrivacidade]].forEach(function (p) {
     var el = document.getElementById(p[0]);
     if (!el) return;
-    if (p[1] && /^https?:\/\//.test(p[1])) {
+    if (p[1] && /^(https?:\/\/|\/[a-z])/.test(p[1])) {
       el.setAttribute("href", p[1]);
       el.hidden = false;
     } else el.hidden = true;
