@@ -1,52 +1,103 @@
 # ADR-0005 — Billing Central do FM Command: o AtendeVendeIA obedece à licença
 
-Status: **PROPOSTA** (08/10/2026), aguarda o Diretor e o alinhamento com o repositório do FM Command · Data: 2026-10-08
+Status: **DIRETRIZ APROVADA pelo Diretor em 08/10/2026; detalhamento técnico PROPOSTO e sem implementação** · Data: 2026-10-08
+Auditoria que sustenta este ADR: `docs/auditoria/AUDITORIA_BILLING_CENTRAL_2026-10-08.md`. Contrato: `docs/FM_COMMAND_LICENCAS.md`.
 
 ## Contexto
 
-Direção dada pelo Fábio em 08/10/2026 (arquitetura prevista, **ainda não conferida tecnicamente** no repositório do FM Command, que esta sessão não leu):
+O Diretor aprovou como diretriz a centralização de assinaturas e licenças no **FM Command** (repositório `FM-CONTROL-CENTER`), autoridade de billing,
+assinaturas comerciais, políticas de cobrança e direitos de licença de todos os SaaS da FM Tecnologia. Os gateways (Cakto, Hotmart, Asaas, Stripe e
+outros) entram por **adaptadores no Command**; nenhum SaaS depende permanentemente de integração própria para saber o estado comercial de uma assinatura.
 
-- O **FM Command** será a central financeira e comercial de todos os SaaS da F&M Tecnologia (assinaturas, pagamentos, renovações, inadimplência,
-  faturamento), como **Billing Central**.
-- O Command **não é o gateway** de pagamento. Ele administra e integra gateways (Cakto, Asaas, Mercado Pago, Stripe ou outro) por uma camada
-  *Payment Gateway Adapter*, valida o pagamento por webhook autenticado mais consulta à API do provedor e **determina o direito de acesso** (licença).
-- Cada SaaS (Kordena, Iron Fit, AtendeVendeIA, NFCore) consulta ou recebe a licença do Command; **nenhum SaaS tem integração financeira própria**.
-- O Command separa **valor vendido**, **valor recebido** e **lucro líquido**, conciliando taxas, estornos e impostos.
+A auditoria mostrou que **o Command ainda não tem** o Billing Central: não emite `customer_id`, `subscription_id` nem `license_id`, não recebe nem emite
+webhook (o modo `webhook` existe no tipo, mas o runtime recusa) e não conhece o AtendeVendeIA. Isto é, o contrato abaixo é trabalho **novo dos dois lados**.
 
-Hoje (ADR-0004 e `docs/FM_COMMAND_INTEGRACAO.md`) o Command só **lê** o AtendeVendeIA. E a Cakto/Hotmart avisam o AtendeVendeIA **direto**
-(`/v1/platform/webhooks/{provedor}`), com a política de atraso nossa (`plans.grace_days`, 3 dias).
+## Decisões da diretriz (numeração do Diretor) e como este ADR as cumpre
 
-## Decisão (proposta)
+| # | Diretriz | Como fica |
+|---|---|---|
+| 1 | Command é a autoridade de billing, assinatura, cobrança e licença | O AtendeVendeIA **aplica** a licença; não decide estado comercial |
+| 2 | Gateways por adaptadores no Command; nenhum SaaS depende de integração própria **permanentemente** | Cakto e Hotmart diretas ficam como **transição** (item 7); no fim, só o Command fala com gateway |
+| 3 | `customer_id` imutável emitido pelo Command, mais `subscription_id` e `license_id`; e-mail não é chave primária | Tabela de vínculo no AtendeVendeIA (`commercial_links`); e-mail vira só dado de contato e do convite |
+| 4 | O AtendeVendeIA cria tenant, conta, usuário administrador e convite; o Command dá a **autorização comercial** para provisionar | O evento `license.activated` traz `provisioning.authorized` e o contato do administrador; sem autorização, nada é criado |
+| 5 | Webhook assinado de licença, mais **reconciliação periódica** pela API de licenças do Command | Contrato com os dois canais; a reconciliação corrige perda, atraso e divergência |
+| 6 | Carência e suspensão governadas pelo Command; durante indisponibilidade, **última licença validada**, contingência limitada, auditável, sem prorrogação indefinida | `grace_ends_at` e `valid_until` vêm do Command; contingência de duração máxima (proposta: 72 h), registrada e sem renovação automática |
+| 7 | Preservar Cakto e Hotmart na transição, com **um único responsável por assinatura** e sem evento duplicado | Campo `authority` por assinatura; evento de quem não é a autoridade é registrado e **não aplicado**; modo sombra antes da virada |
+| 8 | Contrato com versionamento, identificação de tenant, produto, assinatura e licença, estados, vigência, carência, origem, id único do evento, assinatura criptográfica, anti-replay, idempotência, reconciliação, eventos fora de ordem e auditoria | `docs/FM_COMMAND_LICENCAS.md`, seção a seção |
+| 9 | Respeitar multi-tenant, segregação de privilégios e governança da FM | Ver "Segurança e governança" abaixo |
 
-1. **Novo remetente `fmcommand`** na mesma rota de compras do SaaS (`POST /v1/platform/webhooks/fmcommand`), com **eventos de licença** (contrato em
-   `docs/FM_COMMAND_LICENCAS.md`). O AtendeVendeIA aplica a licença; não fala com gateway.
-2. **Cakto e Hotmart continuam funcionando** como estão. Os dois caminhos convivem; quando o Billing Central estiver homologado, os webhooks diretos
-   são desligados (apagar o segredo do provedor desliga o recebimento).
-3. **Uma só fonte de verdade para a tolerância de atraso.** Com o `fmcommand`, quem decide é o Command: ele manda `license.past_due` com
-   `grace_until` e depois `license.suspended`. Os 3 dias do AtendeVendeIA (`plans.grace_days`) ficam só como **reserva** para evento sem `grace_until`.
-4. **Autenticação:** assinatura HMAC-SHA256 do corpo com segredo próprio (`FM_PLATFORM_FMCOMMAND_SECRET`, mínimo 32 caracteres), carimbo de tempo com
-   janela curta contra reenvio, comparação em tempo constante. Sem segredo configurado a rota responde 404 (desligada por padrão), como a Cakto.
-5. **Idempotência** pelo `event_id` do Command (tabela `platform_events`, já existente). Ordem de chegada não é garantida: cada evento só muda o estado
-   nas transições previstas em `lifecycle.next_status`; o resto fica registrado como ignorado.
-6. **Identificação do cliente:** o **e-mail do comprador** (como hoje) liga a licença à conta; o `customer.external_id` do Command é guardado para
-   auditoria e para a consulta periódica. Plano: `plan_products(provider='fmcommand', external_product_id=<plan_code>)` → `plan_key`.
-7. **Conferência periódica (fase 2, opcional):** o AtendeVendeIA consulta o Command (`GET` de licença por cliente, com token de serviço) para
-   corrigir aviso perdido. Só depois de o Command oferecer essa rota.
-8. **Fora do escopo do AtendeVendeIA:** gateways, conciliação, taxas, impostos e lucro líquido. O evento traz `payment.amount_cents` só como
-   informação; o AtendeVendeIA não calcula receita.
+## Decisão técnica proposta
+
+### Papéis
+
+- **FM Command:** emite identificadores; recebe e valida pagamentos dos gateways (por adaptadores, com consulta à API do provedor quando necessário);
+  mantém assinatura e licença; decide carência e suspensão; **emite** eventos de licença e **serve** a API de licenças. Não é o gateway.
+- **AtendeVendeIA:** **consome** a licença; cria e mantém tenant, conta, administrador e convite; aplica o estado (`active`, `past_due`, `suspended`,
+  `canceled`, `refunded`) pelo ciclo de vida que já existe (`provisioning/lifecycle.py`); guarda o vínculo e a auditoria. Não fala com gateway no destino final.
+
+### Vínculo e identificadores (diretriz 3)
+
+Nova tabela do AtendeVendeIA (proposta, sem migration nesta PR): `commercial_links` com `tenant_id` (PK), `issuer` (`fmcommand`), `customer_id`,
+`subscription_id`, `license_id` (todos texto opaco e imutável; únicos por `issuer`), `authority`, `license_version`, `state`, `valid_from`, `valid_until`,
+`grace_ends_at`, `last_validated_at`, `contingency_until`. Com RLS forçada e leitura/escrita só em modo `system`, como `platform_events`.
+`tenant_plans.source` passa a admitir `fmcommand`. O produto mantém o seu próprio `tenant_id`; o Command nunca vê nem escolhe o `tenant_id` interno.
+
+### Responsável único por assinatura e transição (diretriz 7)
+
+`authority` por assinatura: `direct:cakto`, `direct:hotmart` ou `fmcommand`.
+
+1. **Hoje:** todas as assinaturas são `direct:*`; o Command não participa. O lançamento não muda.
+2. **Modo sombra** (`FM_FMCOMMAND_MODE=shadow`): o AtendeVendeIA recebe e valida os eventos do Command, **registra** e compara com o estado real, mas **não aplica**.
+   Divergências viram relatório. Critério para sair: período combinado sem divergência.
+3. **Virada por assinatura:** o Diretor autoriza e a assinatura passa a `authority = fmcommand` (registrado na auditoria). Dali em diante, eventos
+   diretos da Cakto ou da Hotmart dessa assinatura são registrados com resultado `not_authoritative` e **ignorados**. Nenhuma assinatura tem dois responsáveis.
+4. **Fim:** quando todas as assinaturas estiverem no Command, os segredos da Cakto e da Hotmart são apagados (a rota volta a responder 404).
+
+### Indisponibilidade e contingência (diretriz 6)
+
+- O AtendeVendeIA guarda a **última licença validada** (`license_version`, vigência e carência).
+- Command fora do ar **não suspende** quem estava ativo e dentro da vigência.
+- Se a vigência ou a carência vencer **sem** confirmação do Command, vale a **contingência**: no máximo `contingency_hours` (proposta: 72 h, teto fixo na configuração do
+  AtendeVendeIA, valor do Command nunca excede o teto), registrada na auditoria no início e no fim. **Sem prorrogação automática:** ao fim da contingência o
+  estado vira `suspended` (nada é apagado). Só uma licença nova validada (evento ou reconciliação) reabre.
+- A reconciliação e os eventos nunca "prorrogam sozinhos": só uma licença emitida pelo Command altera datas.
+
+### Segurança e governança (diretriz 9)
+
+- **Segredos separados:** um para receber eventos (`FM_PLATFORM_FMCOMMAND_SECRET`, assinatura HMAC), outro, de **leitura**, para o AtendeVendeIA consultar a API de licenças,
+  com escopo `licenses:read` limitado ao produto `ATENDEVENDEIA`. O token de leitura do Command sobre o AtendeVendeIA (ADR-0004) continua separado e só leitura.
+- **Sem dado em excesso:** o evento traz identificadores, estado, datas, plano e contato do administrador. Nunca cartão, CPF, endereço nem credencial de gateway.
+- **Multi-tenant:** a licença é de um cliente; o handler resolve o `tenant_id` pelo vínculo e processa em modo `system` do banco, com consultas fixas, como o recebimento
+  de compras de hoje. Nenhuma rota de pessoa ou de cliente toca nesse caminho.
+- **Privilégio mínimo:** o Command não escreve no banco do AtendeVendeIA (regra do ADR-0004 mantida); o AtendeVendeIA não escreve no Command.
+- **Auditoria:** cada evento aplicado, ignorado, divergente ou de contingência gera registro; o corpo bruto fica cifrado em `platform_events`.
+
+## Fora do escopo do AtendeVendeIA
+
+Gateways, conciliação financeira, taxas, impostos e lucro líquido (valor vendido, recebido e líquido) são do Command. O evento traz `payment.amount_cents` só como informação.
 
 ## Consequências
 
-- **Nada disto está implementado nem testado contra o FM Command.** Este ADR e o contrato são a base para o Command implementar do lado dele.
-- Falta no código do AtendeVendeIA: o normalizador `fmcommand`, o segredo, o evento de **suspensão** (hoje a suspensão vem do cálculo da carência ou da
-  área `/admin`, não de um evento) e os testes. Sem mudança de banco prevista (usa `plan_products`, `platform_events`, `tenant_plans`).
-- **Lançamento não espera o Billing Central:** a compra na Cakto já foi provada com compra real (07/10/2026). Plugar o Command depois não muda nada
-  para o cliente.
-- Dado pessoal no evento: só e-mail, nome e valor. Nunca cartão, CPF ou dado de pagamento do cliente.
+- **Nada está implementado nem testado contra o Command.** O Command precisa construir: emissão de identificadores, adaptadores de gateway, emissor de webhook assinado
+  (com fila e reenvio), API de licenças e a fonte do AtendeVendeIA no Source Registry (hoje inexistente).
+- O AtendeVendeIA precisa construir (futuro, com aprovação): `commercial_links`, normalizador e verificação `fmcommand`, `source = fmcommand`, evento de suspensão, reconciliação,
+  contingência, modo sombra e testes. **Nenhuma migration é criada nesta PR.**
+- **O lançamento não espera o Billing Central:** a Cakto direta foi provada (07/10/2026).
+- Risco assumido: durante a transição existem duas vias; o campo `authority` e o modo sombra existem exatamente para impedir efeito duplicado.
 
-## Perguntas em aberto (para o Diretor e o FM Command)
+## Fases propostas (cada uma exige aprovação)
 
-1. Formato real que o Command consegue enviar (campos, cabeçalho de assinatura, nomes de evento). O contrato aqui é uma **proposta**.
-2. Chave do cliente: e-mail do comprador, ou código próprio do Command?
-3. Quem cria a conta e o convite após a compra: o AtendeVendeIA ao receber `license.activated` (como hoje) ou o Command?
-4. O Command terá a rota de consulta de licença (item 7)?
+| Fase | Entrega | Onde |
+|---|---|---|
+| G0 | Aprovar este ADR e o contrato | Diretor |
+| G1 | Command: fonte do produto, emissão de identificadores, API de licenças (sem gateways ainda) | Command |
+| G2 | AtendeVendeIA: recebimento `fmcommand` desligado por padrão, vínculo e testes | AtendeVendeIA |
+| G3 | Modo sombra com o Command emitindo eventos reais de teste | os dois |
+| G4 | Reconciliação e contingência provadas (derrubar o Command de propósito) | os dois |
+| G5 | Virada por assinatura, depois adaptadores de gateway no Command | Command |
+
+## Perguntas ainda abertas
+
+1. Formato dos identificadores (UUID versus texto prefixado) e quem os emite além do Command.
+2. Confirmar os parâmetros propostos: contingência de 72 h e reconciliação a cada 15 min.
+3. Quem aprova a virada de uma assinatura para `fmcommand` e com qual registro.
