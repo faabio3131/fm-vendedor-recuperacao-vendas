@@ -308,6 +308,9 @@ def test_only_known_modules_call_out_to_the_network() -> None:
         "ai/gemini.py",  # base FM_AI_BASE_URL, da plataforma
         "auth/google.py",  # certificados do Google, endereço fixo
         "channels/meta_api.py",  # FM_META_GRAPH_BASE, da plataforma
+        # API de licenças do Command: FM_FMCOMMAND_API_BASE_URL, da plataforma; só https, sem
+        # redirecionamento, só GET e desligada por padrão (ADR-0005).
+        "licensing/reconcile.py",
         "ops/loadtest.py",  # linha de comando; só endereço local, a menos que o operador confirme
         "ops/smoke.py",  # só roda pela linha de comando, contra o endereço que o operador passou
     }

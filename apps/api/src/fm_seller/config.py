@@ -2,11 +2,33 @@
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MIN_WEBHOOK_SECRET_CHARS = 32
+
+
+def parse_webhook_secrets(raw: str) -> dict[str, str]:
+    """`kid:segredo,kid2:segredo2` -> {kid: segredo}. Cada segredo precisa de 32+ caracteres."""
+    out: dict[str, str] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        kid, sep, secret = part.partition(":")
+        if not sep or not re.fullmatch(r"[A-Za-z0-9._-]{1,32}", kid):
+            raise ValueError("FM_FMCOMMAND_WEBHOOK_SECRETS: use kid:segredo (kid simples)")
+        if len(secret) < MIN_WEBHOOK_SECRET_CHARS:
+            raise ValueError("FM_FMCOMMAND_WEBHOOK_SECRETS: cada segredo precisa de 32+ caracteres")
+        if kid in out:
+            raise ValueError("FM_FMCOMMAND_WEBHOOK_SECRETS: kid repetido")
+        out[kid] = secret
+    return out
 
 
 class Settings(BaseSettings):
@@ -76,10 +98,56 @@ class Settings(BaseSettings):
     # Se preenchido, precisa ter ao menos 32 caracteres; valor aleatório próprio, nunca no git.
     fmcc_control_plane_token: str = ""
 
+    # Billing Central do FM Command (ADR-0005, contrato fmcc.license.v1). TUDO desligado por padrão:
+    # `off` não recebe nem consulta nada; `shadow` valida e registra sem alterar licença real;
+    # `enforce` aplica a licença do Command (só depois da aprovação humana registrada).
+    fmcommand_mode: Literal["off", "shadow", "enforce"] = "off"
+    # Código canônico do produto no catálogo do Command (nunca inventado aqui).
+    fmcommand_product_code: str = ""
+    # Segredos de assinatura dos eventos: "kid:segredo,kid2:segredo2" (dois valem na rotação).
+    fmcommand_webhook_secrets: str = ""
+    # API de licenças do Command (somente leitura): base https e token de serviço.
+    fmcommand_api_base_url: str = ""
+    fmcommand_api_token: SecretStr = SecretStr("")
+    fmcommand_reconcile_minutes: int = Field(default=15, ge=1, le=60)
+    fmcommand_api_timeout_seconds: float = Field(default=10.0, ge=1, le=30)
+    # Contingência: máximo 72 h (teto fixo, aprovado). Não renova sozinha.
+    fmcommand_contingency_hours: int = Field(default=72, ge=1, le=72)
+    # Sem reconciliação bem-sucedida por este tempo, o ops-check avisa.
+    fmcommand_stale_after_minutes: int = Field(default=45, ge=5, le=1440)
+
     @model_validator(mode="after")
     def _control_plane_token_is_strong(self) -> Settings:
         if self.fmcc_control_plane_token and len(self.fmcc_control_plane_token) < 32:
             raise ValueError("FM_FMCC_CONTROL_PLANE_TOKEN precisa ter ao menos 32 caracteres")
+        return self
+
+    @model_validator(mode="after")
+    def _fmcommand_config_is_safe(self) -> Settings:
+        """Config do Billing Central: nada pela metade. Desligado não exige nada."""
+        if self.fmcommand_mode == "off":
+            return self
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]{1,63}", self.fmcommand_product_code):
+            raise ValueError("FM_FMCOMMAND_PRODUCT_CODE precisa ser o código canônico do catálogo")
+        if self.fmcommand_webhook_secrets:
+            parse_webhook_secrets(self.fmcommand_webhook_secrets)
+        if self.fmcommand_api_base_url:
+            parsed = urlsplit(self.fmcommand_api_base_url)
+            if (
+                parsed.scheme != "https"
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+            ):
+                raise ValueError("FM_FMCOMMAND_API_BASE_URL precisa ser https, sem credencial")
+            if len(self.fmcommand_api_token.get_secret_value()) < 32:
+                raise ValueError("FM_FMCOMMAND_API_TOKEN precisa ter ao menos 32 caracteres")
+        if self.fmcommand_mode == "enforce" and not (
+            self.fmcommand_webhook_secrets and self.fmcommand_api_base_url
+        ):
+            raise ValueError(
+                "FM_FMCOMMAND_MODE=enforce exige segredos de assinatura e a API de licenças"
+            )
         return self
 
     @model_validator(mode="after")

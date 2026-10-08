@@ -15,6 +15,7 @@ from importlib import resources
 
 import psycopg
 
+from fm_seller.config import Settings
 from fm_seller.db import Conn, Database
 from fm_seller.recovery.senders import MessageSender
 
@@ -52,6 +53,7 @@ def check(
     *,
     now: datetime | None = None,
     require_worker: bool = True,
+    settings: Settings | None = None,
 ) -> list[Finding]:
     """Devolve os achados atuais. Lista vazia = tudo em ordem."""
     now = now or datetime.now(UTC)
@@ -168,6 +170,71 @@ def check(
                     WARNING,
                     "sync_templates_parado",
                     f"{waiting} template(s) aguardando a Meta sem sincronizar há mais de 30 min.",
+                )
+            )
+    if settings is not None and settings.fmcommand_mode != "off":
+        found.extend(license_findings(db, settings, now))
+    return found
+
+
+def license_findings(db: Database, settings: Settings, now: datetime) -> list[Finding]:
+    """Achados do Billing Central. Só existem fora do modo `off`; nada aqui lê dado de pessoa."""
+    found: list[Finding] = []
+    with db.tx(system=True) as conn:
+        sync = conn.execute(
+            "SELECT last_success_at, last_error, consecutive_failures FROM license_sync_state"
+        ).fetchone()
+        if settings.fmcommand_api_base_url and sync is not None:
+            stale = timedelta(minutes=settings.fmcommand_stale_after_minutes)
+            last = sync["last_success_at"]
+            if last is None or now - last > stale:
+                found.append(
+                    Finding(
+                        WARNING,
+                        "licencas_sem_reconciliacao",
+                        "A reconciliação de licenças com o Command não teve sucesso há mais de "
+                        f"{settings.fmcommand_stale_after_minutes} min"
+                        + (f" (último erro: {sync['last_error']})." if sync["last_error"] else "."),
+                    )
+                )
+        active = _one(
+            conn,
+            "SELECT count(*) FROM commercial_links WHERE authority = 'fmcommand' "
+            "AND contingency_started_at IS NOT NULL AND contingency_exhausted_at IS NULL",
+        )
+        if active:
+            found.append(
+                Finding(
+                    WARNING,
+                    "licencas_em_contingencia",
+                    f"{active} licença(s) em contingência (máximo 72 h, sem renovação automática).",
+                )
+            )
+        exhausted = _one(
+            conn,
+            "SELECT count(*) FROM commercial_links WHERE authority = 'fmcommand' "
+            "AND contingency_exhausted_at IS NOT NULL AND state IN ('active', 'past_due')",
+        )
+        if exhausted:
+            found.append(
+                Finding(
+                    CRITICAL,
+                    "licencas_contingencia_esgotada",
+                    f"{exhausted} cliente(s) suspensos por contingência esgotada: confirmar com o "
+                    "Command.",
+                )
+            )
+        failed = _one(
+            conn,
+            "SELECT count(*) FROM license_events WHERE outcome = 'failed' AND received_at < %s",
+            (now - EVENT_FAILED_AFTER,),
+        )
+        if failed:
+            found.append(
+                Finding(
+                    WARNING,
+                    "eventos_de_licenca_falhos",
+                    f"{failed} evento(s) de licença falharam (a reconciliação tenta corrigir).",
                 )
             )
     return found
