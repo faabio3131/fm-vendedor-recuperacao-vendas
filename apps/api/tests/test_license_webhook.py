@@ -54,8 +54,9 @@ def count(env: Env, sql: str, params: tuple[Any, ...] = ()) -> int:
 def provision(client: Any, lic: Lic) -> dict[str, Any]:
     res = post_event(client, lic.event())
     assert res.status_code == 200, res.text
-    assert res.json() == {"status": "provisioned"}
-    return res.json()
+    body: dict[str, Any] = res.json()
+    assert body == {"status": "provisioned"}
+    return body
 
 
 # ------------------------------------------------------------------ desligado e borda
@@ -463,7 +464,8 @@ def test_license_tables_are_invisible_and_unwritable_with_a_tenant_context(
     tenant_id = link[0]
     with db.tx(tenant_id=tenant_id) as conn:
         for table in ("commercial_links", "license_events", "license_shadow", "license_sync_state"):
-            assert conn.execute(f"SELECT count(*) AS n FROM {table}").fetchone()["n"] == 0
+            row = conn.execute(f"SELECT count(*) AS n FROM {table}").fetchone()
+            assert row is not None and row["n"] == 0
     with pytest.raises(psycopg.Error), db.tx(tenant_id=tenant_id) as conn:
         conn.execute("UPDATE commercial_links SET authority = 'direct'")
         conn.execute(
