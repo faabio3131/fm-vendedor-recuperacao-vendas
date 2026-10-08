@@ -1,6 +1,6 @@
 # ADR-0005 — Billing Central do FM Command: o AtendeVendeIA obedece à licença
 
-Status: **DIRETRIZ APROVADA pelo Diretor em 08/10/2026; detalhamento técnico PROPOSTO e sem implementação** · Data: 2026-10-08
+Status: **DIRETRIZ E COMPLEMENTO APROVADOS pelo Diretor em 08/10/2026; detalhamento técnico PROPOSTO e sem implementação** · Data: 2026-10-08
 Auditoria que sustenta este ADR: `docs/auditoria/AUDITORIA_BILLING_CENTRAL_2026-10-08.md`. Contrato: `docs/FM_COMMAND_LICENCAS.md`.
 
 ## Contexto
@@ -96,8 +96,43 @@ Gateways, conciliação financeira, taxas, impostos e lucro líquido (valor vend
 | G4 | Reconciliação e contingência provadas (derrubar o Command de propósito) | os dois |
 | G5 | Virada por assinatura, depois adaptadores de gateway no Command | Command |
 
+## Complemento do Diretor (08/10/2026): central financeira de TODOS os SaaS
+
+O FM Command será a central financeira de assinaturas de **todos** os SaaS da FM Tecnologia (Kordena, AtendeVendeIA, Iron Fit, NFCore e produtos futuros).
+Funcionamento obrigatório, e como este ADR o cobre:
+
+| # | Complemento | Cobertura |
+|---|---|---|
+| 1 | Clientes contratam os planos e pagam por gateways autorizados da FM (Cakto, Hotmart, Asaas, Stripe) | Fora do produto. O AtendeVendeIA nunca cobra nem recebe pagamento |
+| 2 | Gateways cobram e repassam à conta financeira da FM Tecnologia | Relação FM e provedor. O produto não vê valores líquidos nem a conta bancária |
+| 3 | O Command centraliza assinaturas, mensalidades, pagamentos confirmados, renovações, cancelamentos, inadimplência, taxas e conciliação | **Só no Command.** O evento de licença não carrega taxa nem conciliação; traz `payment.amount_cents` apenas informativo. Valor vendido, valor recebido e lucro líquido ficam no Command |
+| 4 | O Command determina o estado comercial das licenças e o comunica aos SaaS | Eventos `fmcc.license.v1` e API de licenças (já no contrato) |
+| 5 | O AtendeVendeIA não mantém autoridade própria **permanente**; provisiona e aplica licenças | `authority` por assinatura; o destino final é só `fmcommand`; `plans.grace_days` vira reserva e deixa de ser regra |
+| 6 | Cakto e Hotmart do AtendeVendeIA continuam durante a migração, sem interromper vendas nem assinaturas existentes | Nada muda até a virada de cada assinatura; o recebimento direto atual não é tocado por este trabalho |
+| 7 | Transição gradual, sem duplicidade de cobrança, assinatura ou evento | Seção seguinte |
+
+### Prevenção de duplicidade (cobrança, assinatura e evento)
+
+- **Cobrança:** cada assinatura é cobrada por **um só** gateway e uma só conta, definido pelo Command (`subscription_id` → referência da assinatura no gateway). O Command cria a assinatura no gateway com
+  chave de idempotência por cliente, produto, plano e período; não cria uma segunda enquanto houver uma viva. Enquanto uma assinatura for `direct:*`, o Command **não** cobra nem recria a assinatura dela.
+- **Assinatura:** uma assinatura nunca tem duas autoridades (`authority` único, ver "Responsável único" acima). Cliente que já assina pela Cakto ou Hotmart é **importado** pelo Command com o `subscription_id`
+  ligado à referência existente no gateway, **sem nova cobrança**.
+- **Evento:** `event_id` único mais `license_version`; evento de quem não é a autoridade é registrado como `not_authoritative` e não aplicado. Antes da virada, o modo sombra só compara.
+- **Reembolso e cancelamento** feitos direto no gateway antes da virada continuam chegando pelo recebimento direto; depois da virada o Command é quem os recebe e comunica.
+
+### Escopo multi-produto e implicação para o Kordena
+
+- O contrato `fmcc.license.v1` é **independente de produto** (`product_code`); Kordena, Iron Fit, NFCore e futuros adotam o mesmo contrato e a mesma API de licenças. Nada nele é específico do AtendeVendeIA além dos valores de `product_code` e `plan_code`.
+- **Atenção (achado da auditoria):** o **Kordena já tem a própria cobrança**: provedores de pagamento, política de roteamento e direitos de acesso (`entitlements`) dentro do Kordena, e o Command hoje apenas o comanda e lê.
+  Tornar o Command a autoridade também do Kordena é uma **migração própria**, com a mesma lógica de transição (responsável único, modo sombra, virada por assinatura), e exige ADR no Command que **substitua** a regra
+  atual dos documentos dele (FMCC-09, seção 6: a autoridade da mutação comercial do Kordena é o catálogo canônico do próprio Kordena). Isto é decisão e trabalho do repositório do Command, fora desta PR.
+- Os documentos do Command também afirmam que uma assinatura ativa **não** deve ser contada a partir de fatos "ativou" acumulados, porque um cancelamento posterior deixaria a contagem falsa. Por isso as licenças deste contrato
+  carregam o **estado completo e a versão**, em vez de só mudanças.
+
 ## Perguntas ainda abertas
 
 1. Formato dos identificadores (UUID versus texto prefixado) e quem os emite além do Command.
 2. Confirmar os parâmetros propostos: contingência de 72 h e reconciliação a cada 15 min.
 3. Quem aprova a virada de uma assinatura para `fmcommand` e com qual registro.
+4. Ordem de migração dos outros produtos (o Kordena exige ADR próprio no Command) e quais gateways (Asaas, Stripe) o Command adota primeiro.
+5. Como o Command importa as assinaturas já existentes na Cakto e na Hotmart sem criar nova cobrança.

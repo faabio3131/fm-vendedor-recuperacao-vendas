@@ -1,9 +1,9 @@
-# Contrato de licenças: FM Command (Billing Central) para o AtendeVendeIA
+# Contrato de licenças: FM Command (Billing Central) para os SaaS da FM Tecnologia (AtendeVendeIA como primeiro consumidor)
 
 Versão do contrato: `fmcc.license.v1` · Escrito em 08/10/2026 · **PROPOSTA**: nada aqui existe ainda do lado do Command nem do AtendeVendeIA.
 Decisão e cercas: `docs/adr/0005-billing-central-do-fm-command.md`. Auditoria: `docs/auditoria/AUDITORIA_BILLING_CENTRAL_2026-10-08.md`.
 
-O Command emite licenças; o AtendeVendeIA as aplica. O contrato tem dois canais: **eventos assinados** (webhook) e **API de licenças** (reconciliação).
+O Command emite licenças; cada SaaS as aplica. **O contrato é independente de produto** (`product_code`): Kordena, AtendeVendeIA, Iron Fit, NFCore e futuros usam o mesmo `fmcc.license.v1`. Este documento descreve o consumo pelo AtendeVendeIA, o primeiro. O contrato tem dois canais: **eventos assinados** (webhook) e **API de licenças** (reconciliação).
 
 ## 1. Versionamento
 
@@ -17,7 +17,7 @@ O Command emite licenças; o AtendeVendeIA as aplica. O contrato tem dois canais
 | `customer_id` | Cliente comercial na FM; **chave canônica**. Nunca é o e-mail |
 | `subscription_id` | Assinatura do cliente a um produto |
 | `license_id` | Direito de acesso concedido por uma assinatura a um produto |
-| `product_code` | Produto (`ATENDEVENDEIA`); o receptor recusa produto diferente do seu |
+| `product_code` | Produto (`ATENDEVENDEIA`, `KORDENA`, `IRON`...), definido pelo Command uma só vez; cada receptor recusa produto diferente do seu |
 | `event_id` | Identificador único do evento (chave de idempotência) |
 
 O `tenant_id` do AtendeVendeIA **nunca** trafega: o produto mapeia `customer_id`, `subscription_id` e `license_id` para o seu tenant (`commercial_links`).
@@ -131,6 +131,15 @@ em `audit` com o `license_id` como alvo. Reconciliação, divergência, entrada 
 
 `200 {"status":"<resultado>"}` · `400` JSON inválido · `401` assinatura, carimbo ou `kid` inválido · `404` rota desligada · `413` corpo grande · `422` `schema_version` ou `product_code` desconhecido ·
 `429` limite de falhas por IP. O Command reenvia em rede e `5xx`; `4xx` não adianta repetir.
+
+## 13. Fronteira financeira e multi-produto
+
+- O Command centraliza assinaturas, mensalidades, pagamentos confirmados, renovações, cancelamentos, inadimplência, **taxas e conciliação**. Nada disso é enviado ao produto: o evento de licença
+  não carrega taxa, líquido, conta de repasse nem dado do gateway além de `source.gateway` e `gateway_ref` (auditoria). `payment.amount_cents` é informativo.
+- Valor vendido, valor recebido e lucro líquido existem **só no Command**.
+- O produto **não** cobra, não cria assinatura em gateway e não mantém autoridade permanente sobre o estado comercial. Provisiona (tenant, conta, administrador, convite) e aplica a licença.
+- Cliente já assinante pela Cakto ou Hotmart é importado pelo Command com `subscription_id` ligado à referência existente, **sem nova cobrança**; até a virada, o recebimento direto continua sendo a autoridade (campo `authority`).
+- Cada assinatura tem um só gateway cobrando e uma só autoridade; ver ADR-0005, "Prevenção de duplicidade".
 
 ## 12. O que cada lado precisa construir (nada existe ainda)
 

@@ -52,13 +52,34 @@ Pedido do Diretor: auditar a estrutura do AtendeVendeIA e verificar o acesso ao 
 6. Não há **responsável único por assinatura**: hoje Cakto e Hotmart agem sozinhas, e a convivência com o Command exigiria evitar duplicidade.
 7. A assinatura de webhook usa um formato por provedor; o Command precisará de um formato próprio, com `kid` para rotação de segredo.
 
-## 4. Pontos que exigem decisão ou alinhamento (não bloqueiam a documentação)
+## 4. Contratos disponíveis hoje (auditados) e compatibilidade
+
+Pedido do complemento do Diretor: auditar os contratos disponíveis antes de documentar.
+
+| Contrato existente | Dono | Natureza | Relação com o Billing Central |
+|---|---|---|---|
+| `GET /v1/control-plane/fmcc/health` e `/snapshot` do AtendeVendeIA (`atendevendeia.fmcc.v1`, ADR-0004) | AtendeVendeIA | Leitura agregada pelo Command, token de serviço | **Mantido.** Continua sendo a saúde e a contagem de assinaturas; não vira canal de licença |
+| `POST /v1/platform/webhooks/{cakto,hotmart}` | AtendeVendeIA | Entrada de compra direta do gateway | **Preservado na transição** (complemento 6); desligado só no fim, por assinatura |
+| `kordena.fmcc.commercial.v1` (snapshot com `customers`, `subscriptions`, `billing_transactions`, `entitlements`, `catalog`) e comandos comerciais governados | Kordena e Command | Pull do Command mais comandos do Command ao Kordena | O Kordena **tem autoridade própria de cobrança**. Migrar o Kordena para o Billing Central é projeto separado (ver ADR-0005) |
+| `ConnectorFact` e `SourceDefinition` (`pull`, `webhook`, `hybrid`) | Command | Contrato interno de integração | Base reutilizável para a fonte do AtendeVendeIA; o runtime recusa o modo `webhook` hoje |
+| Contratos de IRON, CampaIA e NFCore com o Command | Command | **Inexistentes** (`UNSUPPORTED` no registro de 06/10/2026) | Esses produtos entram direto no contrato `fmcc.license.v1`, sem legado a migrar |
+
+**Compatibilidade verificada com o contrato proposto (`fmcc.license.v1`):**
+
+- **Cabe no modelo do Command:** `externalId` do fato (`event_id` ou `license_id` com versão), `sourceTimestamp` (`occurred_at`), `mappingVersion` (`schema_version`), `secretRef` (segredo por referência) e a lista de origens permitidas (`https`).
+- **Corrige uma armadilha documentada por ele:** o Command não conta assinatura ativa a partir de fatos cumulativos; o contrato carrega **estado completo mais versão**, que é o modelo certo para "ativo agora".
+- **Nome do produto:** o registro do Command usa `IRON` (o Diretor fala "Iron Fit"); o `product_code` deve ser definido pelo Command e uma só vez.
+- **Conflito de regra a resolver no Command:** os documentos dele atribuem a autoridade comercial do Kordena ao catálogo do próprio Kordena. A diretriz nova a inverte. É preciso ADR no Command que a substitua.
+- **Duplicidade de cobrança:** o AtendeVendeIA nunca cobra, então o risco de cobrança duplicada está só entre gateways e Command; o ADR-0005 define a regra (um gateway por assinatura, importação sem nova cobrança, idempotência por cliente, produto, plano e período).
+
+## 5. Pontos que exigem decisão ou alinhamento (não bloqueiam a documentação)
 
 - Formato de identificador do Command (UUID versus texto prefixado) e quem os emite.
 - Parâmetros de contingência (proposta no ADR: 72 horas) e de reconciliação (proposta: 15 minutos).
 - Quem pode mudar o responsável de uma assinatura (Cakto direta para Command) e com qual aprovação.
+- Ordem de migração dos produtos e ADR no Command para o Kordena.
 
-## 5. Cercas deste trabalho
+## 6. Cercas deste trabalho
 
 - Esta PR só acrescenta documentos. **Sem merge, deploy ou mudança operacional** até aprovação posterior do Diretor.
 - O lançamento do AtendeVendeIA segue com Cakto e Hotmart diretas (decisão 7 da diretriz); nada aqui o atrasa.
