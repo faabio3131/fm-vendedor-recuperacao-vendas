@@ -31,7 +31,7 @@ cabeçalhos de segurança. Detalhes técnicos em `docs/SEGURANCA.md`. Nenhum sis
 
 - **Meta** (WhatsApp, Messenger, Instagram): entrega das mensagens, sob os termos da Meta.
 - **Google** (login) e **Google Gemini** (IA): o texto da conversa e o cadastro de ofertas são enviados ao modelo para gerar a resposta sugerida. **Credenciais nunca vão para a IA.**
-- **Hospedagem e banco de dados**: região de **São Paulo, Brasil** (decisão do Diretor, 05/10/2026). **[Provedor a definir: o Render, previsto hoje no rascunho, não tem região no Brasil; só publicar esta frase depois de contratar um provedor que tenha.]**
+- **Hospedagem e banco de dados**: servidores **no exterior** (Estados Unidos ou outra região fora do Brasil, conforme o provedor de nuvem; decisão do Diretor, 08/10/2026, provável Render). **[Se o provedor final for outro, conferir a região e ajustar esta frase.]**
 - Plataformas de venda (Cakto, Hotmart): recebemos delas os eventos de compra do Cliente.
 - Autoridades, quando a lei exigir.
 
