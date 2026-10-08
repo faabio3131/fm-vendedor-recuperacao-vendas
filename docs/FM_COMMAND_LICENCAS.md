@@ -101,7 +101,11 @@ Cada assinatura tem um `authority` no AtendeVendeIA (`direct` (Cakto/Hotmart, co
 `not_authoritative`, registrado e **não aplicado** (e o inverso para eventos diretos depois da virada). **Modo sombra** (`FM_FMCOMMAND_MODE=shadow`): todo evento `fmcommand` é
 validado e registrado, nenhum é aplicado.
 
-## 7.1 Gates para transferência de autoridade\n\nAntes da mudança de `authority`, o adaptador do gateway correspondente deve estar operacional e homologado no Command; pagamentos e estornos devem estar reconciliados; os estados comerciais devem coincidir em modo sombra; o Command deve emitir eventos e fornecer autorizações de provisionamento via API. A mudança é por assinatura, com aprovação humana registrada da administração central da FM Tecnologia (ator, justificativa, horário, evidências), idempotência, proteção concorrencial e plano de recuperação governado. Em caso de falha, não permitir simultaneamente duas autoridades de escrita.\n\n## 8. API de licenças do Command (reconciliação)
+## 7.1 Gates para transferência de autoridade
+
+Antes da mudança de `authority`, o adaptador do gateway correspondente deve estar operacional e homologado no Command; pagamentos e estornos devem estar reconciliados; os estados comerciais devem coincidir em modo sombra; o Command deve emitir eventos e fornecer autorizações de provisionamento via API. A mudança é por assinatura, com aprovação humana registrada da administração central da FM Tecnologia (ator, justificativa, horário, evidências), idempotência, proteção concorrencial e plano de recuperação governado. Em caso de falha, não permitir simultaneamente duas autoridades de escrita.
+
+## 8. API de licenças do Command (reconciliação)
 
 Somente leitura, `Authorization: Bearer <token>` com escopo `licenses:read` limitado ao produto `ATENDEVENDEIA`; base `https` em origem permitida.
 
@@ -113,7 +117,11 @@ Somente leitura, `Authorization: Bearer <token>` com escopo `licenses:read` limi
   `license.reconciled` com o antes e o depois. Em modo sombra, só relata.
 - Erros `5xx`, `429` e rede: nova tentativa com espera crescente; `4xx` de credencial gera alerta (não adianta repetir).
 
-## 8.1 Recuperação de provisionamento perdido\n\nA listagem de reconciliação e a consulta individual devem devolver também o estado completo de autorização de provisionamento, incluindo os campos necessários para a criação idempotente do tenant e convite. O SaaS não pode depender exclusivamente do primeiro webhook de ativação. O provisionamento deve ser feito uma única vez por licença/assinatura, com mapeamento estável e proteção contra corrida.\n\n## 9. Indisponibilidade e contingência
+## 8.1 Recuperação de provisionamento perdido
+
+A listagem de reconciliação devolve também o estado completo de autorização de provisionamento, incluindo os campos necessários para a criação idempotente do tenant e convite. O SaaS não depende exclusivamente do primeiro webhook de ativação. O provisionamento ocorre uma única vez por licença/assinatura, com mapeamento estável e proteção contra corrida.
+
+## 9. Indisponibilidade e contingência
 
 - Sem resposta do Command: vale a **última licença validada** (`last_validated_at`).
 - Licença dentro de `valid_until` (ou de `grace_ends_at`): segue normal.
