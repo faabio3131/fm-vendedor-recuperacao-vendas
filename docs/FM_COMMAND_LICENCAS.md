@@ -14,11 +14,11 @@ O Command emite licenças; cada SaaS as aplica. **O contrato é independente de 
 
 | Campo | Significado |
 |---|---|
-| `customer_id` | Cliente comercial na FM; **chave canônica**. Nunca é o e-mail |
+| `customer_id` | Cliente comercial na FM; **chave canônica**, UUIDv7 emitido pelo Command (parâmetro aprovado). Nunca é o e-mail |
 | `subscription_id` | Assinatura do cliente a um produto |
 | `license_id` | Direito de acesso concedido por uma assinatura a um produto |
 | `product_code` | Produto (`ATENDEVENDEIA`, `KORDENA`, `IRON`...), definido pelo Command uma só vez; cada receptor recusa produto diferente do seu |
-| `event_id` | Identificador único do evento (chave de idempotência) |
+| `event_id` | Texto opaco, único por evento (chave de idempotência); o AtendeVendeIA não presume formato |
 
 O `tenant_id` do AtendeVendeIA **nunca** trafega: o produto mapeia `customer_id`, `subscription_id` e `license_id` para o seu tenant (`commercial_links`).
 
@@ -37,7 +37,7 @@ O `tenant_id` do AtendeVendeIA **nunca** trafega: o produto mapeia `customer_id`
 
 ## 4. Corpo do evento (webhook)
 
-`POST /v1/platform/webhooks/fmcommand` (rota da família de compras; desligada com 404 sem `FM_PLATFORM_FMCOMMAND_SECRET`).
+`POST /v1/platform/webhooks/fmcommand` (rota própria, anterior à genérica `/{provider}`; sem efeito com `FM_FMCOMMAND_MODE=off`, o padrão).
 
 ```json
 {
@@ -57,8 +57,7 @@ O `tenant_id` do AtendeVendeIA **nunca** trafega: o produto mapeia `customer_id`
     "plan_code": "fase-1",
     "valid_from": "2026-10-08T00:00:00Z",
     "valid_until": "2026-11-08T00:00:00Z",
-    "grace_ends_at": null,
-    "contingency_hours": 72
+    "grace_ends_at": null
   },
   "provisioning": {
     "authorized": true,
@@ -98,7 +97,7 @@ O tipo descreve o motivo; **o efeito vem de `license.state`** e da regra de vers
 
 ## 7. Responsável único (transição com Cakto e Hotmart)
 
-Cada assinatura tem um `authority` no AtendeVendeIA (`direct:cakto`, `direct:hotmart`, `fmcommand`). Evento `fmcommand` para assinatura com outra autoridade: resultado
+Cada assinatura tem um `authority` no AtendeVendeIA (`direct` (Cakto/Hotmart, com a origem em `previous_source`) ou `fmcommand`). Evento `fmcommand` para assinatura com outra autoridade: resultado
 `not_authoritative`, registrado e **não aplicado** (e o inverso para eventos diretos depois da virada). **Modo sombra** (`FM_FMCOMMAND_MODE=shadow`): todo evento `fmcommand` é
 validado e registrado, nenhum é aplicado.
 
@@ -108,10 +107,9 @@ Somente leitura, `Authorization: Bearer <token>` com escopo `licenses:read` limi
 
 | Rota | Resposta |
 |---|---|
-| `GET /v1/licenses/{license_id}` | `200` com o objeto `license` completo, `customer_id`, `subscription_id`, `product_code`, `as_of`; `404` se não existir |
-| `GET /v1/licenses?product_code=ATENDEVENDEIA&updated_since=<cursor>&limit=100` | `200` `{ "items": [...], "next_cursor": "...", "as_of": "..." }` ordenado por atualização |
+| `GET /v1/licenses?product_code=ATENDEVENDEIA&limit=100&cursor=<cursor>` | `200` `{ "schema_version": "fmcc.license.v1", "items": [...], "next_cursor": "..."|null, "as_of": "..." }`; cada item traz `license`, `provisioning` e `source`, o suficiente para criar conta e convite mesmo com webhook perdido |
 
-- O AtendeVendeIA reconcilia **a cada 15 minutos** (proposta), na subida e depois de salto de versão. Divergência: aplica a licença do Command (maior `license_version`), registra
+- O AtendeVendeIA reconcilia **a cada 15 minutos** (parâmetro aprovado, configurável de 1 a 60 min), na subida e depois de salto de versão. Divergência: aplica a licença do Command (maior `license_version`), registra
   `license.reconciled` com o antes e o depois. Em modo sombra, só relata.
 - Erros `5xx`, `429` e rede: nova tentativa com espera crescente; `4xx` de credencial gera alerta (não adianta repetir).
 
@@ -119,12 +117,12 @@ Somente leitura, `Authorization: Bearer <token>` com escopo `licenses:read` limi
 
 - Sem resposta do Command: vale a **última licença validada** (`last_validated_at`).
 - Licença dentro de `valid_until` (ou de `grace_ends_at`): segue normal.
-- Passou do prazo sem confirmação: **contingência** de no máximo `contingency_hours` (teto fixo na configuração do AtendeVendeIA; o valor do Command nunca excede o teto; proposta: 72 h),
+- Passou do prazo sem confirmação: **contingência** de no máximo 72 h (teto fixo na configuração do AtendeVendeIA, `FM_FMCOMMAND_CONTINGENCY_HOURS` ≤ 72; o contrato não carrega esse valor; parâmetro aprovado),
   registrada no início e no fim. **Sem prorrogação automática:** ao fim, `suspended`. Só licença nova validada reabre.
 
 ## 10. Auditoria
 
-Cada evento gera linha em `platform_events` (corpo bruto cifrado) com `outcome` em `applied`, `duplicate`, `stale`, `ignored`, `not_authoritative`, `unmapped_product`, `unauthorized_provisioning`, `failed`, e registro
+Cada evento gera linha em `platform_events` (corpo bruto cifrado) com `outcome` em `provisioned`, `applied`, `applied_plan_unmapped`, `stale`, `validated`, `duplicate`, `ignored`, `shadow`, `not_authoritative`, `requires_adoption`, `unauthorized_provisioning`, `unmapped_plan`, `identity_mismatch`, `pending`, `no_link_inactive`, `failed`, e registro
 em `audit` com o `license_id` como alvo. Reconciliação, divergência, entrada e saída de contingência também. Nenhum registro leva dado de pagamento.
 
 ## 11. Respostas do webhook
@@ -138,7 +136,7 @@ em `audit` com o `license_id` como alvo. Reconciliação, divergência, entrada 
   não carrega taxa, líquido, conta de repasse nem dado do gateway além de `source.gateway` e `gateway_ref` (auditoria). `payment.amount_cents` é informativo.
 - Valor vendido, valor recebido e lucro líquido existem **só no Command**.
 - O produto **não** cobra, não cria assinatura em gateway e não mantém autoridade permanente sobre o estado comercial. Provisiona (tenant, conta, administrador, convite) e aplica a licença.
-- Cliente já assinante pela Cakto ou Hotmart é importado pelo Command com `subscription_id` ligado à referência existente, **sem nova cobrança**; até a virada, o recebimento direto continua sendo a autoridade (campo `authority`).
+- Cliente já assinante pela Cakto ou Hotmart é importado pelo Command com `subscription_id` ligado à referência existente, **sem nova cobrança**; até a virada, o recebimento direto continua sendo a autoridade (campo `authority`, que o Command também guarda, com a referência imutável `external_subscription_ref`).
 - Cada assinatura tem um só gateway cobrando e uma só autoridade; ver ADR-0005, "Prevenção de duplicidade".
 
 ## 13. O que cada lado precisa construir (nada existe ainda)
@@ -148,3 +146,9 @@ Source Registry hoje é recusado pelo runtime); API de licenças; fonte do Atend
 
 **AtendeVendeIA:** `commercial_links` e `tenant_plans.source = fmcommand`; normalizador e verificação `fmcommand`; evento de suspensão externa; vigência e `license_version`;
 reconciliação; contingência; modo sombra; testes de assinatura, replay, idempotência, ordem, transição e isolamento entre clientes.
+
+## 14. Compatibilidade com o Command (PR #62) e implementação
+
+Conferido contra `FM-CONTROL-CENTER` PR #62 (somente a fundação; nada operacional): estados, validação (`UUID_V7`, versão monotônica, `valid_from < valid_until`, `grace_ends_at` só em `past_due`), regra de duplicado/obsoleto/identidade divergente e a contingência fail-closed de 72 h são **idênticos** aos do AtendeVendeIA.
+Implementação no AtendeVendeIA: PR [#59](https://github.com/faabio3131/fm-vendedor-recuperacao-vendas/pull/59) e `docs/FM_COMMAND_LICENCAS_IMPLEMENTACAO.md` (variáveis `FM_FMCOMMAND_*`, tudo desligado por padrão, sem merge).
+Parâmetros aprovados: UUIDv7 emitido pelo Command; reconciliação a cada 15 min; contingência máxima 72 h, persistida e sem renovação automática; troca de autoridade só com aprovação humana registrada; gateways iniciais Cakto e Hotmart.

@@ -57,14 +57,14 @@ Nova tabela do AtendeVendeIA (proposta, sem migration nesta PR): `commercial_lin
 
 - O AtendeVendeIA guarda a **última licença validada** (`license_version`, vigência e carência).
 - Command fora do ar **não suspende** quem estava ativo e dentro da vigência.
-- Se a vigência ou a carência vencer **sem** confirmação do Command, vale a **contingência**: no máximo `contingency_hours` (proposta: 72 h, teto fixo na configuração do
+- Se a vigência ou a carência vencer **sem** confirmação do Command, vale a **contingência**: no máximo 72 h (`FM_FMCOMMAND_CONTINGENCY_HOURS` ≤ 72; aprovado; teto fixo na configuração do
   AtendeVendeIA, valor do Command nunca excede o teto), registrada na auditoria no início e no fim. **Sem prorrogação automática:** ao fim da contingência o
   estado vira `suspended` (nada é apagado). Só uma licença nova validada (evento ou reconciliação) reabre.
 - A reconciliação e os eventos nunca "prorrogam sozinhos": só uma licença emitida pelo Command altera datas.
 
 ### Segurança e governança (diretriz 9)
 
-- **Segredos separados:** um para receber eventos (`FM_PLATFORM_FMCOMMAND_SECRET`, assinatura HMAC), outro, de **leitura**, para o AtendeVendeIA consultar a API de licenças,
+- **Segredos separados:** um para receber eventos (`FM_FMCOMMAND_WEBHOOK_SECRETS`, assinatura HMAC com `kid`), outro, de **leitura**, para o AtendeVendeIA consultar a API de licenças,
   com escopo `licenses:read` limitado ao produto `ATENDEVENDEIA`. O token de leitura do Command sobre o AtendeVendeIA (ADR-0004) continua separado e só leitura.
 - **Sem dado em excesso:** o evento traz identificadores, estado, datas, plano e contato do administrador. Nunca cartão, CPF, endereço nem credencial de gateway.
 - **Multi-tenant:** a licença é de um cliente; o handler resolve o `tenant_id` pelo vínculo e processa em modo `system` do banco, com consultas fixas, como o recebimento
