@@ -21,7 +21,7 @@ Embedded Signup (exige CNPJ), cognição vertical do Core/Assistant (ADR-0002).
 
 | # | Decisão | Sugestão | Estado |
 |---|---|---|---|
-| D1 | Nome comercial, domínio e marca | **AtendeVendeIA** (`atendevendeia.com.br`) | NOME DECIDIDO em 03/10/2026; registro do domínio, consulta de marca e perfis sociais pendentes (ação do Diretor) |
+| D1 | Nome comercial, domínio e marca | **AtendeVendeIA** (`atendevendeia.com.br`) | NOME DECIDIDO em 03/10/2026; domínio `atendevendeia.com.br` REGISTRADO (Registro.br, 03/10/2026, expira em 03/10/2027; renovar antes); landing em atendevendeia.pages.dev (Cloudflare Pages, pasta `apps/landing`), domínio ainda por ligar; consulta de marca e perfis sociais pendentes (ação do Diretor) |
 | D2 | Preços e limites por plano (pesquisa de mercado) | Plano de entrada: **R$ 97,90/mês no anual** e **R$ 149,90/mês no mensal** (Diretor, 03/10/2026). Demais planos e limites de respostas de IA: ver seção 2.1 | PARCIAL: preço de entrada definido; planos acima e limites PENDENTES |
 | D3 | Quem paga as mensagens da Meta | O cliente, na própria conta Meta, controlando o próprio gasto | **DECIDIDO** em 03/10/2026 |
 | D4 | Conexão do WhatsApp sem Tech Provider e sem CNPJ (cliente com CPF) | Conexão simples para o cliente; caminho depende do teste real (seção 2.2) | PENDENTE |
