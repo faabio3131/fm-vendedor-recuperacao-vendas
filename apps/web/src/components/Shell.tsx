@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
 import { api, ApiError, storeTenant, type Me } from "@/lib/api";
+import { Brand } from "@/components/Brand";
 
 const MeContext = createContext<Me | null>(null);
 
@@ -75,7 +76,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <MeContext.Provider value={me}>
       <div className="shell">
         <aside className="side">
-          <div className="brand">AtendeVendeIA</div>
+          <Brand size={34} />
           <nav className="nav" aria-label="Principal">
             {NAV.filter((item) => !item.roles || item.roles.includes(me.tenant.role)).map((item) => (
               <Link key={item.href} href={item.href} aria-current={path === item.href ? "page" : undefined}>
