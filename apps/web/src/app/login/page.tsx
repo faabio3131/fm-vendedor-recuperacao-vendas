@@ -1,5 +1,6 @@
 "use client";
 
+import { Brand } from "@/components/Brand";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
@@ -84,6 +85,7 @@ export default function LoginPage() {
   return (
     <div className="center">
       <div className="card login">
+        <Brand size={96} stacked tagline />
         <h1>Entrar</h1>
         <p className="muted">Use a conta Google do e-mail da sua compra.</p>
         {CLIENT_ID ? <div ref={buttonRef} /> : <div className="alert">Login com Google não configurado neste ambiente.</div>}

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Atende seus clientes e recupera vendas no WhatsApp, levando até o link de pagamento.",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#000610" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
