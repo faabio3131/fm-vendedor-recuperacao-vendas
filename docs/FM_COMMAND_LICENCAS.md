@@ -132,7 +132,7 @@ em `audit` com o `license_id` como alvo. Reconciliação, divergência, entrada 
 `200 {"status":"<resultado>"}` · `400` JSON inválido · `401` assinatura, carimbo ou `kid` inválido · `404` rota desligada · `413` corpo grande · `422` `schema_version` ou `product_code` desconhecido ·
 `429` limite de falhas por IP. O Command reenvia em rede e `5xx`; `4xx` não adianta repetir.
 
-## 13. Fronteira financeira e multi-produto
+## 12. Fronteira financeira e multi-produto
 
 - O Command centraliza assinaturas, mensalidades, pagamentos confirmados, renovações, cancelamentos, inadimplência, **taxas e conciliação**. Nada disso é enviado ao produto: o evento de licença
   não carrega taxa, líquido, conta de repasse nem dado do gateway além de `source.gateway` e `gateway_ref` (auditoria). `payment.amount_cents` é informativo.
@@ -141,7 +141,7 @@ em `audit` com o `license_id` como alvo. Reconciliação, divergência, entrada 
 - Cliente já assinante pela Cakto ou Hotmart é importado pelo Command com `subscription_id` ligado à referência existente, **sem nova cobrança**; até a virada, o recebimento direto continua sendo a autoridade (campo `authority`).
 - Cada assinatura tem um só gateway cobrando e uma só autoridade; ver ADR-0005, "Prevenção de duplicidade".
 
-## 12. O que cada lado precisa construir (nada existe ainda)
+## 13. O que cada lado precisa construir (nada existe ainda)
 
 **Command** (`FM-CONTROL-CENTER`): emissão de `customer_id`, `subscription_id` e `license_id`; adaptadores de gateway; emissor de webhook assinado com fila e reenvio (o modo `webhook` do
 Source Registry hoje é recusado pelo runtime); API de licenças; fonte do AtendeVendeIA no Source Registry (hoje inexistente).
