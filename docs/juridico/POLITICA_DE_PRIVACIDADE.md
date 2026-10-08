@@ -30,7 +30,7 @@ cabeçalhos de segurança. Detalhes técnicos em `docs/SEGURANCA.md`. Nenhum sis
 ## 4. Com quem compartilhamos (suboperadores)
 
 - **Meta** (WhatsApp, Messenger, Instagram): entrega das mensagens, sob os termos da Meta.
-- **Google** (login) e **Google Gemini** (IA): o texto da conversa e o cadastro de ofertas são enviados ao modelo para gerar a resposta sugerida. **Credenciais nunca vão para a IA.**
+- **Google** (login) e **Google Gemini** (IA): o texto da conversa e o cadastro de ofertas são enviados ao modelo para gerar a resposta sugerida. Quando o recurso de voz está ativo, a mensagem de áudio do cliente final também é enviada ao modelo só para ser transcrita em texto; o áudio não é guardado, apenas o texto. **Credenciais nunca vão para a IA.**
 - **Hospedagem e banco de dados**: servidores **no exterior** (Estados Unidos ou outra região fora do Brasil, conforme o provedor de nuvem; decisão do Diretor, 08/10/2026, provável Render). **[Se o provedor final for outro, conferir a região e ajustar esta frase.]**
 - Plataformas de venda (Cakto, Hotmart): recebemos delas os eventos de compra do Cliente.
 - Autoridades, quando a lei exigir.

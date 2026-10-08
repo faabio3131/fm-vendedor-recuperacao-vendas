@@ -19,6 +19,16 @@ OPT_OUT_REPLY = (
 )
 
 
+def apply_opt_out(conn: Conn, tenant_id: uuid.UUID, conv_id: uuid.UUID, identity: str) -> None:
+    suppress_identity(conn, tenant_id, identity, "opt_out")
+    conn.execute(
+        "UPDATE conversations SET status = 'closed', last_inbound_at = now(), "
+        "last_message_at = now() WHERE id = %s",
+        (conv_id,),
+    )
+    enqueue_text(conn, tenant_id, conv_id, "system", OPT_OUT_REPLY)
+
+
 def record_inbound(
     conn: Conn,
     tenant_id: uuid.UUID,
@@ -29,13 +39,25 @@ def record_inbound(
     text: str,
     message_id: str,
     counts: dict[str, int],
+    media_id: str | None = None,
 ) -> None:
-    optout = is_opt_out(text)
+    """`media_id`: áudio a transcrever. A mensagem entra já tratada (o vendedor IA espera) e o
+    worker troca o texto pela transcrição; a conferência de opt-out acontece então."""
+    optout = is_opt_out(text) and media_id is None
     inserted = conn.execute(
         "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, status, "
-        "provider_message_id, handled) VALUES (%s, %s, 'in', 'customer', %s, 'received', %s, %s) "
+        "provider_message_id, handled, media_id, media_status) "
+        "VALUES (%s, %s, 'in', 'customer', %s, 'received', %s, %s, %s, %s) "
         "ON CONFLICT DO NOTHING RETURNING id",
-        (tenant_id, conv_id, text, message_id, optout),
+        (
+            tenant_id,
+            conv_id,
+            text,
+            message_id,
+            optout or media_id is not None,
+            media_id,
+            "pending" if media_id is not None else None,
+        ),
     ).fetchone()
     if inserted is None:
         counts["duplicates"] += 1
@@ -45,13 +67,7 @@ def record_inbound(
         "SELECT 1 FROM suppressions WHERE tenant_id = %s AND identity = %s", (tenant_id, identity)
     ).fetchone()
     if optout:
-        suppress_identity(conn, tenant_id, identity, "opt_out")
-        conn.execute(
-            "UPDATE conversations SET status = 'closed', last_inbound_at = now(), "
-            "last_message_at = now() WHERE id = %s",
-            (conv_id,),
-        )
-        enqueue_text(conn, tenant_id, conv_id, "system", OPT_OUT_REPLY)
+        apply_opt_out(conn, tenant_id, conv_id, identity)
         counts["opt_outs"] += 1
         return
     stop_cold_cases(conn, tenant_id, contact_id, datetime.now(UTC))

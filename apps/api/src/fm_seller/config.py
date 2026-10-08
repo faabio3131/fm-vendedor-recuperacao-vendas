@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     ai_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     ai_thinking_level: Literal["low", "medium", "high"] = "low"
     ai_timeout_seconds: float = Field(default=20.0, ge=1, le=60)
+    # Áudio do cliente (WhatsApp): transcrito pelo mesmo modelo e tratado como texto. Desligado
+    # por padrão: o áudio é enviado ao Google (suboperador já listado na política de privacidade).
+    voice_transcription: bool = False
+    voice_max_bytes: int = Field(default=2_000_000, ge=10_000, le=8_000_000)
 
     # Envio real pelo WhatsApp Cloud API. Desligado por padrão: só ligar depois de validar com uma
     # conta real (docs/PENDENCIAS_EXTERNAS.md). Em FM_ENV=test nunca é usado.

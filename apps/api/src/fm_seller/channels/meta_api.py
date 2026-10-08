@@ -84,3 +84,27 @@ class MetaClient:
         if not isinstance(data, dict):
             raise MetaUncertain("resposta fora do formato")
         return data
+
+    def download(self, url: str, token: str, *, max_bytes: int) -> bytes:
+        """Baixa um arquivo de mídia já resolvido pela Meta. Só https, sem redirecionamento e
+        com teto de tamanho (lido aos poucos, para não encher a memória)."""
+        if not url.startswith("https://"):
+            raise MetaRejected(400, None, "endereço de mídia fora de https")
+        try:
+            with self._client.stream(
+                "GET", url, headers={"Authorization": f"Bearer {token}"}, follow_redirects=False
+            ) as res:
+                if res.status_code >= 500:
+                    raise MetaUncertain(f"http {res.status_code}")
+                if res.status_code >= 400:
+                    raise MetaRejected(res.status_code, None, "mídia indisponível")
+                if res.status_code != 200:
+                    raise MetaUncertain(f"http {res.status_code}")
+                data = bytearray()
+                for chunk in res.iter_bytes():
+                    data.extend(chunk)
+                    if len(data) > max_bytes:
+                        raise MetaRejected(413, None, "mídia maior que o limite")
+                return bytes(data)
+        except httpx.HTTPError as exc:
+            raise MetaUncertain(f"rede: {type(exc).__name__}") from None

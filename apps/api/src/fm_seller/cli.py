@@ -14,7 +14,7 @@ import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import psycopg
 
@@ -271,6 +271,7 @@ def _cycle(
     redone_platform = reprocess_platform(db, box)
     cold = detect_cold_conversations(db)
     stats = run_due_steps(db, box, sender)
+    audios_first = _voice_step(db, box, settings, model, log)
     seller = run_ai_replies(db, model)
     outbox = flush_outbox(db, box, sender, social=social)
     templates = sync_all(db, box, gateway)
@@ -290,9 +291,41 @@ def _cycle(
                 "saida": outbox.__dict__,
                 "templates": templates.__dict__,
                 "licencas": licencas,
+                "audios": audios_first,
             }
         },
     )
+
+
+def _voice_step(
+    db: Database,
+    box: SecretBox,
+    settings: Settings | None,
+    model: AiModel,
+    log: logging.Logger,
+) -> dict[str, Any]:
+    """Transcreve áudios de clientes antes do vendedor IA; só ligado por FM_VOICE_TRANSCRIPTION."""
+    if settings is None or not settings.voice_transcription or not hasattr(model, "transcribe"):
+        return {}
+    from fm_seller.channels.meta_api import MetaClient
+    from fm_seller.channels.voice import Transcriber, transcribe_pending
+
+    try:
+        stats = transcribe_pending(
+            db,
+            box,
+            cast(Transcriber, model),
+            MetaClient(
+                base=settings.meta_graph_base,
+                version=settings.meta_graph_version,
+                timeout=settings.meta_timeout_seconds,
+            ),
+            max_bytes=settings.voice_max_bytes,
+        )
+        return dict(stats.__dict__)
+    except Exception:
+        log.exception("etapa de áudios falhou")
+        return {"erro": "falha"}
 
 
 def _license_step(
