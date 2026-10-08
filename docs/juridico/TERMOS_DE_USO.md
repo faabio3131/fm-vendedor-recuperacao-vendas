@@ -1,6 +1,6 @@
 # Termos de Uso do AtendeVendeIA (RASCUNHO)
 
-> **RASCUNHO para revisão de advogado (P8).** Não publicar sem revisão. Itens entre `[colchetes]` são dados da F&M a preencher.
+> **Aprovado pelo Diretor em 05/10/2026 e publicado no site; sem revisão de advogado, por decisão do Diretor.** Última atualização: 08/10/2026. Itens entre `[colchetes]`, se houver, são dados da F&M.
 > Versão do rascunho: 05/10/2026.
 
 ## 1. Quem somos e o que é o serviço

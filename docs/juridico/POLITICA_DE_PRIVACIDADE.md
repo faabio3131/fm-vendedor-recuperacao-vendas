@@ -1,6 +1,6 @@
 # Política de Privacidade do AtendeVendeIA (RASCUNHO)
 
-> **RASCUNHO para revisão de advogado (P8).** Itens entre `[colchetes]` a preencher. Versão do rascunho: 05/10/2026.
+> **Aprovado pelo Diretor em 05/10/2026 e publicado no site; sem revisão de advogado, por decisão do Diretor.** Última atualização: 08/10/2026. Itens entre `[colchetes]` são avisos de conferência.
 > Descreve o que o sistema **realmente faz hoje** (ver `docs/ARQUITETURA.md`, Bloco 18, e `docs/SEGURANCA.md`). Se o sistema mudar, atualize.
 
 ## 1. Papéis (LGPD, Lei 13.709/2018)
