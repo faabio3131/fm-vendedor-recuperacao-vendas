@@ -23,6 +23,7 @@ const NAV: { href: string; label: string; roles?: string[] }[] = [
   { href: "/reports", label: "Relatórios" },
   { href: "/connections", label: "Conexões" },
   { href: "/plan", label: "Meu plano" },
+  { href: "/install", label: "App no celular" },
   { href: "/privacy", label: "Privacidade", roles: ["owner", "admin"] },
 ];
 
