@@ -69,7 +69,7 @@ Agora: seguir `docs/PLANO_FASE_STAGING.md` (cada PR só entra com o CI verde). C
 Testes só com simuladores até o item B1 do plano, e só com o "go" do Fábio.
 
 Do Fábio, na subida ao servidor: escolher o banco; retomar ou recriar o ambiente no Render pelo guia
-`docs/STAGING_RENDER.md`; registrar `atendevendeia.com.br`; criar o Client ID do Google; colar a documentação
+`docs/STAGING_RENDER.md`; ligar `atendevendeia.com.br` (já registrado) à landing; criar o Client ID do Google; colar a documentação
 ou um evento de exemplo da Hotmart (a página oficial deu 403 e não foi contornada). Depois, com as contas:
 testes reais da seção 4 de `docs/LANCAMENTO_MVP.md`.
 
