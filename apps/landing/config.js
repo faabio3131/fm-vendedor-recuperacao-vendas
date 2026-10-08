@@ -1,0 +1,18 @@
+/* Configuração da landing do AtendeVendeIA. Edite SÓ este arquivo para liberar a página.
+ *
+ * liberado: false  -> todos os botões de entrada ficam como "Acesso em breve" (padrão, e o que vale se este arquivo falhar).
+ * liberado: true   -> os botões levam ao painel (campo `painel`). Só ligar depois da produção paga estar no ar.
+ *
+ * Os campos de texto vazios ("") ficam escondidos na página; nada de "preencher depois" aparece para o visitante.
+ */
+window.LANDING = {
+  liberado: false,
+  painel: "", // endereço do painel de PRODUÇÃO, por exemplo "https://painel.exemplo.com.br/login"
+  empresa: "FM Tecnologia LTDA",
+  cnpj: "", // por exemplo "00.000.000/0001-00" (aparece no rodapé quando preenchido)
+  sede: "", // por exemplo "Pouso Alegre, MG"
+  contato: "", // e-mail ou endereço de contato comercial (aparece no rodapé quando preenchido)
+  linkTermos: "", // endereço dos Termos de uso aprovados
+  linkPrivacidade: "", // endereço da Política de privacidade aprovada
+  siteEmpresa: "https://fmtecnologia.com.br",
+};
