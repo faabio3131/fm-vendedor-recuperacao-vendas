@@ -94,7 +94,10 @@ def enforce_grace(db: Database, *, now: datetime | None = None) -> int:
         rows = conn.execute(
             "SELECT tp.tenant_id FROM tenant_plans tp JOIN plans p ON p.key = tp.plan_key "
             "WHERE tp.status = 'past_due' AND tp.past_due_since IS NOT NULL "
-            "AND tp.past_due_since + make_interval(days => p.grace_days) <= %s FOR UPDATE OF tp",
+            "AND tp.past_due_since + make_interval(days => p.grace_days) <= %s "
+            # A carência de quem o Command governa é do Command (grace_ends_at da licença).
+            "AND NOT EXISTS (SELECT 1 FROM commercial_links cl WHERE cl.tenant_id = tp.tenant_id "
+            "AND cl.authority = 'fmcommand') FOR UPDATE OF tp",
             (stamp,),
         ).fetchall()
         for r in rows:

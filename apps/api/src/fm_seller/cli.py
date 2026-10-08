@@ -102,6 +102,56 @@ def plan_status_command(settings: Settings, tenant_id: str, status: str) -> int:
     return 0 if ok else 1
 
 
+def license_command(settings: Settings, args: argparse.Namespace) -> int:
+    """Billing Central: estado, reconciliação sob demanda e retorno seguro de autoridade."""
+    from fm_seller.errors import AppError
+    from fm_seller.licensing import authority
+    from fm_seller.licensing.reconcile import cycle as license_cycle
+
+    db = Database(settings.database_admin_url)
+    db.open()
+    try:
+        if args.cmd == "license-status":
+            with db.tx(system=True) as conn:
+                rows = conn.execute(
+                    "SELECT authority, state, count(*) AS n FROM commercial_links "
+                    "GROUP BY authority, state ORDER BY authority, state"
+                ).fetchall()
+                sync = conn.execute(
+                    "SELECT last_success_at, last_error, consecutive_failures "
+                    "FROM license_sync_state"
+                ).fetchone()
+            print("Modo:", settings.fmcommand_mode)
+            for r in rows:
+                print(f"  {r['authority']:9} {r['state']:9} {r['n']}")
+            if sync:
+                print("Última reconciliação ok:", sync["last_success_at"])
+                print("Falhas seguidas:", sync["consecutive_failures"])
+            return 0
+        if args.cmd == "license-reconcile":
+            if settings.fmcommand_mode == "off":
+                print("Modo off: nada a fazer.")
+                return 0
+            out = license_cycle(db, SecretBox(settings.secrets_keys), settings)
+            print(out)
+            return 0
+        try:
+            res = authority.release(
+                db,
+                settings,
+                tenant_id=uuid.UUID(args.tenant),
+                approved_by=args.approved_by,
+                evidence=args.evidence,
+            )
+        except AppError as exc:
+            print("ERRO:", exc.message)
+            return 1
+        print("Autoridade:", res)
+        return 0
+    finally:
+        db.close()
+
+
 def preflight_command(_settings: Settings | None, args: argparse.Namespace) -> int:
     """Confere o ambiente antes de subir. 0 = ok, 1 = avisos, 2 = crítico (não suba)."""
     from fm_seller.ops.preflight import run as run_preflight
@@ -211,6 +261,7 @@ def _cycle(
     model: AiModel,
     gateway: TemplateGateway,
     log: logging.Logger,
+    settings: Settings | None = None,
 ) -> None:
     suspended = lifecycle.enforce_grace(db)
     captures.purge_expired(db)
@@ -223,6 +274,7 @@ def _cycle(
     seller = run_ai_replies(db, model)
     outbox = flush_outbox(db, box, sender, social=social)
     templates = sync_all(db, box, gateway)
+    licencas = _license_step(db, box, settings, log)
     log.info(
         "ciclo",
         extra={
@@ -237,9 +289,25 @@ def _cycle(
                 "vendedor": seller.__dict__,
                 "saida": outbox.__dict__,
                 "templates": templates.__dict__,
+                "licencas": licencas,
             }
         },
     )
+
+
+def _license_step(
+    db: Database, box: SecretBox, settings: Settings | None, log: logging.Logger
+) -> dict[str, Any]:
+    """Licenças do Command: só fora do modo `off`; erro aqui NUNCA derruba o ciclo do worker."""
+    if settings is None or settings.fmcommand_mode == "off":
+        return {}
+    from fm_seller.licensing.reconcile import cycle as license_cycle
+
+    try:
+        return license_cycle(db, box, settings)
+    except Exception as exc:
+        log.exception("etapa de licenças falhou")
+        return {"erro": type(exc).__name__}
 
 
 def run_worker(interval: int, once: bool) -> None:
@@ -257,7 +325,7 @@ def run_worker(interval: int, once: bool) -> None:
     try:
         while True:
             try:
-                _cycle(db, box, sender, social, model, gateway, log)
+                _cycle(db, box, sender, social, model, gateway, log, settings)
             except Exception as exc:
                 # Um ciclo com erro não derruba o worker; o erro fica no log e no batimento
                 # (só o tipo: o detalhe pode ter dado de cliente). O alerta de worker parado
@@ -280,7 +348,9 @@ def ops_check_command(settings: Settings, *, require_worker: bool) -> int:
     db = Database(settings.database_url)
     db.open()
     try:
-        findings = ops_check(db, build_sender(settings), require_worker=require_worker)
+        findings = ops_check(
+            db, build_sender(settings), require_worker=require_worker, settings=settings
+        )
     finally:
         db.close()
     pending = pending_migrations(settings.database_admin_url)
@@ -431,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
     ct.add_argument("--email", required=True)
     ct.add_argument("--plan", default="fase-1")
     mp = sub.add_parser("map-product", help="Liga um produto da Cakto/Hotmart a um plano")
-    mp.add_argument("--provider", required=True, choices=["cakto", "hotmart"])
+    mp.add_argument("--provider", required=True, choices=["cakto", "hotmart", "fmcommand"])
     mp.add_argument("--product-id", required=True)
     mp.add_argument("--plan", required=True)
     ps = sub.add_parser("plan-status", help="Suspende ou reativa um cliente à mão (não apaga dado)")
@@ -478,6 +548,14 @@ def main(argv: list[str] | None = None) -> int:
         "revoke-platform-admin", help="Tira o acesso à administração da plataforma"
     )
     rpa.add_argument("--email", required=True)
+    sub.add_parser("license-status", help="Resumo das licenças do Command (somente leitura)")
+    sub.add_parser("license-reconcile", help="Reconcilia agora com o Command (shadow/enforce)")
+    lr = sub.add_parser(
+        "license-release", help="Retorno seguro: devolve a autoridade à Cakto/Hotmart (1 cliente)"
+    )
+    lr.add_argument("--tenant", required=True)
+    lr.add_argument("--approved-by", required=True)
+    lr.add_argument("--evidence", required=True)
     sub.add_parser("metrics", help="Números do sistema inteiro em JSON (sem conteúdo de conversa)")
     lt = sub.add_parser(
         "loadtest", help="Teste de carga leve contra uma API local (números da máquina de teste)"
@@ -547,6 +625,8 @@ def main(argv: list[str] | None = None) -> int:
         run_worker(args.interval, args.once)
     elif args.cmd in ("create-platform-admin", "revoke-platform-admin"):
         return platform_admin_command(settings, args)
+    elif args.cmd in ("license-status", "license-reconcile", "license-release"):
+        return license_command(settings, args)
     elif args.cmd == "metrics":
         return metrics_command(settings)
     elif args.cmd == "ai-check":
