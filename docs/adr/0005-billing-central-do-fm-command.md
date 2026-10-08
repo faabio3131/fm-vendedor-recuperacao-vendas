@@ -49,9 +49,9 @@ Nova tabela do AtendeVendeIA (proposta, sem migration nesta PR): `commercial_lin
 1. **Hoje:** todas as assinaturas são `direct:*`; o Command não participa. O lançamento não muda.
 2. **Modo sombra** (`FM_FMCOMMAND_MODE=shadow`): o AtendeVendeIA recebe e valida os eventos do Command, **registra** e compara com o estado real, mas **não aplica**.
    Divergências viram relatório. Critério para sair: período combinado sem divergência.
-3. **Virada por assinatura:** o Diretor autoriza e a assinatura passa a `authority = fmcommand` (registrado na auditoria). Dali em diante, eventos
+3. **Pré-requisitos obrigatórios de virada:** adaptador do gateway envolvido homologado no Command; pagamentos, estornos e assinaturas reconciliados com o provedor; autorização de provisionamento consultável pela API; validação de consistência entre estado direto e estado Command; plano de recuperação e rollback governado, com registro auditável e sem duas autoridades simultâneas. Só após esses gates, realizar a virada.\n4. **Virada por assinatura:** o Diretor autoriza e a assinatura passa a `authority = fmcommand` (registrado na auditoria). Dali em diante, eventos
    diretos da Cakto ou da Hotmart dessa assinatura são registrados com resultado `not_authoritative` e **ignorados**. Nenhuma assinatura tem dois responsáveis.
-4. **Fim:** quando todas as assinaturas estiverem no Command, os segredos da Cakto e da Hotmart são apagados (a rota volta a responder 404).
+5. **Fim:** quando todas as assinaturas estiverem no Command, os segredos da Cakto e da Hotmart são apagados (a rota volta a responder 404).
 
 ### Indisponibilidade e contingência (diretriz 6)
 
@@ -94,7 +94,7 @@ Gateways, conciliação financeira, taxas, impostos e lucro líquido (valor vend
 | G2 | AtendeVendeIA: recebimento `fmcommand` desligado por padrão, vínculo e testes | AtendeVendeIA |
 | G3 | Modo sombra com o Command emitindo eventos reais de teste | os dois |
 | G4 | Reconciliação e contingência provadas (derrubar o Command de propósito) | os dois |
-| G5 | Virada por assinatura, depois adaptadores de gateway no Command | Command |
+| G5 | Implementar e homologar adaptadores de gateway, reconciliação financeira e migração por assinatura, somente após aprovação humana registrada e gates de consistência | Command e AtendeVendeIA |
 
 ## Complemento do Diretor (08/10/2026): central financeira de TODOS os SaaS
 
@@ -129,7 +129,7 @@ Funcionamento obrigatório, e como este ADR o cobre:
 - Os documentos do Command também afirmam que uma assinatura ativa **não** deve ser contada a partir de fatos "ativou" acumulados, porque um cancelamento posterior deixaria a contagem falsa. Por isso as licenças deste contrato
   carregam o **estado completo e a versão**, em vez de só mudanças.
 
-## Perguntas ainda abertas
+## Parâmetros aprovados e controles complementares\n\n- Identificadores: UUIDv7 gerados exclusivamente pelo Command, trafegados como strings opacas; não usar e-mail como chave.\n- Reconciliação: a cada 15 minutos, com execução também no início e após detectar lacunas de versão.\n- Contingência: limite de 72 horas, prazo persistido e auditável que não reinicia em restart e nunca se aplica para reativar licenças explicitamente suspensas, canceladas, expiradas ou reembolsadas.\n- Virada de autoridade: exige aprovação humana da administração central da FM Tecnologia, com evidências de reconciliação, idempotência, controle de concorrência e recuperação governada.\n- A integração deve recuperar autorizações de provisionamento perdidas por consulta à API, não apenas por webhook.\n\n## Questões para refinamento de implementação
 
 1. Formato dos identificadores (UUID versus texto prefixado) e quem os emite além do Command.
 2. Confirmar os parâmetros propostos: contingência de 72 h e reconciliação a cada 15 min.
