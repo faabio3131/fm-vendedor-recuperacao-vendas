@@ -1,0 +1,110 @@
+# Produção em UM servidor (Hetzner ou outro com Docker). Não é usado por nada que roda hoje:
+# o staging continua no Render. Segredos ficam em /opt/fm-seller/.env (NUNCA no repositório).
+# Passo a passo: docs/HETZNER_PRODUCAO.md.
+name: fm-seller
+
+x-api-env: &api-env
+  FM_ENV: prod
+  FM_COOKIE_SECURE: "true"
+  FM_DATABASE_URL: postgresql://fm_app:${FM_APP_DB_PASSWORD}@db:5432/fm_seller
+  FM_DATABASE_ADMIN_URL: postgresql://fm_owner:${FM_OWNER_DB_PASSWORD}@db:5432/fm_seller
+  FM_SECRETS_KEYS: ${FM_SECRETS_KEYS}
+  FM_GOOGLE_CLIENT_ID: ${FM_GOOGLE_CLIENT_ID}
+  FM_WEB_ORIGIN: https://${APP_HOST}
+  FM_PUBLIC_BASE_URL: https://${API_HOST}
+  FM_PLATFORM_CAKTO_SECRET: ${FM_PLATFORM_CAKTO_SECRET:-}
+  FM_PLATFORM_HOTMART_HOTTOK: ${FM_PLATFORM_HOTMART_HOTTOK:-}
+  FM_AI_API_KEY: ${FM_AI_API_KEY:-}
+  FM_AI_MODEL: ${FM_AI_MODEL:-gemini-3.1-flash-lite}
+  FM_WHATSAPP_LIVE: ${FM_WHATSAPP_LIVE:-false}
+  FM_VOICE_TRANSCRIPTION: ${FM_VOICE_TRANSCRIPTION:-false}
+  FM_FMCOMMAND_MODE: ${FM_FMCOMMAND_MODE:-off}
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fm_owner
+      POSTGRES_PASSWORD: ${FM_OWNER_DB_PASSWORD}
+      POSTGRES_DB: fm_seller
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Sem "ports": o banco só existe dentro da rede interna do Docker, nunca na internet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fm_owner -d fm_seller"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  # Passo único a cada subida: cria o papel fm_app, aplica migrations, cria o primeiro cliente.
+  bootstrap:
+    build: { context: ../../apps/api }
+    image: fm-seller-api:local
+    command: ["python", "-m", "fm_seller.cli", "bootstrap"]
+    restart: "no"
+    environment:
+      <<: *api-env
+      FM_BOOTSTRAP_APP_PASSWORD: ${FM_APP_DB_PASSWORD}
+      FM_BOOTSTRAP_OWNER_EMAIL: ${FM_BOOTSTRAP_OWNER_EMAIL:-}
+      FM_BOOTSTRAP_TENANT_NAME: ${FM_BOOTSTRAP_TENANT_NAME:-}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+
+  api:
+    image: fm-seller-api:local
+    command: ["uvicorn", "fm_seller.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    environment: *api-env
+    depends_on:
+      bootstrap: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/v1/health', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+    networks: [internal]
+
+  worker:
+    image: fm-seller-api:local
+    command: ["python", "-m", "fm_seller.cli", "worker", "--interval", "30"]
+    restart: unless-stopped
+    environment: *api-env
+    depends_on:
+      bootstrap: { condition: service_completed_successfully }
+    networks: [internal]
+
+  web:
+    build:
+      context: ../../apps/web
+      args:
+        # Painel e API em subdomínios do mesmo site: o painel chama a API direto.
+        NEXT_PUBLIC_API_URL: https://${API_HOST}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${FM_GOOGLE_CLIENT_ID}
+    restart: unless-stopped
+    networks: [internal]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      APP_HOST: ${APP_HOST}
+      API_HOST: ${API_HOST}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api, web]
+    networks: [internal]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
