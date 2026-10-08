@@ -12,7 +12,7 @@ window.LANDING = {
   cnpj: "07.109.248/0001-57", // por exemplo "00.000.000/0001-00" (aparece no rodapé quando preenchido)
   sede: "Cajamar, SP", // por exemplo "Pouso Alegre, MG"
   contato: "privacidadeatendevendeia@gmail.com", // e-mail ou endereço de contato comercial (aparece no rodapé quando preenchido)
-  linkTermos: "", // endereço dos Termos de uso aprovados
-  linkPrivacidade: "", // endereço da Política de privacidade aprovada
+  linkTermos: "/termos/", // endereço dos Termos de uso aprovados
+  linkPrivacidade: "/privacidade/", // endereço da Política de privacidade aprovada
   siteEmpresa: "https://fmtecnologia.com.br",
 };
