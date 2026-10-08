@@ -10,7 +10,7 @@ O Command emite licenças; cada SaaS as aplica. **O contrato é independente de 
 - `schema_version` em todo corpo: `fmcc.license.v1`. Mudança que quebra compatibilidade cria `v2` em rota nova; `v1` continua aceita durante a migração.
 - Campos novos opcionais podem ser acrescentados em `v1`; o receptor **ignora campos desconhecidos** e **recusa** versão que não conhece (`422`).
 
-## 2. Identificadores (todos imutáveis, emitidos pelo Command, texto opaco)
+## 2. Identificadores (todos imutáveis, UUIDv7 emitidos pelo Command e transmitidos como texto opaco)
 
 | Campo | Significado |
 |---|---|
@@ -102,7 +102,7 @@ Cada assinatura tem um `authority` no AtendeVendeIA (`direct:cakto`, `direct:hot
 `not_authoritative`, registrado e **não aplicado** (e o inverso para eventos diretos depois da virada). **Modo sombra** (`FM_FMCOMMAND_MODE=shadow`): todo evento `fmcommand` é
 validado e registrado, nenhum é aplicado.
 
-## 8. API de licenças do Command (reconciliação)
+## 7.1 Gates para transferência de autoridade\n\nAntes da mudança de `authority`, o adaptador do gateway correspondente deve estar operacional e homologado no Command; pagamentos e estornos devem estar reconciliados; os estados comerciais devem coincidir em modo sombra; o Command deve emitir eventos e fornecer autorizações de provisionamento via API. A mudança é por assinatura, com aprovação humana registrada da administração central da FM Tecnologia (ator, justificativa, horário, evidências), idempotência, proteção concorrencial e plano de recuperação governado. Em caso de falha, não permitir simultaneamente duas autoridades de escrita.\n\n## 8. API de licenças do Command (reconciliação)
 
 Somente leitura, `Authorization: Bearer <token>` com escopo `licenses:read` limitado ao produto `ATENDEVENDEIA`; base `https` em origem permitida.
 
@@ -111,16 +111,16 @@ Somente leitura, `Authorization: Bearer <token>` com escopo `licenses:read` limi
 | `GET /v1/licenses/{license_id}` | `200` com o objeto `license` completo, `customer_id`, `subscription_id`, `product_code`, `as_of`; `404` se não existir |
 | `GET /v1/licenses?product_code=ATENDEVENDEIA&updated_since=<cursor>&limit=100` | `200` `{ "items": [...], "next_cursor": "...", "as_of": "..." }` ordenado por atualização |
 
-- O AtendeVendeIA reconcilia **a cada 15 minutos** (proposta), na subida e depois de salto de versão. Divergência: aplica a licença do Command (maior `license_version`), registra
+- O AtendeVendeIA reconcilia **a cada 15 minutos** (parâmetro aprovado), na subida e depois de salto de versão. Divergência: aplica a licença do Command (maior `license_version`), registra
   `license.reconciled` com o antes e o depois. Em modo sombra, só relata.
 - Erros `5xx`, `429` e rede: nova tentativa com espera crescente; `4xx` de credencial gera alerta (não adianta repetir).
 
-## 9. Indisponibilidade e contingência
+## 8.1 Recuperação de provisionamento perdido\n\nA listagem de reconciliação e a consulta individual devem devolver também o estado completo de autorização de provisionamento, incluindo os campos necessários para a criação idempotente do tenant e convite. O SaaS não pode depender exclusivamente do primeiro webhook de ativação. O provisionamento deve ser feito uma única vez por licença/assinatura, com mapeamento estável e proteção contra corrida.\n\n## 9. Indisponibilidade e contingência
 
 - Sem resposta do Command: vale a **última licença validada** (`last_validated_at`).
 - Licença dentro de `valid_until` (ou de `grace_ends_at`): segue normal.
-- Passou do prazo sem confirmação: **contingência** de no máximo `contingency_hours` (teto fixo na configuração do AtendeVendeIA; o valor do Command nunca excede o teto; proposta: 72 h),
-  registrada no início e no fim. **Sem prorrogação automática:** ao fim, `suspended`. Só licença nova validada reabre.
+- Passou do prazo sem confirmação: **contingência** de no máximo `contingency_hours` (teto fixo na configuração do AtendeVendeIA; o valor do Command nunca excede o teto; teto aprovado: 72 h),
+  registrada no início e no fim com `contingency_started_at` e `contingency_until` persistidos de forma durável (nunca reiniciar a janela por restart ou nova tentativa). Só se aplica à última licença previamente ativa ou em carência e não pode reativar um estado explicitamente `suspended`, `canceled`, `refunded` ou `expired`. **Sem prorrogação automática:** ao fim, `suspended`. Só licença nova validada reabre.
 
 ## 10. Auditoria
 
