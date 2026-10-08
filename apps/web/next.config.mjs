@@ -43,7 +43,11 @@ const nextConfig = {
   poweredByHeader: false,
   output: "standalone",
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // O navegador precisa rever o service worker a cada abertura, senão uma versão nova demora a valer.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, max-age=0" }] },
+    ];
   },
   async rewrites() {
     if (!apiProxyTarget) return [];
