@@ -15,6 +15,14 @@ Todos os botões de entrada mostram "Acesso em breve" e não têm link. O rodap�
 **ficam escondidos** até serem preenchidos no `config.js` (nada de "preencher depois" aparece para o visitante). O `index.html` tem `noindex` para não
 aparecer em buscadores enquanto estiver bloqueada.
 
+## Onde está publicada hoje
+Cloudflare Pages, projeto `atendevendeia` (conta da FM), ligado à branch `main` deste repositório:
+- Saída (Build output directory): `apps/landing`; sem comando de build; sem pasta raiz.
+- Endereço de teste: `https://atendevendeia.pages.dev`. Domínio real: `atendevendeia.com.br` (registrado no Registro.br em 03/10/2026), a ligar em Custom domains.
+- Cada mudança em `apps/landing/` que chega à `main` é publicada sozinha em poucos minutos. Para isso o app do Cloudflare no GitHub precisa ter acesso ao
+  repositório (GitHub, Settings, Applications, Cloudflare Workers and Pages, Repository access). Se aparecer o aviso "disconnected from your Git account",
+  conferir esse acesso.
+
 ## Como publicar (escolha uma)
 1. **Dentro do site da FM Tecnologia:** copiar a pasta `apps/landing/` inteira para uma pasta do site (por exemplo `/atendevendeia/`). Funciona em qualquer hospedagem de
    arquivos. Se o site tiver política de segurança de conteúdo (CSP), ela precisa permitir script e estilo do próprio endereço (os arquivos são separados, sem script embutido).
