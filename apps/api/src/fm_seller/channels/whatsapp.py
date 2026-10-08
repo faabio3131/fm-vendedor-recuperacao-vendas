@@ -82,6 +82,7 @@ def ingest_whatsapp(
     public_id: str,
     headers: Mapping[str, str],
     raw_body: bytes,
+    voice: bool = False,
 ) -> dict[str, int]:
     if len(raw_body) > MAX_BODY:
         raise AppError(413, "payload_too_large", "Corpo grande demais.")
@@ -115,7 +116,7 @@ def ingest_whatsapp(
                     for c in value.get("contacts", []) or []
                 }
                 for msg in value.get("messages", []) or []:
-                    _inbound(conn, tenant_id, msg, names, counts)
+                    _inbound(conn, tenant_id, msg, names, counts, voice)
                 for st in value.get("statuses", []) or []:
                     _status(conn, tenant_id, st, counts)
         conn.execute(
@@ -137,6 +138,16 @@ def _text_of(msg: Mapping[str, Any]) -> str:
         reply = inter.get("button_reply") or inter.get("list_reply") or {}
         return str(reply.get("title", ""))[:4000]
     return f"[mensagem do tipo {kind or 'desconhecido'}]"
+
+
+AUDIO_PLACEHOLDER = "[áudio em transcrição]"
+
+
+def _audio_id(msg: Mapping[str, Any]) -> str | None:
+    if str(msg.get("type", "")) != "audio":
+        return None
+    media = str((msg.get("audio") or {}).get("id", ""))
+    return media[:200] or None
 
 
 def upsert_conversation(
@@ -174,6 +185,7 @@ def _inbound(
     msg: Mapping[str, Any],
     names: Mapping[str, str],
     counts: dict[str, int],
+    voice: bool = False,
 ) -> None:
     phone = normalize_phone_br(msg.get("from"))
     message_id = str(msg.get("id", ""))
@@ -182,15 +194,17 @@ def _inbound(
     contact_id, conv_id = upsert_conversation(
         conn, tenant_id, phone, names.get(str(msg.get("from")), "")
     )
+    media_id = _audio_id(msg) if voice else None
     record_inbound(
         conn,
         tenant_id,
         contact_id=contact_id,
         conv_id=conv_id,
         identity=phone,
-        text=_text_of(msg),
+        text=AUDIO_PLACEHOLDER if media_id else _text_of(msg),
         message_id=message_id,
         counts=counts,
+        media_id=media_id,
     )
 
 

@@ -309,3 +309,14 @@ segundo**, latência média 19,6 ms, p50 16,3 ms, p95 37,2 ms, p99 58,5 ms, nenh
 Adicionar a nova chave **na frente** em `FM_SECRETS_KEYS` (`novo:base64,antigo:base64`). Valores novos
 usam a nova chave; os antigos continuam legíveis. A re-cifragem em lote dos valores antigos ainda
 não está implementada.
+
+## Áudio do cliente (transcrição)
+
+Desligado por padrão. Para ligar, defina `FM_VOICE_TRANSCRIPTION=true` **na API e no worker** (e a
+chave do Gemini). Só WhatsApp. O cliente manda áudio, a mensagem fica em espera, o worker baixa o
+áudio da Meta, transcreve e a conversa segue como texto (inclusive o pedido de "parar"). Limite de
+tamanho: `FM_VOICE_MAX_BYTES` (padrão 2 MB). Depois de 3 falhas a mensagem volta como
+"[mensagem do tipo audio]", como era antes. O áudio e a transcrição não vão para o log.
+Antes de ligar para clientes: conferir a política de privacidade publicada (já cita a voz) e
+testar com um áudio real (a Graph API foi implementada pela documentação, ainda sem conta real).
+Migration `0014` (aditiva) é aplicada no `migrate` do deploy.

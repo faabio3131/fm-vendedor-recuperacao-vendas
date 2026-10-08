@@ -34,4 +34,5 @@ async def receive(public_id: str, request: Request) -> dict[str, int]:
         public_id=public_id,
         headers=request.headers,
         raw_body=raw,
+        voice=request.app.state.settings.voice_transcription,
     )
