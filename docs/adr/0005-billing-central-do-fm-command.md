@@ -49,9 +49,10 @@ Nova tabela do AtendeVendeIA (proposta, sem migration nesta PR): `commercial_lin
 1. **Hoje:** todas as assinaturas são `direct:*`; o Command não participa. O lançamento não muda.
 2. **Modo sombra** (`FM_FMCOMMAND_MODE=shadow`): o AtendeVendeIA recebe e valida os eventos do Command, **registra** e compara com o estado real, mas **não aplica**.
    Divergências viram relatório. Critério para sair: período combinado sem divergência.
-3. **Virada por assinatura:** o Diretor autoriza e a assinatura passa a `authority = fmcommand` (registrado na auditoria). Dali em diante, eventos
+3. **Pré-requisitos obrigatórios de virada:** adaptador do gateway envolvido homologado no Command; pagamentos, estornos e assinaturas reconciliados com o provedor; autorização de provisionamento consultável pela API; validação de consistência entre estado direto e estado Command; plano de recuperação e rollback governado, com registro auditável e sem duas autoridades simultâneas. Só após esses gates, realizar a virada.
+4. **Virada por assinatura:** o Diretor autoriza e a assinatura passa a `authority = fmcommand` (registrado na auditoria). Dali em diante, eventos
    diretos da Cakto ou da Hotmart dessa assinatura são registrados com resultado `not_authoritative` e **ignorados**. Nenhuma assinatura tem dois responsáveis.
-4. **Fim:** quando todas as assinaturas estiverem no Command, os segredos da Cakto e da Hotmart são apagados (a rota volta a responder 404).
+5. **Fim:** quando todas as assinaturas estiverem no Command, os segredos da Cakto e da Hotmart são apagados (a rota volta a responder 404).
 
 ### Indisponibilidade e contingência (diretriz 6)
 
@@ -94,7 +95,7 @@ Gateways, conciliação financeira, taxas, impostos e lucro líquido (valor vend
 | G2 | AtendeVendeIA: recebimento `fmcommand` desligado por padrão, vínculo e testes | AtendeVendeIA |
 | G3 | Modo sombra com o Command emitindo eventos reais de teste | os dois |
 | G4 | Reconciliação e contingência provadas (derrubar o Command de propósito) | os dois |
-| G5 | Virada por assinatura, depois adaptadores de gateway no Command | Command |
+| G5 | Implementar e homologar adaptadores de gateway, reconciliação financeira e migração por assinatura, somente após aprovação humana registrada e gates de consistência | Command e AtendeVendeIA |
 
 ## Complemento do Diretor (08/10/2026): central financeira de TODOS os SaaS
 
@@ -129,10 +130,27 @@ Funcionamento obrigatório, e como este ADR o cobre:
 - Os documentos do Command também afirmam que uma assinatura ativa **não** deve ser contada a partir de fatos "ativou" acumulados, porque um cancelamento posterior deixaria a contagem falsa. Por isso as licenças deste contrato
   carregam o **estado completo e a versão**, em vez de só mudanças.
 
-## Perguntas ainda abertas
+## Parâmetros aprovados e controles complementares
 
-1. Formato dos identificadores (UUID versus texto prefixado) e quem os emite além do Command.
-2. Confirmar os parâmetros propostos: contingência de 72 h e reconciliação a cada 15 min.
-3. Quem aprova a virada de uma assinatura para `fmcommand` e com qual registro.
-4. Ordem de migração dos outros produtos (o Kordena exige ADR próprio no Command) e quais gateways (Asaas, Stripe) o Command adota primeiro.
-5. Como o Command importa as assinaturas já existentes na Cakto e na Hotmart sem criar nova cobrança.
+- Identificadores: UUIDv7 gerados exclusivamente pelo Command, trafegados como strings opacas; não usar e-mail como chave.
+- Reconciliação: a cada 15 minutos, com execução também no início e após detectar lacunas de versão.
+- Contingência: limite de 72 horas, prazo persistido e auditável que não reinicia em restart e nunca se aplica para reativar licenças explicitamente suspensas, canceladas, expiradas ou reembolsadas.
+- Virada de autoridade: exige aprovação humana da administração central da FM Tecnologia, com evidências de reconciliação, idempotência, controle de concorrência e recuperação governada.
+- A integração deve recuperar autorizações de provisionamento perdidas por consulta à API, não apenas por webhook.
+
+## Decisões consolidadas e pendências reais
+
+- **Identificadores:** UUIDv7 emitidos pelo Command, texto opaco na integração; não usar e-mail como chave canônica.
+- **Contingência:** teto de 72 horas, persistido, auditável e não reiniciável; não restabelece licenças suspensas/canceladas/reembolsadas.
+- **Reconciliação:** a cada 15 minutos, também no início e após salto de versão.
+- **Autoridade de virada:** administração central da FM Tecnologia, mediante aprovação humana registrada, com evidências e rollback governado.
+- **Código de produto:** manter `IRON` como identificador técnico canônico do cadastro existente; **Iron Fit** é nome comercial exibido. O catálogo do Command define os códigos e aliases, sem mudanças unilaterais pelo SaaS.
+- **Migração por produto:** priorizar AtendeVendeIA, preservando Cakto/Hotmart diretas; Kordena terá ADR próprio antes de qualquer mudança de autoridade; os demais produtos seguem após certificação de seus contratos. A ordem definitiva dos demais depende da auditoria por produto.
+- **Importação de assinantes:** importar de forma *read-only*, usando par (provedor, referência externa imutável da assinatura) e reconciliação com API do gateway; gerar IDs canônicos novos sem criar checkout, ordem de pagamento nem recorrência nova. Simular e auditar a importação, vincular ao tenant existente com evidência, comparar estados e só transferir `authority` após autorização humana e gates verdes.
+- **Gateways do Billing Central:** Cakto/Hotmart primeiro para compatibilidade e migração; Asaas/Stripe posteriormente por adaptador homologado, conforme necessidade comercial e custos. Nenhum provedor é automaticamente ativado em produção.
+
+## Pendências de engenharia
+
+1. ADR específico no Command para migrar a autoridade comercial do Kordena sem romper seu catálogo nem os `entitlements`.
+2. Contrato e implementação de importação idempotente das assinaturas existentes, incluindo tratamento de ambiguidades de e-mail, múltiplas assinaturas e referências externas ausentes.
+3. Testes reais de conciliação de provedor, proteção contra cobrança duplicada e contingência operacional, antes de qualquer virada.
