@@ -4,6 +4,9 @@ Escrito em 05/10/2026. O FM Command é o centro de controle do Fábio (repositó
 Este documento descreve **o lado do AtendeVendeIA**, já construído e testado, e **o que o FM Command precisa implementar** do lado dele.
 Decisão e cercas: `docs/adr/0004-conexao-com-o-fm-command.md`.
 
+> **Atualização de 08/10/2026:** o FM Command será também o Billing Central (assinaturas e licenças de todos os SaaS). Proposta de como o AtendeVendeIA recebe
+> licenças dele: `docs/adr/0005-billing-central-do-fm-command.md`, `docs/FM_COMMAND_LICENCAS.md` e a auditoria `docs/auditoria/AUDITORIA_BILLING_CENTRAL_2026-10-08.md`. Esta página continua valendo para a **leitura** (saúde e snapshot).
+
 > **Estado honesto:** o lado do AtendeVendeIA está pronto e testado contra o contrato. O lado do FM Command **não existe** (não foi alterado, porque o
 > repositório dele só foi lido). Nenhuma chamada real entre os dois foi feita. Nada aqui é "conectado" até o item 7 abaixo passar com evidência.
 
