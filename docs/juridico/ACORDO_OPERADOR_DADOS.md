@@ -1,6 +1,6 @@
-# Acordo de Tratamento de Dados Pessoais (Cliente = controlador; F&M = operador) (RASCUNHO)
+# Acordo de Tratamento de Dados Pessoais (Cliente = controlador; F&M = operador)
 
-> **RASCUNHO para revisão de advogado (P8).** Itens entre `[colchetes]` a preencher. Versão do rascunho: 05/10/2026.
+> **Pontos em aberto preenchidos e aprovados pelo Diretor em 09/10/2026; sem revisão de advogado, por decisão do Diretor. Ainda não publicado no site.** Versão: 09/10/2026.
 
 ## 1. Objeto
 
@@ -14,11 +14,11 @@ Regula o tratamento de dados pessoais dos **contatos do Cliente** pela F&M Tecno
 ## 3. Medidas de segurança
 
 O Operador mantém as medidas descritas em `docs/SEGURANCA.md`: isolamento por cliente (RLS), cifragem de credenciais, controle de acesso, limites contra abuso, auditoria imutável e logs sem conteúdo de conversa nem dado pessoal.
-Reconhece-se que **não houve teste de invasão independente** até a data deste rascunho **[atualizar quando houver]**.
+Reconhece-se que **não houve teste de invasão independente** até 09/10/2026 (atualizar quando houver).
 
 ## 4. Suboperadores
 
-O Cliente autoriza os suboperadores listados na Política de Privacidade (Meta, Google/Gemini, hospedagem e banco de dados no exterior). O Operador avisará sobre novos suboperadores com **[15]** dias de antecedência, podendo o Cliente se opor ou encerrar o contrato.
+O Cliente autoriza os suboperadores listados na Política de Privacidade (Meta, Google/Gemini, hospedagem e banco de dados no exterior). O Operador avisará sobre novos suboperadores com **15** dias de antecedência, podendo o Cliente se opor ou encerrar o contrato.
 
 ## 5. Direitos dos titulares
 
@@ -34,7 +34,7 @@ Prazo de retenção configurável pelo Cliente (padrão 365 dias). Na exclusão 
 
 ## 8. Auditoria
 
-O Cliente pode pedir, **[uma vez por ano]**, informações razoáveis que demonstrem o cumprimento deste acordo.
+O Cliente pode pedir, **uma vez por ano**, informações razoáveis que demonstrem o cumprimento deste acordo.
 
 ## 9. Responsabilidade e vigência
 
