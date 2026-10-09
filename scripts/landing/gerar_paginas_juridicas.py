@@ -9,10 +9,11 @@ import re
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[2]
-DATA = "08/10/2026"
+DATA = "08/10/2026"  # usado só para a data de publicação, se houver no texto
 PAGINAS = [
-    ("TERMOS_DE_USO.md", "termos", "Termos de Uso"),
-    ("POLITICA_DE_PRIVACIDADE.md", "privacidade", "Política de Privacidade"),
+    ("TERMOS_DE_USO.md", "termos", "Termos de Uso", "09/10/2026"),
+    ("POLITICA_DE_PRIVACIDADE.md", "privacidade", "Política de Privacidade", "08/10/2026"),
+    ("ACORDO_OPERADOR_DADOS.md", "acordo", "Acordo de Tratamento de Dados", "09/10/2026"),
 ]
 
 
@@ -29,6 +30,7 @@ def limpar(md: str) -> str:
     t = re.sub(r"\s*\*\*\[Provedor a definir:[^\]]*\]\*\*", "", t)
     t = re.sub(r"\s*\*\*\[advogado:[^\]]*\]\*\*", "", t)
     t = t.replace(" **[confirmar]**", "")
+    t = t.replace(" (atualizar quando houver)", "")
     t = t.replace(" (decisão do Diretor, 05/10/2026)", "")
     t = t.replace("**[data de publicação]**", f"**{DATA}**")
     t = re.sub(r" Detalhes técnicos em `docs/SEGURANCA.md`\.", "", t)
@@ -104,6 +106,7 @@ MODELO = """<!doctype html>
     <nav class="links" aria-label="Documentos">
       <a href="../termos/">Termos de uso</a>
       <a href="../privacidade/">Política de privacidade</a>
+      <a href="../acordo/">Acordo de dados</a>
     </nav>
     <a class="btn" href="../">Voltar</a>
   </div>
@@ -119,7 +122,7 @@ MODELO = """<!doctype html>
   <div class="wrap">
     <div class="row">
       <div class="by"><i></i><span>AtendeVendeIA é um produto da FM Tecnologia</span></div>
-      <div class="row"><a href="../termos/">Termos de uso</a><a href="../privacidade/">Política de privacidade</a></div>
+      <div class="row"><a href="../termos/">Termos de uso</a><a href="../privacidade/">Política de privacidade</a><a href="../acordo/">Acordo de dados</a></div>
     </div>
   </div>
 </footer>
@@ -127,9 +130,9 @@ MODELO = """<!doctype html>
 </html>
 """
 
-for arq, pasta, titulo in PAGINAS:
+for arq, pasta, titulo, data in PAGINAS:
     corpo = converter(limpar((RAIZ / "docs/juridico" / arq).read_text(encoding="utf-8")))
     destino = RAIZ / "apps/landing" / pasta
     destino.mkdir(parents=True, exist_ok=True)
-    (destino / "index.html").write_text(MODELO.format(titulo=titulo, data=DATA, corpo=corpo), encoding="utf-8")
+    (destino / "index.html").write_text(MODELO.format(titulo=titulo, data=data, corpo=corpo), encoding="utf-8")
     print("gerado", destino / "index.html")

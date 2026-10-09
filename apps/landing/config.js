@@ -14,5 +14,6 @@ window.LANDING = {
   contato: "privacidadeatendevendeia@gmail.com", // e-mail ou endereço de contato comercial (aparece no rodapé quando preenchido)
   linkTermos: "/termos/", // endereço dos Termos de uso aprovados
   linkPrivacidade: "/privacidade/", // endereço da Política de privacidade aprovada
+  linkAcordo: "/acordo/", // endereço do Acordo de tratamento de dados (operador) aprovado
   siteEmpresa: "https://fmtecnologia.com.br",
 };

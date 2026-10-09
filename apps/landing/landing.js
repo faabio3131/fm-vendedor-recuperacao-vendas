@@ -35,7 +35,7 @@
       contato.hidden = false;
     } else contato.hidden = true;
   }
-  [["f-termos", c.linkTermos], ["f-privacidade", c.linkPrivacidade]].forEach(function (p) {
+  [["f-termos", c.linkTermos], ["f-privacidade", c.linkPrivacidade], ["f-acordo", c.linkAcordo]].forEach(function (p) {
     var el = document.getElementById(p[0]);
     if (!el) return;
     if (p[1] && /^(https?:\/\/|\/[a-z])/.test(p[1])) {

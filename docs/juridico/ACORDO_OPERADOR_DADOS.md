@@ -1,6 +1,6 @@
 # Acordo de Tratamento de Dados Pessoais (Cliente = controlador; F&M = operador)
 
-> **Pontos em aberto preenchidos e aprovados pelo Diretor em 09/10/2026; sem revisão de advogado, por decisão do Diretor. Ainda não publicado no site.** Versão: 09/10/2026.
+> **Pontos em aberto preenchidos e aprovados pelo Diretor em 09/10/2026; sem revisão de advogado, por decisão do Diretor. Publicado no site em /acordo/ (09/10/2026).** Versão: 09/10/2026.
 
 ## 1. Objeto
 
@@ -13,7 +13,7 @@ Regula o tratamento de dados pessoais dos **contatos do Cliente** pela F&M Tecno
 
 ## 3. Medidas de segurança
 
-O Operador mantém as medidas descritas em `docs/SEGURANCA.md`: isolamento por cliente (RLS), cifragem de credenciais, controle de acesso, limites contra abuso, auditoria imutável e logs sem conteúdo de conversa nem dado pessoal.
+O Operador mantém, entre outras, as seguintes medidas: isolamento por cliente (RLS), cifragem de credenciais, controle de acesso, limites contra abuso, auditoria imutável e logs sem conteúdo de conversa nem dado pessoal.
 Reconhece-se que **não houve teste de invasão independente** até 09/10/2026 (atualizar quando houver).
 
 ## 4. Suboperadores
