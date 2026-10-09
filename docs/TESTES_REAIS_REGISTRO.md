@@ -56,6 +56,15 @@ conversa privada e deve ser trocada ao fim do staging; o plano não prova nada s
 | 8 | Relatório | valor e data do relatório batem com o que a plataforma registrou (D6) | depende de 6 e 7 | NÃO FEITO | | | |
 | 9 | Ponta a ponta | compra, login, conectar WhatsApp, template aprovado, oportunidade, mensagem recebida, resposta encerra o caso | precisa de worker | NÃO FEITO | | | |
 
+## Voz: transcrição do áudio do cliente (PR #61)
+
+| Parte | Estado | Data | Resultado real |
+|---|---|---|---|
+| A. Transcrição contra o Gemini real (sem WhatsApp) | **PASSOU** | 09/10/2026 | Modelo `gemini-3.1-flash-lite`, código real (`GeminiModel.transcribe`), dois áudios sintéticos em português no formato ogg/opus (voz gerada pelo `gemini-2.5-flash-preview-tts`). Pergunta de venda: texto praticamente idêntico, 1,4 s, 213 tokens de entrada e 23 de saída. Pedido de parar: texto idêntico, 6,4 s. Custo: centavos. **Limite:** áudio limpo e sintético, não voz real com ruído. |
+| B. Áudio real pelo WhatsApp | **NÃO FEITO** | | Precisa de worker (não existe no staging grátis), `FM_VOICE_TRANSCRIPTION=true` na API e no worker, app da Meta publicado (mensagem real não chegou em modo desenvolvimento, ver teste 4) e token da Meta válido. Planejado para quando a produção existir. |
+
+**Achado da Parte A:** o pedido de parar transcrito ("Por favor, pode parar de me mandar mensagem? Não quero mais receber.", 67 caracteres) **não era reconhecido** como saída, porque a regra só olhava mensagens de até 60 caracteres. Vale também para texto digitado. Corrigido no PR de frases longas de saída (`recovery/optout.py`).
+
 ## Roteiros para criar as contas (para o Fábio)
 
 Telas do Google e da Meta mudam: **confira na tela atual**. Se algo não bater, mande o texto do erro, **nunca** a chave. Guarde chaves em cofre
