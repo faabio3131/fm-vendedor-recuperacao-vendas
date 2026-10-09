@@ -8,6 +8,13 @@ here="$(cd "$(dirname "$0")" && pwd)"
 load_env
 repo="$(cd "$DEPLOY_DIR/../.." && pwd)"
 
+# Segredos: o .env só pode ser lido pelo dono (chmod 600)
+perm="$(stat -c '%a' "$ENV_FILE" 2>/dev/null || echo missing)"
+if [ "$perm" != "600" ]; then
+  echo "O arquivo $ENV_FILE precisa ter permissão 600 (hoje: $perm). Rode: chmod 600 $ENV_FILE" >&2
+  exit 1
+fi
+
 log "1/5 backup antes da atualização"
 "$here/backup.sh"
 

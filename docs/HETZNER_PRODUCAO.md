@@ -37,6 +37,32 @@ Um servidor, tudo em contêineres: Postgres 16 (sem porta pública), `bootstrap`
 2. Parar API e worker, trocar o banco: renomear o banco em uso e o restaurado (`ALTER DATABASE … RENAME TO …`), subir de novo e conferir `/v1/health`.
 3. Só apagar o banco antigo depois de confirmar com clientes reais.
 
+## Endurecimento (checklist de segurança do servidor)
+Conferido ponto por ponto contra o que está em `deploy/hetzner/`:
+
+| Ponto | Estado |
+|---|---|
+| Banco sem porta publicada (só rede interna do Docker) | **Já era assim**; só `80` e `443` são publicadas (pelo Caddy) |
+| Firewall: o Docker ignora o UFW em porta publicada | Sem risco hoje: o único serviço que publica porta é o Caddy (80/443, já liberadas). **Regra para o futuro:** nunca acrescentar `ports:` a banco, API ou worker; se precisar de acesso de gerência, publicar só em `127.0.0.1` |
+| Limites de CPU e memória por serviço | **Novo.** banco 2 GB, API 1 GB, painel 1 GB, worker 768 MB, Caddy 256 MB (soma ≈ 5,1 GB + 512 MB do passo de migração); um serviço que estoura é encerrado sozinho em vez de derrubar a máquina |
+| Sem root dentro do contêiner | API e painel já tinham `USER` sem root. **Novo:** `no-new-privileges` em todos e `cap_drop: ALL` + `read_only` (com `/tmp` em memória) nos serviços da aplicação |
+| Segredos | `.env` fora do Git (já era). **Novo:** `deploy.sh` recusa rodar se o `.env` não estiver com permissão `600` |
+| SSH só por chave e sem root | **Já era** (`setup-server.sh`) |
+| Bloqueio de tentativas (fail2ban) | **Novo:** regra explícita para o SSH (5 falhas, bloqueio de 1 hora) |
+| Rotação de logs | **Novo:** nos dois lugares, `daemon.json` do Docker e no compose (20 MB × 3 arquivos por serviço) |
+
+**Não testado em contêiner de verdade** (sem Docker no ambiente de teste): `read_only`, `cap_drop` e os limites. No primeiro servidor, conferir com `docker compose ps` e `docker stats`; se um serviço não subir por causa de `read_only`, retirar só essa linha daquele serviço e anotar aqui. O banco e o Caddy ficaram **sem** `cap_drop` e sem `read_only` de propósito (precisam ajustar permissões ao subir) e só têm `no-new-privileges`.
+Conferência de fora, depois de subir: `ss -tlnp` no servidor deve mostrar escutando para fora só `22`, `80` e `443`.
+
+## Vários produtos na mesma máquina (futuro; hoje só o AtendeVendeIA)
+Só depois de **medir** o consumo do AtendeVendeIA por algumas semanas. Regras para entrar um segundo produto:
+- projeto Docker Compose próprio, **rede interna própria** e **Postgres próprio** (nenhum produto enxerga o banco do outro);
+- credenciais, chave de cifragem e `.env` próprios por produto;
+- um único Caddy na frente (rede compartilhada só com ele), um domínio por produto;
+- soma dos limites de memória dentro da RAM da máquina, com folga;
+- backup e teste de restauração por produto.
+Os produtos que já têm infraestrutura própria (como o Kordena) não entram sem decisão separada.
+
 ## Riscos aceitos e limites
 - **Um servidor só:** se cair, o sistema cai até voltar. Backup e restauração testados reduzem o dano, não a queda.
 - **Operação é nossa:** atualizações do sistema operacional são automáticas (só segurança), mas Docker e imagens exigem `deploy.sh` periódico.

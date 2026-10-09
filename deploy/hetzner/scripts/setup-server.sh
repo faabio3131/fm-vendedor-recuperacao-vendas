@@ -10,8 +10,18 @@ apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y ufw unattended-upgrades age curl git ca-certificates rclone fail2ban
 dpkg-reconfigure -f noninteractive unattended-upgrades
 
+# Rotação de logs do Docker (vale para qualquer contêiner da máquina, antes de instalar/reiniciar)
+install -d /etc/docker
+cat > /etc/docker/daemon.json <<'JSON'
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "20m", "max-file": "3" }
+}
+JSON
+
 # Docker (repositório oficial)
 if ! command -v docker >/dev/null; then curl -fsSL https://get.docker.com | sh; fi
+systemctl restart docker || true
 
 # Firewall: só SSH, HTTP e HTTPS. O banco nunca é publicado.
 ufw default deny incoming; ufw default allow outgoing
@@ -25,6 +35,18 @@ PasswordAuthentication no
 PermitRootLogin prohibit-password
 CONF
 systemctl reload ssh || systemctl reload sshd || true
+
+# Proteção contra tentativa de senha no SSH: bloqueia o IP por 1 hora após 5 falhas
+install -d /etc/fail2ban/jail.d
+cat > /etc/fail2ban/jail.d/50-fm.local <<'CONF'
+[sshd]
+enabled = true
+maxretry = 5
+findtime = 10m
+bantime = 1h
+CONF
+systemctl enable --now fail2ban
+systemctl restart fail2ban || true
 
 # Swap de 2 GB (folga contra falta de memória)
 if ! swapon --show | grep -q /swapfile; then
