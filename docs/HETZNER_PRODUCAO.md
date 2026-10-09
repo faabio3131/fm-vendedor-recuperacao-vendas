@@ -15,7 +15,7 @@
 Um servidor, tudo em contêineres: Postgres 16 (sem porta pública), `bootstrap` (migrations a cada subida), API, worker, painel e Caddy (HTTPS automático nas portas 80/443). Painel em `APP_HOST` e API em `API_HOST` (subdomínios do mesmo site). Firewall: só 22, 80 e 443.
 
 ## Passo a passo (primeira vez)
-1. **Conta e servidor.** Criar conta no Hetzner, servidor **Ubuntu 24.04**, localização **Ashburn (EUA)**, plano de **4 CPUs e 8 GB** para começar (reduzir só depois de medir), com **IPv4**, **Backups do Hetzner ligados** e a sua **chave SSH** (nunca senha).
+1. **Conta e servidor.** Criar conta no Hetzner, servidor **Ubuntu 24.04**, localização **Falkenstein, Nuremberg (Alemanha) ou Helsinki (Finlândia)**, plano **CX33** (4 CPUs e 8 GB) para começar (reduzir só depois de medir), com **IPv4**, **Backups do Hetzner ligados** e a sua **chave SSH** (nunca senha). **Não escolher os EUA:** no Hetzner o servidor equivalente lá custa cerca de 7 vezes mais (ver "Preço").
 2. **DNS (Cloudflare).** Registros `A` para `app.` e `api.` apontando para o IP do servidor, com a nuvem **cinza (somente DNS)**.
 3. **Preparar o servidor (uma vez):** como root, `bash deploy/hetzner/scripts/setup-server.sh` (atualizações automáticas, firewall, SSH só por chave, swap, Docker, agendamentos).
 4. **Código:** como `fmapp`, `git clone https://github.com/faabio3131/fm-vendedor-recuperacao-vendas /opt/fm-seller`.
@@ -41,4 +41,17 @@ Um servidor, tudo em contêineres: Postgres 16 (sem porta pública), `bootstrap`
 - **Um servidor só:** se cair, o sistema cai até voltar. Backup e restauração testados reduzem o dano, não a queda.
 - **Operação é nossa:** atualizações do sistema operacional são automáticas (só segurança), mas Docker e imagens exigem `deploy.sh` periódico.
 - **Memória não medida:** começar com 8 GB e reduzir depois de ver o consumo real.
-- O preço do Hetzner não foi confirmado em fonte oficial (ver a conversa de 08/10/2026): confira no console antes de contratar.
+- **Latência:** servidor na Europa responde mais devagar para quem está no Brasil (ordem de 200 ms por pedido, não medida). Webhooks e WhatsApp não sentem; o painel fica um pouco menos ágil.
+
+## Preço (fonte oficial, conferida em 08/10/2026)
+Tabela do Hetzner "Price Adjustment 15 June 2026" (https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/), valores **sem IVA e sem IPv4**:
+
+| Plano | Alemanha / Finlândia | EUA (Ashburn / Hillsboro) |
+|---|---|---|
+| CX23 (2 CPUs, 4 GB) | €5,49 (US$6,49) | não existe |
+| **CX33 (4 CPUs, 8 GB)** | **€8,49 (US$9,99)** | não existe |
+| CPX21 (3 CPUs, 4 GB) | n/d | €31,99 (US$37,49) |
+| CPX31 (4 CPUs, 8 GB) | n/d | €62,49 (US$73,49) |
+
+Falta confirmar no console, ao criar a conta: preço do IPv4, preço do Backup do Hetzner, se há IVA para empresa/pessoa do Brasil e disponibilidade (as páginas de plano mostravam "currently unavailable" para vários itens; pode ser só a exibição).
+
