@@ -104,7 +104,7 @@ em 3 meses: ao definir limites e planos (D2), usar o valor de 2027.
 - [ ] Client ID do Google (P1) · [ ] chave do Gemini no staging (P2) · [ ] hospedagem e domínio (P3)
 - [ ] papéis do Postgres e chave de cifragem em cofre, com cópia separada (P4)
 - [ ] produto de teste na Cakto (P6) e na Hotmart (P7) · [ ] conta de teste da Meta com número e token (C1/C2)
-- [ ] termos de uso e privacidade aprovados pelo Diretor e publicados, sem advogado por decisão dele (P8); acordo de operador preenchido e aprovado, falta publicar · [ ] orientação do contador (P9)
+- [ ] termos de uso e privacidade aprovados pelo Diretor e publicados, sem advogado por decisão dele (P8); acordo de operador aprovado e publicado em /acordo/ · [ ] orientação do contador (P9)
 
 ## 4. Testes com contas reais, nesta ordem
 

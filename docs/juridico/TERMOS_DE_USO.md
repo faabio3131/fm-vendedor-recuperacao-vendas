@@ -42,7 +42,7 @@ f) manter sigilo das credenciais e tokens que cadastrar.
 
 ## 6. Dados e privacidade
 
-O tratamento de dados está descrito na **Política de Privacidade** e no **Acordo de Tratamento de Dados (operador)**, que fazem parte destes Termos.
+O tratamento de dados está descrito na **Política de Privacidade** e no **Acordo de Tratamento de Dados (operador)**, que fazem parte destes Termos. Ao contratar e usar o Serviço, você concorda com os três documentos. O Acordo está na página "Acordo de dados", no rodapé do site.
 
 ## 7. Propriedade intelectual
 
