@@ -1,16 +1,16 @@
 :root {
   /* Identidade AtendeVendeIA: cores medidas da família Iron Fit Core (by FM Tecnologia).
      Todo texto tem contraste acima de 7:1 sobre o fundo (docs/IDENTIDADE_VISUAL.md). */
-  --bg: #000610;
-  --surface: #020e22;
-  --surface-2: #07182f;
-  --ink: #e8ecf1;
-  --muted: #9fabbb;
-  --line: #1c3a60;
-  --field-line: #5a7aa3;
-  --accent: #2aa4f0;
-  --accent-2: #33d8fb;
-  --accent-ink: #000610;
+  --bg: #020504;
+  --surface: #06100E;
+  --surface-2: #0A1A17;
+  --ink: #EAF4F2;
+  --muted: #93B2AD;
+  --line: #12302B;
+  --field-line: #4F7A74;
+  --accent: #19D3C5;
+  --accent-2: #6BE7DC;
+  --accent-ink: #021210;
   --warn: #f0b429;
   --bad: #ff7b72;
   --ok: #3ecf8e;
@@ -19,8 +19,8 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
-body { background: radial-gradient(1000px 460px at 85% -8%, #0b2a52 0%, transparent 62%), var(--bg); background-repeat: no-repeat; background-attachment: fixed; }
-body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { background: radial-gradient(1000px 460px at 85% -8%, #0b3a35 0%, transparent 62%), var(--bg); background-repeat: no-repeat; background-attachment: fixed; }
+body { font: 15px/1.55 "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 a { color: inherit; }
 h1 { font-size: 1.5rem; margin: 0 0 4px; }
 h2 { font-size: 1.1rem; margin: 28px 0 10px; }
@@ -30,7 +30,7 @@ p { margin: 0 0 12px; }
 .side { border-right: 1px solid var(--line); background: var(--surface); padding: 20px 14px; }
 .brand { display: flex; align-items: center; gap: 10px; margin: 0 8px 22px; }
 .brand.stacked { flex-direction: column; text-align: center; margin: 0 0 18px; gap: 12px; }
-.brand-mark { flex: none; filter: drop-shadow(0 0 8px rgba(42, 164, 240, 0.35)); }
+.brand-mark { flex: none; filter: drop-shadow(0 0 8px rgba(25, 211, 197, 0.4)); }
 .brand-name { font-weight: 800; font-size: 1.05rem; line-height: 1.1; white-space: nowrap; }
 .brand.stacked .brand-name { font-size: 1.5rem; }
 .brand-a { background: linear-gradient(180deg, #ffffff, #aab3bf); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -78,7 +78,7 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--lin
 @media (max-width: 520px) { .step { grid-template-columns: 1fr; } }
 code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; word-break: break-all; }
 .center { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
-.login { width: min(420px, 100%); box-shadow: 0 0 48px rgba(42, 164, 240, 0.12); border-color: #1f4573; }
+.login { width: min(420px, 100%); box-shadow: 0 0 48px rgba(25, 211, 197, 0.14); border-color: #1c4a43; }
 @media (max-width: 760px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
   .nav a { white-space: nowrap; }
@@ -88,10 +88,37 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 }
 
 .progress { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 8px 0; }
-.progress > span { display: block; height: 100%; background: var(--ok); }
+.progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 .steps { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 10px; }
 .steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
 .steps .mark { width: 28px; height: 28px; border-radius: 999px; border: 2px solid var(--line); display: grid; place-items: center; font-weight: 700; }
 .steps .mark.done { border-color: var(--ok); color: var(--ok); }
 .steps .body { min-width: 0; overflow-wrap: anywhere; }
 .btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* ---- Visual turquesa (família FM) ---- */
+h1, h2, .brand-name, .num { font-family: Sora, "Plus Jakarta Sans", system-ui, sans-serif; letter-spacing: -0.01em; }
+h1 { font-size: 1.65rem; font-weight: 700; }
+h2 { font-weight: 600; }
+.side { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: linear-gradient(180deg, var(--surface), var(--bg)); }
+.nav { display: grid; gap: 2px; }
+.nav a { display: flex; align-items: center; gap: 10px; transition: background .15s, color .15s; }
+.nav a svg { width: 18px; height: 18px; flex: none; opacity: .85; }
+.nav a[aria-current="page"] svg { color: var(--accent-2); opacity: 1; }
+.card { background: linear-gradient(160deg, var(--surface-2), var(--surface) 70%); transition: border-color .2s, box-shadow .2s; }
+.grid > .card:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: 0 0 28px rgba(25, 211, 197, .1); }
+.badge { background: color-mix(in srgb, currentColor 10%, transparent); font-weight: 600; }
+button, .btn { transition: border-color .15s, background .15s, filter .15s; }
+button:hover:not(:disabled), a.btn:hover { border-color: var(--accent); }
+button.primary { box-shadow: 0 0 22px rgba(25, 211, 197, .25); }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; border-color: var(--accent); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.num { color: var(--accent-2); }
+.steps .mark.done { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent-2); }
+@media (max-width: 760px) {
+  .side { position: static; height: auto; }
+  .nav { display: flex; gap: 6px; }
+  .nav a { border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; }
+  .nav a[aria-current="page"] { box-shadow: none; border-color: var(--accent); }
+}

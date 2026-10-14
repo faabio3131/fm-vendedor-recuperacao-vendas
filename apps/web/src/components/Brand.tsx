@@ -16,18 +16,18 @@ export function BrandMark({ size = 40, compact = false }: { size?: number; compa
           <stop offset="1" stopColor="#8e98a6" />
         </linearGradient>
         <linearGradient id={blu} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#33d8fb" />
-          <stop offset="1" stopColor="#2aa4f0" />
+          <stop offset="0" stopColor="#6BE7DC" />
+          <stop offset="1" stopColor="#19D3C5" />
         </linearGradient>
       </defs>
       <path
         d="M60 10A46 46 0 1 1 36 95.2L12 108 18.3 75.4A46 46 0 0 1 60 10Z"
-        fill="#020e22"
+        fill="#06100E"
         stroke={`url(#${sil})`}
         strokeWidth={compact ? 8 : 5}
         strokeLinejoin="round"
       />
-      {!compact && <circle cx="60" cy="56" r="36" fill="none" stroke="#2aa4f0" strokeWidth="1.6" opacity=".75" />}
+      {!compact && <circle cx="60" cy="56" r="36" fill="none" stroke="#19D3C5" strokeWidth="1.6" opacity=".75" />}
       <g fill="none" strokeWidth={compact ? 10 : 6.5} strokeLinecap="round" strokeLinejoin="round">
         <polyline points={compact ? "33,66 45,32 57,66" : "33,63 45,33 57,63"} stroke={`url(#${sil})`} />
         {!compact && <line x1="37" y1="54" x2="53" y2="54" stroke={`url(#${sil})`} />}
@@ -35,13 +35,13 @@ export function BrandMark({ size = 40, compact = false }: { size?: number; compa
       </g>
       {!compact && (
         <>
-          <circle cx="49" cy="77" r="3.2" fill="#33d8fb" />
-          <circle cx="60" cy="77" r="3.2" fill="#33d8fb" opacity=".75" />
-          <circle cx="71" cy="77" r="3.2" fill="#33d8fb" opacity=".5" />
+          <circle cx="49" cy="77" r="3.2" fill="#6BE7DC" />
+          <circle cx="60" cy="77" r="3.2" fill="#6BE7DC" opacity=".75" />
+          <circle cx="71" cy="77" r="3.2" fill="#6BE7DC" opacity=".5" />
         </>
       )}
-      <circle cx="98" cy="20" r="13" fill={`url(#${blu})`} stroke="#000610" strokeWidth="3" />
-      <path d="M98 12.5 100.2 17.8 105.5 20 100.2 22.2 98 27.5 95.8 22.2 90.5 20 95.8 17.8Z" fill="#000610" />
+      <circle cx="98" cy="20" r="13" fill={`url(#${blu})`} stroke="#020504" strokeWidth="3" />
+      <path d="M98 12.5 100.2 17.8 105.5 20 100.2 22.2 98 27.5 95.8 22.2 90.5 20 95.8 17.8Z" fill="#020504" />
     </svg>
   );
 }
