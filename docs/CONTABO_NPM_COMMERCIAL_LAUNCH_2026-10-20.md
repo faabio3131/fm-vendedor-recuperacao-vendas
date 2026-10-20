@@ -93,3 +93,13 @@ Preservar ambiente Render até operação homologada. VPS única tem risco de fa
 - Como resolver incompatibilidade entre **Evolution API** instalada e autoridade atual do produto que estabelece **Meta Cloud API oficial**? Precisará de ADR e testes para uma eventual integração, mantendo identidade e consentimento, antes de colocar envios automáticos em produção.
 - Qual o procedimento autorizado para instalar chave SSH pública no servidor? Atualmente não há sessão administrativa autenticada pelo executor.
 - Confirmar registro DNS `app.atendevendeia.com.br` e provedor de cobrança, identidade Google, credenciais de IA, termos e política comercial, sem colocar segredos no chat.
+
+## Evidências adicionais após preparação da PR #71 (20/10/2026)
+
+- PR de implantação `#71`, branch `feat/contabo-npm-isolated-atendevendeia-release-20261020`, **Draft e não integrada**.
+- Teste local não destrutivo com PyYAML no computador autorizado: `YAML_SYNTAX_AND_NETWORK_ISOLATION_PASS`. Verificou sintaxe YAML, 5 serviços originais, ausência de `ports`, Bootstrap só com perfil explícito, `FM_WHATSAPP_LIVE=false`, rede DB privada, Web como único serviço no NPM edge e limites de memória. **Isto NÃO equivale a `docker compose config`, build ou E2E**.
+- GitHub Actions da PR: CI #163 e `Contabo NPM isolation contract` #1 **FAIL**, com jobs encerrados em segundos e `steps=null` (nenhuma etapa de execução reportada). Causa de inicialização de runner ainda NÃO comprovada. Não marcar gates verdes, nem mergear enquanto a indisponibilidade/falha não for resolvida.
+- Auditoria de dependências na `main` #4: os jobs Python/Node estão FAIL. Não desativar auditoria; obter detalhes e corrigir antes do Go/No-Go.
+- Foi verificado que o único arquivo de chave pública SSH preexistente no computador autorizado é de contexto **NFCore staging/Railway**; **não reutilizar** essa identidade para administrar a Contabo. Para adicionar chave SSH exclusiva à VPS, solicitar aprovação específica do responsável e instalá-la via console Contabo com o host fingerprint conferido.
+- Último smoke HTTP sem credenciais: `https://atendevendeia.com.br/` = **200**; `https://api.atendevendeia.com.br/`, `/health`, `/health/live` = **502**. O servidor ainda não confirmou execução do container Evolution. **Sem login SSH** por chave; não houve deploy.
+- Uma eventual troca do canal oficial Meta pelo Evolution exige ADR do produto, isolamento, autenticidade dos webhooks, consentimento, controles de credenciais e teste com número real. Alteração não implícita por conta do container instalado.
