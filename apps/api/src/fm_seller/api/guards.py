@@ -50,9 +50,7 @@ def security_headers(cfg: Settings) -> dict[str, str]:
     return headers
 
 
-def client_ip(
-    request: Request, trust_proxy: bool, trusted_proxy_cidrs: str = ""
-) -> str:
+def client_ip(request: Request, trust_proxy: bool, trusted_proxy_cidrs: str = "") -> str:
     """Só aceita XFF do peer autorizado. Seleciona o primeiro salto não confiável à direita."""
     peer = request.client.host if request.client else "desconhecido"
     if not trust_proxy or not trusted_proxy_cidrs.strip():
@@ -152,7 +150,9 @@ class Guards:
             and request.url.path.startswith(WEBHOOKS)
             and status in FAILED_WEBHOOK
         ):
-            self.limiter.add(f"whfail:{client_ip(request, self.cfg.trust_proxy, self.cfg.trusted_proxy_cidrs)}")
+            self.limiter.add(
+                f"whfail:{client_ip(request, self.cfg.trust_proxy, self.cfg.trusted_proxy_cidrs)}"
+            )
 
 
 class BodyTooLarge(Exception):
