@@ -79,7 +79,7 @@ class EvolutionClient:
         if not isinstance(instance, dict):
             raise AppError(502, "evolution_invalid_state", "Estado da conexão não verificável.")
         reported = instance.get("instanceName")
-        if reported is not None and reported != safe:
+        if reported != safe:
             raise AppError(502, "evolution_instance_mismatch", "A instância informada não confere.")
         state = instance.get("state")
         if not isinstance(state, str) or state not in ("open", "close", "connecting"):
