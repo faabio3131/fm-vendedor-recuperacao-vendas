@@ -87,3 +87,28 @@ runner antes de declarar qualquer gate verde. Nenhuma homologação real foi exe
 Próximo bloco: executar gates internos no mesmo SHA via runner disponível ou ambiente
 isolado autenticado; corrigir regressões. Em seguida continuar a construção dos
 webhooks e roteamento do provider, sem repetição da interface de QR já implementada.
+
+
+## Atualização de verificação local — 20/10/2026
+
+- O candidato foi clonado em diretório temporário isolado no computador autorizado, sem modificar os projetos existentes.
+- `ruff check` sobre os nove arquivos Python tocados: **PASS**, após remover import não utilizado.
+- `mypy --strict` sobre os quatro arquivos Python novos/de teste: **PASS** depois da correção do tipo de retorno da rota.
+- `compileall` dos novos módulos: **PASS**.
+- `pytest tests/test_evolution_pairing.py -q` com `PYTHONPATH=src`:
+  **1 PASSED, 4 ERRORS durante setup**, porque o PostgreSQL do PC rejeita a
+  autenticação do usuário local de testes `fm_owner`. **Nenhum dos quatro
+  testes de integração executou seu corpo.** Não alterar credenciais da instância
+  existente por conveniência. Docker não está instalado na máquina verificada.
+- **Causa real do GitHub Actions encontrada**:
+  execução [#39525222347](https://github.com/faabio3131/fm-vendedor-recuperacao-vendas/actions/runs/39525222347):
+  os jobs `api` e `web` não foram iniciados. A anotação oficial diz
+  *“The job was not started because recent account payments have failed or your spending
+  limit needs to be increased. Please check the 'Billing & plans' section in your settings”*.
+  Isto é **bloqueio de billing do GitHub**, não evidência de erro dos testes.
+- Corrigidas as duas não conformidades estáticas encontradas. Revisar novamente
+  os gates no HEAD atualizado; não reutilizar CI histórica como certificação.
+- Sem credenciais Evolution, mensagem real, banco produtivo, merge ou deploy.
+
+**Gate de merge: bloqueado** até disponibilidade de runner, testes PostgreSQL/RLS,
+frontend E2E, revisão de segurança e autorização específica do Diretor.
