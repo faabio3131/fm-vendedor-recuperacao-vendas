@@ -29,27 +29,39 @@ class EvolutionClient:
         self._key = api_key
         self._timeout = timeout
 
-    def _call(self, method: str, route: str, *, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _call(
+        self, method: str, route: str, *, body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         if not self._base or not self._key:
-            raise AppError(503, "evolution_not_configured", "Pareamento temporariamente indisponível.")
+            raise AppError(
+                503, "evolution_not_configured", "Pareamento temporariamente indisponível."
+            )
         try:
-            with httpx.Client(timeout=self._timeout, follow_redirects=False, trust_env=False) as client:
+            with httpx.Client(
+                timeout=self._timeout, follow_redirects=False, trust_env=False
+            ) as client:
                 response = client.request(
                     method, f"{self._base}{route}", headers={"apikey": self._key},
                     json=body,
                 )
         except httpx.RequestError:
-            raise AppError(503, "evolution_unreachable", "Evolution indisponível. Tente novamente.") from None
+            raise AppError(
+                503, "evolution_unreachable", "Evolution indisponível. Tente novamente."
+            ) from None
         if response.status_code == 404:
             raise InstanceMissing()
         if response.status_code >= 400:
             raise AppError(502, "evolution_rejected", "A Evolution recusou a operação.") from None
         if len(response.content) > _MAX_RESPONSE:
-            raise AppError(502, "evolution_response_too_large", "Resposta da Evolution fora do limite.")
+            raise AppError(
+                502, "evolution_response_too_large", "Resposta da Evolution fora do limite."
+            )
         try:
             payload: Any = response.json()
         except ValueError:
-            raise AppError(502, "evolution_invalid_response", "Resposta inválida da Evolution.") from None
+            raise AppError(
+                502, "evolution_invalid_response", "Resposta inválida da Evolution."
+            ) from None
         if not isinstance(payload, dict):
             raise AppError(502, "evolution_invalid_response", "Resposta inválida da Evolution.")
         return payload
