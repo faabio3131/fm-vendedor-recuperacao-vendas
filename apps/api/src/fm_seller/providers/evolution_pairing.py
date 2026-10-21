@@ -95,13 +95,18 @@ class EvolutionPairingService:
 
     def _set_status(self, p: Principal, status: str, verified: bool = False) -> None:
         with self._db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
+            previous = conn.execute(
+                "SELECT status FROM connections WHERE tenant_id = %s AND provider = %s "
+                "FOR UPDATE",
+                (p.tenant_id, _PROVIDER),
+            ).fetchone()
             conn.execute(
                 "UPDATE connections SET status = %s, last_error = NULL, "
                 "last_verified_at = CASE WHEN %s THEN now() ELSE NULL END, "
                 "updated_at = now() WHERE tenant_id = %s AND provider = %s",
                 (status, verified, p.tenant_id, _PROVIDER),
             )
-            if verified:
+            if verified and previous is not None and previous["status"] != "connected":
                 audit(
                     conn, tenant_id=p.tenant_id, actor=p.user_id,
                     action="evolution.session.verified", target=_PROVIDER,
@@ -143,6 +148,11 @@ class EvolutionPairingService:
                 self._set_status(p, "connected", verified=True)
                 return {"status": "connected", "connected": True}
             qr_code = self.client.qr(name)
+        except InstanceMissing:
+            self._set_status(p, "needs_attention")
+            raise AppError(
+                503, "evolution_instance_not_ready", "Instância ainda não pronta para o QR."
+            ) from None
         except AppError:
             self._set_status(p, "needs_attention")
             raise
