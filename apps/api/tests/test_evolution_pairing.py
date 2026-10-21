@@ -135,13 +135,14 @@ def test_evolution_http_contract_and_rejects_invalid_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[httpx.Request] = []
+    reported_name: dict[str, str | None] = {"name": "fmav-" + "a" * 32}
     raw_client = httpx.Client
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
         if "connectionState" in request.url.path:
             return httpx.Response(
-                200, json={"instance": {"instanceName": "fmav-" + "a" * 32, "state": "open"}}
+                200, json={"instance": {"instanceName": reported_name["name"], "state": "open"}}
             )
         if "/connect/" in request.url.path:
             return httpx.Response(200, json={"base64": QR})
@@ -155,6 +156,12 @@ def test_evolution_http_contract_and_rejects_invalid_state(
     client = EvolutionClient(base_url="https://evolution.example.test", api_key="s" * 40)
     name = "fmav-" + "a" * 32
     assert client.state(name) == "open"
+    reported_name["name"] = "fmav-" + "b" * 32
+    with pytest.raises(AppError):
+        client.state(name)
+    reported_name["name"] = None
+    with pytest.raises(AppError):
+        client.state(name)
     assert client.qr(name) == QR
     client.create(name)
     assert all(req.headers["apikey"] == "s" * 40 for req in calls)
