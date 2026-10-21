@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Any
 
 import httpx
 import pytest
@@ -45,7 +44,9 @@ def _owner(client: TestClient, env: Env) -> str:
 
 
 def _enable(client: TestClient, fake: FakeEvolution) -> None:
-    service = client.app.state.evolution_pairing
+    from typing import Any, cast
+
+    service = cast(Any, client.app).state.evolution_pairing
     service._settings = service._settings.model_copy(update={"evolution_enabled": True})
     service.client = fake
 
@@ -139,7 +140,9 @@ def test_evolution_http_contract_and_rejects_invalid_state(
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
         if "connectionState" in request.url.path:
-            return httpx.Response(200, json={"instance": {"instanceName": "fmav-" + "a" * 32, "state": "open"}})
+            return httpx.Response(
+                200, json={"instance": {"instanceName": "fmav-" + "a" * 32, "state": "open"}}
+            )
         if "/connect/" in request.url.path:
             return httpx.Response(200, json={"base64": QR})
         return httpx.Response(200, json={"instance": {"instanceName": "fmav-" + "a" * 32}})
