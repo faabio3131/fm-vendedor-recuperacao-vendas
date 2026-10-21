@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ProviderCard } from "@/components/ProviderCard";
+import { EvolutionWhatsAppCard } from "@/components/EvolutionWhatsAppCard";
 import { Shell, useMe } from "@/components/Shell";
 import { api, type Connection, type Provider } from "@/lib/api";
 
@@ -50,15 +51,19 @@ function Connections() {
           <section key={g.key}>
             <h2>{g.title}</h2>
             <div className="grid">
-              {list.map((p) => (
-                <ProviderCard
-                  key={p.key}
-                  provider={p}
-                  connection={connections.find((c) => c.provider === p.key)}
-                  canEdit={canEdit}
-                  onChange={load}
-                />
-              ))}
+              {list.map((p) =>
+                p.key === "evolution" ? (
+                  <EvolutionWhatsAppCard key={p.key} provider={p} canEdit={canEdit} />
+                ) : (
+                  <ProviderCard
+                    key={p.key}
+                    provider={p}
+                    connection={connections.find((c) => c.provider === p.key)}
+                    canEdit={canEdit}
+                    onChange={load}
+                  />
+                ),
+              )}
             </div>
           </section>
         );
