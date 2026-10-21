@@ -37,7 +37,9 @@ class EvolutionPairingService:
 
     def _enabled(self) -> None:
         if not self._settings.evolution_enabled:
-            raise AppError(503, "evolution_disabled", "Pareamento Evolution ainda não foi liberado.")
+            raise AppError(
+                503, "evolution_disabled", "Pareamento Evolution ainda não foi liberado."
+            )
 
     def _instance_name(self, p: Principal) -> str:
         # Nome estável, sem input do navegador, separado por tenant.
@@ -56,10 +58,14 @@ class EvolutionPairingService:
                 row["config_encrypted"], tenant_id=str(p.tenant_id), provider=_PROVIDER
             )
         except CryptoError:
-            raise AppError(503, "instance_binding_invalid", "Vínculo de instância inválido.") from None
+            raise AppError(
+                503, "instance_binding_invalid", "Vínculo de instância inválido."
+            ) from None
         name = config.get("instance_name")
         if name != self._instance_name(p):
-            raise AppError(409, "instance_binding_mismatch", "A instância deste cliente não confere.")
+            raise AppError(
+                409, "instance_binding_mismatch", "A instância deste cliente não confere."
+            )
         return str(name)
 
     def _reserve(self, p: Principal) -> str:
@@ -117,7 +123,9 @@ class EvolutionPairingService:
             self._set_status(p, "needs_attention")
             raise
         connected = state == "open"
-        result = "connected" if connected else ("pending" if state == "connecting" else "disconnected")
+        result = (
+            "connected" if connected else "pending" if state == "connecting" else "disconnected"
+        )
         self._set_status(p, result, verified=connected)
         return {"status": result, "connected": connected}
 
