@@ -8,7 +8,7 @@ from typing import Any
 from fm_seller.channels.evolution import EvolutionClient, InstanceMissing
 from fm_seller.config import Settings
 from fm_seller.db import Database
-from fm_seller.errors import AppError, forbidden, not_found
+from fm_seller.errors import AppError, forbidden
 from fm_seller.security.crypto import CryptoError, SecretBox
 from fm_seller.services import EDIT_ROLES, Principal, audit, tenant_features
 
