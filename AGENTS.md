@@ -17,8 +17,14 @@ Produto comercial da F&M Tecnologia. Autoridade final: Fábio (Diretor Executivo
    cliente, nunca do texto do modelo. A IA nunca recebe token ou credencial.
 6. **Nunca declarar sucesso sem verificação.** Conexão só vira "conectada" depois de teste real;
    sem adaptador real, o resultado é "não confirmada". Estado de envio vem do provedor, não da intenção.
-7. **Canais Meta oficiais apenas** (WhatsApp Cloud API, Messenger, Instagram). Nada de WhatsApp via QR code.
-   Consentimento e opt-out são respeitados em todo envio.
+7. **Provedores de canais governados.** WhatsApp pode usar **Meta Cloud API oficial ou Evolution API**
+   por adaptadores próprios na mesma aplicação (ADR-0006); Messenger e Instagram continuam via APIs
+   oficiais da Meta. Não misturar as identidades, credenciais ou webhooks dos provedores, nem criar
+   um segundo motor de conversas/recuperação, persistência ou autenticação. **Evolution autorizada
+   arquiteturalmente não significa envio habilitado.** Modo WhatsApp Web/Baileys ou pareamento via
+   QR Code exige decisão operacional específica e avaliação de riscos/termos do WhatsApp antes de uso.
+   Exigir conexão verificada, autenticação do webhook, tenant isolado, consentimento, opt-out,
+   idempotência, auditoria e testes reais; em falhas de autenticação ou escopo, negar por padrão.
 8. **Preços de provedores são dado versionado com data**, não constante no código.
 9. **Evidência antes de "concluído".** Ruff, mypy strict e pytest passando, CI verde, riscos
    residuais registrados. Teste simulado não prova integração real.
