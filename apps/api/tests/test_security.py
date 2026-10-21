@@ -32,7 +32,11 @@ HEADERS = (
 
 def limited_client(env: Env, db: Database, **over: Any) -> Iterator[TestClient]:
     settings = env.settings().model_copy(update={"rate_limit_enabled": True, **over})
-    with TestClient(create_app(settings, db=db, box=env.box), headers={"Origin": ORIGIN}) as c:
+    with TestClient(
+        create_app(settings, db=db, box=env.box),
+        headers={"Origin": ORIGIN},
+        client=("172.16.0.1", 5000),
+    ) as c:
         yield c
 
 
@@ -49,6 +53,7 @@ def strict(env: Env, db: Database) -> Iterator[TestClient]:
         rate_webhook_per_min=50,
         max_body_bytes=2048,
         trust_proxy=True,
+        trusted_proxy_cidrs="172.16.0.1/32",
     )
 
 
@@ -120,9 +125,8 @@ def test_client_ip_uses_the_last_forwarded_entry_only_when_trusted() -> None:
             "client": ("172.16.0.1", 5000),
         }
     )
-    assert (
-        client_ip(request, trust_proxy=True) == "10.0.0.7"
-    )  # a entrada do proxy, não a do cliente
+    assert client_ip(request, trust_proxy=True, trusted_proxy_cidrs="172.16.0.1/32") == "10.0.0.7"
+    assert client_ip(request, trust_proxy=True) == "172.16.0.1"
     assert client_ip(request, trust_proxy=False) == "172.16.0.1"
 
 
@@ -321,3 +325,41 @@ def test_user_controlled_text_cannot_forge_a_log_line() -> None:
     record = logging.LogRecord("x", logging.INFO, __file__, 1, forged, None, None)
     line = JsonFormatter().format(record)
     assert "\n" not in line and json.loads(line)["msg"] == forged  # uma linha só, texto como dado
+
+
+@pytest.mark.parametrize(
+    ("peer", "forwarded", "cidrs", "expected"),
+    [
+        ("203.0.113.20", "198.51.100.1", "10.0.0.0/8", "203.0.113.20"),
+        ("10.0.0.7", "198.51.100.1, 10.0.0.8", "10.0.0.0/8", "198.51.100.1"),
+        ("10.0.0.7", "1.1.1.1, 198.51.100.2", "10.0.0.0/8", "198.51.100.2"),
+        ("10.0.0.7", "not-an-ip", "10.0.0.0/8", "10.0.0.7"),
+        ("10.0.0.7", "", "10.0.0.0/8", "10.0.0.7"),
+        ("10.0.0.7", "198.51.100.1", "", "10.0.0.7"),
+        ("10.0.0.7", "198.51.100.1", "invalid-cidr", "10.0.0.7"),
+    ],
+)
+def test_client_ip_requires_trusted_peer_and_valid_chain(
+    peer: str, forwarded: str, cidrs: str, expected: str
+) -> None:
+    headers = [(b"x-forwarded-for", forwarded.encode())] if forwarded else []
+    request = Request(
+        {"type": "http", "method": "GET", "path": "/", "headers": headers, "client": (peer, 5000)}
+    )
+    assert client_ip(request, trust_proxy=True, trusted_proxy_cidrs=cidrs) == expected
+
+
+def test_client_ip_rejects_duplicate_forwarded_headers() -> None:
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "client": ("10.0.0.7", 5000),
+            "headers": [
+                (b"x-forwarded-for", b"198.51.100.1"),
+                (b"x-forwarded-for", b"198.51.100.2"),
+            ],
+        }
+    )
+    assert client_ip(request, True, "10.0.0.0/8") == "10.0.0.7"
