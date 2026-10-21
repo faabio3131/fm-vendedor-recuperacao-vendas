@@ -89,9 +89,10 @@ class Settings(BaseSettings):
     # Limites contra abuso (docs/SEGURANCA.md). Contagem na memória do processo: com mais de uma
     # instância cada uma conta sozinha. Em teste e no e2e local fica desligado de propósito.
     rate_limit_enabled: bool = True
-    # Atrás do proxy do painel/Render o IP do cliente vem em X-Forwarded-For (última entrada).
-    # NÃO CONFIRMADO no Render: sem isto o limite por IP enxerga só o proxy.
+    # Só confia em X-Forwarded-For quando o peer TCP está numa rede explicitamente autorizada.
+    # Sem CIDRs confiáveis, trust_proxy=True continua em modo fail-closed.
     trust_proxy: bool = False
+    trusted_proxy_cidrs: str = ""
     max_body_bytes: int = Field(default=1_048_576, ge=1024)
     rate_login_per_5min: int = Field(default=60, ge=1)
     rate_api_per_min: int = Field(default=1200, ge=1)
