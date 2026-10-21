@@ -21,10 +21,13 @@ Produto comercial da F&M Tecnologia. Autoridade final: Fábio (Diretor Executivo
    por adaptadores próprios na mesma aplicação (ADR-0006); Messenger e Instagram continuam via APIs
    oficiais da Meta. Não misturar as identidades, credenciais ou webhooks dos provedores, nem criar
    um segundo motor de conversas/recuperação, persistência ou autenticação. **Evolution autorizada
-   arquiteturalmente não significa envio habilitado.** Modo WhatsApp Web/Baileys ou pareamento via
-   QR Code exige decisão operacional específica e avaliação de riscos/termos do WhatsApp antes de uso.
-   Exigir conexão verificada, autenticação do webhook, tenant isolado, consentimento, opt-out,
-   idempotência, auditoria e testes reais; em falhas de autenticação ou escopo, negar por padrão.
+   arquiteturalmente não significa envio habilitado.** Para **AtendeVendeIA**, o Diretor escolheu
+   explicitamente **Evolution API + WhatsApp Web/Baileys por QR Code** em 20/10/2026;
+   **não confundir com VendeAtendeIA**. A escolha da modalidade não dispensa avaliação dos
+   termos e riscos de bloqueio/desconexão, nem autoriza ativação comercial sem certificação.
+   Exigir vínculo por tenant e instância, sessão recuperável, conexão verificada, autenticação
+   dos webhooks, consentimento, opt-out, idempotência, auditoria, testes reais e revogação;
+   em falhas de autenticação ou escopo, negar por padrão.
 8. **Preços de provedores são dado versionado com data**, não constante no código.
 9. **Evidência antes de "concluído".** Ruff, mypy strict e pytest passando, CI verde, riscos
    residuais registrados. Teste simulado não prova integração real.
