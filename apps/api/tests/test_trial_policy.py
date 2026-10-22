@@ -21,9 +21,7 @@ def _enroll(client: TestClient, env: Env, db: Database) -> uuid.UUID:
     email = unique_email("trial")
     tenant = uuid.UUID(env.tenant("Piloto trial", email))
     assert login(client, email).status_code == 200
-    actor = env.sql(
-        "SELECT user_id FROM memberships WHERE tenant_id = %s", (tenant,)
-    )[0][0]
+    actor = env.sql("SELECT user_id FROM memberships WHERE tenant_id = %s", (tenant,))[0][0]
     state = trial.start(db, tenant, actor=actor, now=START)
     assert state["limit"] == 500 and state["warn_at"] == 400
     assert state["status"] == "active"
@@ -72,9 +70,12 @@ def test_shared_cap_warning_expiry_and_idempotency(
         assert state["conversion_prompt"] is False
 
     one = uuid.uuid4()
-    assert trial.reserve(
-        db, tenant, source_kind="recovery", source_id=one, now=START + timedelta(days=1)
-    ) == "reserved"
+    assert (
+        trial.reserve(
+            db, tenant, source_kind="recovery", source_id=one, now=START + timedelta(days=1)
+        )
+        == "reserved"
+    )
     assert trial.finalize(db, tenant, source_kind="recovery", source_id=one, outcome="sent")
     with db.tx(tenant_id=tenant) as conn:
         state = trial.snapshot(conn, tenant, now=START + timedelta(days=1))
@@ -84,9 +85,10 @@ def test_shared_cap_warning_expiry_and_idempotency(
     env.sql("UPDATE tenant_plans SET trial_messages_sent = 499 WHERE tenant_id = %s", (tenant,))
     last = uuid.uuid4()
     assert trial.reserve(db, tenant, source_kind="bot", source_id=last, now=START) == "reserved"
-    assert trial.reserve(
-        db, tenant, source_kind="recovery", source_id=uuid.uuid4(), now=START
-    ) == "blocked"
+    assert (
+        trial.reserve(db, tenant, source_kind="recovery", source_id=uuid.uuid4(), now=START)
+        == "blocked"
+    )
     assert trial.finalize(db, tenant, source_kind="bot", source_id=last, outcome="sent")
     with db.tx(tenant_id=tenant) as conn:
         state = trial.snapshot(conn, tenant, now=START)
@@ -98,10 +100,16 @@ def test_shared_cap_warning_expiry_and_idempotency(
     with db.tx(tenant_id=expiring) as conn:
         state = trial.snapshot(conn, expiring, now=START + timedelta(days=7))
         assert state is not None and state["status"] == "expired"
-    assert trial.reserve(
-        db, expiring, source_kind="bot", source_id=uuid.uuid4(),
-        now=START + timedelta(days=7),
-    ) == "blocked"
+    assert (
+        trial.reserve(
+            db,
+            expiring,
+            source_kind="bot",
+            source_id=uuid.uuid4(),
+            now=START + timedelta(days=7),
+        )
+        == "blocked"
+    )
 
 
 def test_failed_send_releases_slot_uncertain_conservatively_uses_it(
@@ -112,9 +120,10 @@ def test_failed_send_releases_slot_uncertain_conservatively_uses_it(
     unknown = uuid.uuid4()
     assert trial.reserve(db, tenant, source_kind="bot", source_id=failed, now=START) == "reserved"
     assert trial.finalize(db, tenant, source_kind="bot", source_id=failed, outcome="failed")
-    assert trial.reserve(
-        db, tenant, source_kind="recovery", source_id=unknown, now=START
-    ) == "reserved"
+    assert (
+        trial.reserve(db, tenant, source_kind="recovery", source_id=unknown, now=START)
+        == "reserved"
+    )
     assert trial.finalize(
         db, tenant, source_kind="recovery", source_id=unknown, outcome="uncertain"
     )
@@ -131,9 +140,7 @@ def test_two_workers_cannot_exceed_last_shared_slot(
     env.sql("UPDATE tenant_plans SET trial_messages_sent = 499 WHERE tenant_id = %s", (tenant,))
     bot, recovery = uuid.uuid4(), uuid.uuid4()
     with ThreadPoolExecutor(max_workers=2) as pool:
-        a = pool.submit(
-            trial.reserve, db, tenant, source_kind="bot", source_id=bot, now=START
-        )
+        a = pool.submit(trial.reserve, db, tenant, source_kind="bot", source_id=bot, now=START)
         b = pool.submit(
             trial.reserve, db, tenant, source_kind="recovery", source_id=recovery, now=START
         )
