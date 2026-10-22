@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
-import { api, ApiError, storeTenant, type Me } from "@/lib/api";
+import { api, ApiError, storeTenant, type Me, type MyPlan } from "@/lib/api";
 import { Brand } from "@/components/Brand";
 
 const MeContext = createContext<Me | null>(null);
@@ -41,6 +41,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const path = usePathname();
   const [me, setMe] = useState<Me | null>(null);
+  const [trial, setTrial] = useState<MyPlan["trial"]>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,6 +63,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
         setError(message);
       });
   }, [router]);
+
+  useEffect(() => {
+    if (!me) return;
+    api<MyPlan>("/v1/plan")
+      .then((plan) => setTrial(plan.trial ?? null))
+      .catch(() => setTrial(null));
+  }, [me]);
 
   async function logout() {
     await api("/v1/auth/logout", { method: "POST" }).catch(() => undefined);
@@ -130,6 +138,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {["suspended", "canceled", "refunded"].includes(me.plan.status) && (
             <div className="alert bad" role="status">
               Assinatura inativa: envios e vendedor IA pausados. <Link href="/plan">Saiba mais</Link>.
+            </div>
+          )}
+          {trial?.conversion_prompt && (
+            <div className={trial.status === "active" ? "alert" : "alert bad"} role="status">
+              {trial.status === "active"
+                ? `Teste grátis: ${trial.used} de ${trial.limit} mensagens automáticas utilizadas. Já é hora de conhecer nossos planos pagos.`
+                : "Seu teste grátis terminou e os envios automáticos foram bloqueados."}
+              {" "}Não há cobrança automática. <Link href="/plan">Ver meu plano</Link>.
             </div>
           )}
           {children}
