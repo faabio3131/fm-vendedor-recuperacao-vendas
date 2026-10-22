@@ -134,9 +134,7 @@ def test_failed_send_releases_slot_uncertain_conservatively_uses_it(
         assert state["reserved"] == 1
 
     # Reconcile the uncertain send only after evidence of a definitive provider outcome.
-    assert trial.finalize(
-        db, tenant, source_kind="recovery", source_id=unknown, outcome="sent"
-    )
+    assert trial.finalize(db, tenant, source_kind="recovery", source_id=unknown, outcome="sent")
     with db.tx(tenant_id=tenant) as conn:
         state = trial.snapshot(conn, tenant, now=START)
         assert state is not None and state["used"] == 1
@@ -170,17 +168,15 @@ def test_trial_admin_grant_requires_platform_role_and_generic_plan_change_is_den
     assert login(client, owner).status_code == 200
     path = f"/v1/admin/clients/{tenant}/trial"
     assert client.post(path).status_code == 403
-    assert client.put(
-        f"/v1/admin/clients/{tenant}/plan", json={"plan": "av-trial"}
-    ).status_code == 403
+    assert (
+        client.put(f"/v1/admin/clients/{tenant}/plan", json={"plan": "av-trial"}).status_code == 403
+    )
     assert client.post("/v1/auth/logout").status_code == 200
 
     email = unique_email("trial-admin")
     assert pa.invite_admin(env.admin_url, email) == "convite"
     assert login(client, email).status_code == 200
-    rejected = client.put(
-        f"/v1/admin/clients/{tenant}/plan", json={"plan": "av-trial"}
-    )
+    rejected = client.put(f"/v1/admin/clients/{tenant}/plan", json={"plan": "av-trial"})
     assert rejected.status_code == 400
     assert rejected.json()["error"]["code"] == "trial_requires_grant"
 
