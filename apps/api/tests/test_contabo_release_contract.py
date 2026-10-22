@@ -2,6 +2,7 @@
 
 These tests are offline and never connect to the production server.
 """
+
 from __future__ import annotations
 
 import os
