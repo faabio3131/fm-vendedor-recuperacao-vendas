@@ -21,6 +21,9 @@ function Seller() {
   const [persona, setPersona] = useState("");
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [note, setNote] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsFeedback, setSettingsFeedback] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
+  const settingsChanged = settings !== null && persona.trim() !== settings.ai_persona;
 
   const load = useCallback(() => {
     api<Offer[]>("/v1/seller/offers").then(setOffers).catch(() => undefined);
@@ -43,11 +46,25 @@ function Seller() {
     }
   };
 
-  const saveSettings = (ai_enabled: boolean) =>
-    run(async () => {
-      await api("/v1/seller/settings", { method: "PUT", body: JSON.stringify({ ai_enabled, ai_persona: persona }) });
-      return "Ajustes salvos.";
-    });
+  const saveSettings = async (ai_enabled: boolean) => {
+    if (!settings || savingSettings) return;
+    setSavingSettings(true);
+    setSettingsFeedback(null);
+    try {
+      const updated = await api<SellerSettings>("/v1/seller/settings", {
+        method: "PUT",
+        body: JSON.stringify({ ai_enabled, ai_persona: persona }),
+      });
+      setSettings(updated);
+      setPersona(updated.ai_persona);
+      setNote(null);
+      setSettingsFeedback({ kind: "ok", text: "Ajustes salvos com sucesso." });
+    } catch (e) {
+      setSettingsFeedback({ kind: "bad", text: e instanceof Error ? e.message : "Não foi possível salvar os ajustes." });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const addOffer = () =>
     run(async () => {
@@ -95,7 +112,7 @@ function Seller() {
         <label className="check">
           <input
             type="checkbox"
-            disabled={!canEdit || !settings}
+            disabled={!canEdit || !settings || savingSettings}
             checked={settings?.ai_enabled ?? false}
             onChange={(e) => void saveSettings(e.target.checked)}
           />
@@ -115,12 +132,30 @@ function Seller() {
           <div className="alert">Sem oferta ativa, toda conversa vai para uma pessoa. Cadastre uma abaixo.</div>
         )}
         <label htmlFor="persona">Tom de voz (opcional)</label>
-        <textarea id="persona" maxLength={600} disabled={!canEdit} value={persona} onChange={(e) => setPersona(e.target.value)} />
+        <textarea
+          id="persona"
+          maxLength={600}
+          disabled={!canEdit || savingSettings}
+          value={persona}
+          onChange={(e) => {
+            setPersona(e.target.value);
+            setSettingsFeedback(null);
+          }}
+        />
         {canEdit && (
           <div className="row">
-            <button className="primary" onClick={() => void saveSettings(settings?.ai_enabled ?? false)}>
-              Salvar ajustes
+            <button
+              className="primary"
+              disabled={!settings || savingSettings || !settingsChanged}
+              onClick={() => void saveSettings(settings?.ai_enabled ?? false)}
+            >
+              {savingSettings ? "Salvando..." : settingsFeedback?.kind === "ok" && !settingsChanged ? "✓ Salvo" : "Salvar ajustes"}
             </button>
+            {settingsFeedback && (
+              <span className={settingsFeedback.kind === "ok" ? "muted" : "alert bad"} role="status" aria-live="polite">
+                {settingsFeedback.text}
+              </span>
+            )}
           </div>
         )}
       </div>
