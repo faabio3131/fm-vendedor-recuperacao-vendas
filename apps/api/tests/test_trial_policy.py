@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
+from fm_seller import platform_admin as pa
 from fm_seller.db import Database
 from fm_seller.errors import AppError
 from fm_seller.provisioning import trial
@@ -150,3 +151,39 @@ def test_two_workers_cannot_exceed_last_shared_slot(
         state = trial.snapshot(conn, tenant, now=START)
         assert state is not None and state["reserved"] == 1
         assert state["remaining"] == 0
+
+
+def test_trial_admin_grant_requires_platform_role_and_generic_plan_change_is_denied(
+    client: TestClient, env: Env
+) -> None:
+    owner = unique_email("trial-owner")
+    tenant = env.tenant("Cliente do teste interno", owner)
+    assert login(client, owner).status_code == 200
+    path = f"/v1/admin/clients/{tenant}/trial"
+    assert client.post(path).status_code == 403
+    assert client.put(
+        f"/v1/admin/clients/{tenant}/plan", json={"plan": "av-trial"}
+    ).status_code == 403
+    assert client.post("/v1/auth/logout").status_code == 200
+
+    email = unique_email("trial-admin")
+    assert pa.invite_admin(env.admin_url, email) == "convite"
+    assert login(client, email).status_code == 200
+    rejected = client.put(
+        f"/v1/admin/clients/{tenant}/plan", json={"plan": "av-trial"}
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["error"]["code"] == "trial_requires_grant"
+
+    result = client.post(path)
+    assert result.status_code == 200, result.text
+    assert result.json()["limit"] == 500 and result.json()["warn_at"] == 400
+    assert client.post(path).status_code == 400
+    rows = env.sql(
+        "SELECT plan_key, trial_message_cap, trial_warn_at, trial_started_at "
+        "FROM tenant_plans WHERE tenant_id = %s",
+        (tenant,),
+    )
+    assert len(rows) == 1
+    assert rows[0][0:3] == ("av-trial", 500, 400)
+    assert rows[0][3] is not None
