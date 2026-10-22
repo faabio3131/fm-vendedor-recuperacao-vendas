@@ -130,6 +130,15 @@ def test_failed_send_releases_slot_uncertain_conservatively_uses_it(
     )
     with db.tx(tenant_id=tenant) as conn:
         state = trial.snapshot(conn, tenant, now=START)
+        assert state is not None and state["used"] == 0
+        assert state["reserved"] == 1
+
+    # Reconcile the uncertain send only after evidence of a definitive provider outcome.
+    assert trial.finalize(
+        db, tenant, source_kind="recovery", source_id=unknown, outcome="sent"
+    )
+    with db.tx(tenant_id=tenant) as conn:
+        state = trial.snapshot(conn, tenant, now=START)
         assert state is not None and state["used"] == 1
         assert state["reserved"] == 0
 
