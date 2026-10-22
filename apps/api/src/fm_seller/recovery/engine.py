@@ -451,10 +451,16 @@ def _process(
         _finish_if_done(conn, step.case_id, now)
     if reservation == "reserved":
         trial.finalize(
-            db, step.tenant_id, source_kind="recovery", source_id=step.id,
+            db,
+            step.tenant_id,
+            source_kind="recovery",
+            source_id=step.id,
             outcome=(
-                "sent" if outcome == "sent" else "uncertain"
-                if detail and detail.startswith("resultado_incerto") else "failed"
+                "sent"
+                if outcome == "sent"
+                else "uncertain"
+                if detail and detail.startswith("resultado_incerto")
+                else "failed"
             ),
         )
     return outcome
