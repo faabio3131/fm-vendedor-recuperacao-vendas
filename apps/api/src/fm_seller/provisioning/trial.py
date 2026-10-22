@@ -41,8 +41,12 @@ def snapshot(
     reserved = int(row["trial_messages_reserved"])
     # A trial plan without authoritative dates or limits is always closed.
     valid = (
-        started is not None and ends is not None and isinstance(cap, int)
-        and cap > 0 and isinstance(threshold, int) and 0 < threshold < cap
+        started is not None
+        and ends is not None
+        and isinstance(cap, int)
+        and cap > 0
+        and isinstance(threshold, int)
+        and 0 < threshold < cap
     )
     expired = not valid or stamp >= ends
     exhausted = not valid or used + reserved >= cap
@@ -90,8 +94,12 @@ def start(
             "trial_expires_at = %s, trial_message_cap = %s, trial_warn_at = %s "
             "WHERE tenant_id = %s",
             (
-                PLAN, stamp, stamp + timedelta(days=int(policy["duration_days"])),
-                policy["message_cap"], policy["warn_at"], tenant_id,
+                PLAN,
+                stamp,
+                stamp + timedelta(days=int(policy["duration_days"])),
+                policy["message_cap"],
+                policy["warn_at"],
+                tenant_id,
             ),
         )
         audit(conn, tenant_id=tenant_id, actor=actor, action="trial.started", target=PLAN)
@@ -135,7 +143,9 @@ def reserve(
             return "duplicate"
         cap, expires = row["trial_message_cap"], row["trial_expires_at"]
         if (
-            expires is None or stamp >= expires or not isinstance(cap, int)
+            expires is None
+            or stamp >= expires
+            or not isinstance(cap, int)
             or row["trial_messages_sent"] + row["trial_messages_reserved"] >= cap
         ):
             return "blocked"
