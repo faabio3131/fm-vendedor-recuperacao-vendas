@@ -78,4 +78,13 @@ if MOCK_TAMPER=1 bash "$here/backup_offsite.sh" >"$root/negative.log" 2>&1; then
   echo "FAIL: accepted tampered remote backup" >&2
   exit 1
 fi
+bash -n "$here/restore_offsite_check.sh"
+printf 'synthetic-identity' >"$root/identity"
+if BACKUP_REMOTE_OBJECT="mock:store/fake.dump.age" AGE_IDENTITY_FILE="$root/identity" \
+   RESTORE_DATABASE_URL="$FM_DATABASE_ADMIN_URL" \
+   bash "$here/restore_offsite_check.sh" >"$root/unsafe.log" 2>&1; then
+  echo "FAIL: isolated restore accepted unsafe target" >&2
+  exit 1
+fi
 echo 'PASS: offsite backup encrypted-upload control flow and tamper rejection'
+echo 'PASS: isolated restore rejects non-test database'
