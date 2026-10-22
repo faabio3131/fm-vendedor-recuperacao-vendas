@@ -51,7 +51,7 @@ def test_outbox_sends_only_last_trial_message_across_two_claimed(
     sender = SimulatedSender()
     result = flush_outbox(db, env.box, sender, now=NOW, limit=2)
     assert (result.sent, result.failed) == (1, 1)
-    assert len(sender.sent) == 1
+    assert len(sender.texts) == 1  # send_text is the conversational outbound path
     states = env.sql(
         "SELECT status FROM messages WHERE id = ANY(%s) ORDER BY created_at",
         (ids,),
