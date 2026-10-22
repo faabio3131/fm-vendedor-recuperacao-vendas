@@ -18,9 +18,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fm_seller.ai import usage
-from fm_seller.provisioning import trial
 from fm_seller.db import Conn, Database
 from fm_seller.events import normalize as n
+from fm_seller.provisioning import trial
 from fm_seller.services import audit
 
 ACTIVE = "active"
