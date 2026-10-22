@@ -18,7 +18,9 @@ PLAN = "av-trial"
 SOURCE_KINDS = ("bot", "recovery")
 
 
-def snapshot(conn: Conn, tenant_id: uuid.UUID, *, now: datetime | None = None) -> dict[str, Any] | None:
+def snapshot(
+    conn: Conn, tenant_id: uuid.UUID, *, now: datetime | None = None
+) -> dict[str, Any] | None:
     """Read-only trial state from the same plan authority used for paid subscriptions."""
     stamp = now or datetime.now(UTC)
     row = conn.execute(
@@ -62,7 +64,9 @@ def blocked(conn: Conn, tenant_id: uuid.UUID, *, now: datetime | None = None) ->
     return current is not None and current["status"] != "active"
 
 
-def start(db: Database, tenant_id: uuid.UUID, *, actor: uuid.UUID, now: datetime | None = None) -> dict[str, Any]:
+def start(
+    db: Database, tenant_id: uuid.UUID, *, actor: uuid.UUID, now: datetime | None = None
+) -> dict[str, Any]:
     """Internal platform operation only. Never reset an earlier trial."""
     stamp = now or datetime.now(UTC)
     with db.tx(system=True, user_id=actor) as conn:
