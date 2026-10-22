@@ -115,7 +115,7 @@ def test_onboarding_whatsapp_requires_verified_evolution_session(
     def whatsapp_ready() -> bool:
         report = client.get("/v1/onboarding")
         assert report.status_code == 200
-        return next(s["done"] for s in report.json()["steps"] if s["key"] == "whatsapp")
+        return bool(next(s["done"] for s in report.json()["steps"] if s["key"] == "whatsapp"))
 
     assert whatsapp_ready() is False
     assert client.post("/v1/connections/evolution/connect").json()["status"] == "pending"
