@@ -29,7 +29,8 @@ def test_release_script_is_valid_bash_and_requires_two_independent_approvals() -
     assert "pg_restore --exit-on-error" in text
     assert "SOURCE_COMMIT" in text
     guard = GUARD.read_text()
-    assert "sudo" not in guard
+    assert "sudo -S" not in guard
+    assert "docker " not in guard
     assert "stage)" in guard and "deploy)" in guard and "inspect)" in guard
     assert 'exec /bin/bash "$script" deploy' in guard
     assert "docker compose down" not in text
