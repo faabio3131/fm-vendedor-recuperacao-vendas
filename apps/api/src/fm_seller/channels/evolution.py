@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hmac
 import re
 from typing import Any
 
@@ -104,27 +105,39 @@ class EvolutionClient:
         safe = self._name(name)
         if not url.startswith("https://") or len(token) < 32:
             raise AppError(503, "webhook_config_invalid", "Configuração do webhook inválida.")
-        payload = self._call(
-            "POST",
-            f"/webhook/set/{safe}",
-            body={
+        # Installed Evolution v2.3.7 requires the nested 'webhook' schema.
+        # Top-level fields can be rejected with 400 before any callback is registered.
+        body: dict[str, Any] = {
+            "webhook": {
                 "enabled": True,
                 "url": url,
-                "webhookByEvents": False,
-                "webhookBase64": False,
+                "byEvents": False,
+                "base64": False,
                 "events": ["MESSAGES_UPSERT", "MESSAGES_UPDATE"],
                 "headers": {"x-fm-evolution-auth": token},
-            },
-        )
-        # Provider versions differ in wrapper shape. Never accept a clear rejection.
-        webhook = payload.get("webhook")
-        if isinstance(webhook, dict):
-            item = webhook.get("webhook", webhook)
-            if isinstance(item, dict) and (
-                item.get("enabled") is False
-                or (isinstance(item.get("url"), str) and item["url"] != url)
-            ):
-                raise AppError(502, "webhook_config_mismatch", "Webhook divergente.")
+            }
+        }
+        self._call("POST", f"/webhook/set/{safe}", body=body)
+        # Verify the persisted configuration, including custom authentication
+        # header. Fail closed if this provider cannot reliably persist the token.
+        saved = self._call("GET", f"/webhook/find/{safe}")
+        item = saved.get("webhook", saved)
+        if not isinstance(item, dict):
+            raise AppError(502, "webhook_config_mismatch", "Webhook sem configuração verificável.")
+        headers = item.get("headers")
+        if (
+            item.get("enabled") is not True
+            or item.get("url") != url
+            or item.get("webhookByEvents") is not False
+            or not isinstance(item.get("events"), list)
+            or not {"MESSAGES_UPSERT", "MESSAGES_UPDATE"}.issubset(set(item["events"]))
+            or not isinstance(headers, dict)
+            or not isinstance(headers.get("x-fm-evolution-auth"), str)
+            or not hmac.compare_digest(headers["x-fm-evolution-auth"], token)
+        ):
+            raise AppError(
+                502, "webhook_config_mismatch", "Webhook divergente ou sem autenticação."
+            )
 
     def qr(self, name: str) -> str:
         safe = self._name(name)

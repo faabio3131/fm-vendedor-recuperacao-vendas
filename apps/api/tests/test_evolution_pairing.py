@@ -177,3 +177,83 @@ def test_evolution_http_contract_and_rejects_invalid_state(
     assert json.loads(calls[-1].content)["integration"] == "WHATSAPP-BAILEYS"
     with pytest.raises(AppError):
         client.state("../../other-tenant")
+
+
+def test_evolution_237_webhook_schema_and_verified_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The installed v2.3.7 requires a nested webhook, and we verify saved auth."""
+    name = "fmav-" + "c" * 32
+    url = f"https://app.example.test/v1/webhooks/evolution/{name}"
+    token = "v" * 64
+    saved: dict[str, object] = {}
+    seen: list[str] = []
+    raw_client = httpx.Client
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url.path))
+        if request.url.path.endswith(f"/webhook/set/{name}"):
+            payload = json.loads(request.content)
+            assert set(payload) == {"webhook"}
+            webhook = payload["webhook"]
+            assert webhook["enabled"] is True
+            assert webhook["url"] == url
+            assert webhook["byEvents"] is False
+            assert webhook["base64"] is False
+            assert set(webhook["events"]) == {"MESSAGES_UPSERT", "MESSAGES_UPDATE"}
+            assert webhook["headers"]["x-fm-evolution-auth"] == token
+            saved.clear()
+            saved.update(
+                {
+                    "enabled": webhook["enabled"],
+                    "url": webhook["url"],
+                    "webhookByEvents": webhook["byEvents"],
+                    "webhookBase64": webhook["base64"],
+                    "events": webhook["events"],
+                    "headers": webhook["headers"],
+                }
+            )
+            return httpx.Response(201, json={"webhook": saved})
+        if request.url.path.endswith(f"/webhook/find/{name}"):
+            return httpx.Response(200, json=saved)
+        return httpx.Response(404, json={"error": "unexpected route"})
+
+    monkeypatch.setattr(
+        "fm_seller.channels.evolution.httpx.Client",
+        lambda **kw: raw_client(transport=httpx.MockTransport(handler), **kw),
+    )
+    client = EvolutionClient(base_url="https://evolution.example.test", api_key="s" * 40)
+    client.configure_webhook(name, url, token)
+    assert seen == [f"/webhook/set/{name}", f"/webhook/find/{name}"]
+
+
+def test_evolution_237_webhook_rejects_bad_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    name = "fmav-" + "d" * 32
+    raw_client = httpx.Client
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(f"/webhook/set/{name}"):
+            return httpx.Response(201, json={"webhook": {"instanceName": name}})
+        return httpx.Response(
+            200,
+            json={
+                "enabled": True,
+                "url": "https://wrong.example.test",
+                "webhookByEvents": False,
+                "events": ["MESSAGES_UPSERT"],
+                "headers": {"x-fm-evolution-auth": "bad"},
+            },
+        )
+
+    monkeypatch.setattr(
+        "fm_seller.channels.evolution.httpx.Client",
+        lambda **kw: raw_client(transport=httpx.MockTransport(handler), **kw),
+    )
+    client = EvolutionClient(base_url="https://evolution.example.test", api_key="s" * 40)
+    with pytest.raises(AppError) as exc:
+        client.configure_webhook(
+            name, "https://app.example.test/v1/webhooks/evolution/" + name, "v" * 64
+        )
+    assert exc.value.code == "webhook_config_mismatch"

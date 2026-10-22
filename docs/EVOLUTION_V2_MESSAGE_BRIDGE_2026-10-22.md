@@ -33,3 +33,20 @@
 ## Observação de segurança
 
 Cabeçalhos customizados por webhook são documentados para Evolution v2, mas a imagem `evoapicloud/evolution-api:latest` deve ser reconciliada com sua versão exata antes de ativar. O sistema recusa webhooks sem prova do token, mesmo se o provedor antigo omitir o cabeçalho. Eventos repetidos são idempotentes, não tratados como novas mensagens.
+
+## Gate de contrato de versão exata — 22/10/2026
+
+**Servidor efetivo:** Contabo `vmi3683268`, container `evolution_api`, `evoapicloud/evolution-api:latest`, API reportou **2.3.7** via GET `/`. Imagem Docker `sha256:966625532d9076a2381e973a271307d107e6f070450de3abeeea8bd18be07252`, criada em 06/05/2026. Tag `latest` não é âncora imutável; proteger o próximo deploy fixando digest em configuração aprovada.
+
+**Provas observadas somente leitura:** GET `/instance/fetchInstances` autenticado: HTTP 200, uma instância, reportada `connecting`. GET `/instance/connectionState/{instância}`: HTTP 200, estado `close` (verificação mais específica). GET `/webhook/find/{instância}`: HTTP 200; webhook ainda não configurado no formato esperado. GET `/event/webhook/find/{instância}`: 404, rota não suportada nesta instalação. Nenhum callback, mensagem ou alteração na Evolution foi executado neste gate.
+
+**Contrato confrontado com código-fonte da tag oficial `2.3.7`, commit `cd800f2976e1e5b682fbf86a01ee4d85ae61f370`:**
+- `WebhookRouter` usa `POST /webhook/set/{instance}` e `GET /webhook/find/{instance}`;
+- `webhookSchema` exige **`{"webhook":{"enabled":true,"url":"https://...","byEvents":false,"base64":false,"events":["MESSAGES_UPSERT","MESSAGES_UPDATE"],"headers":{"x-fm-evolution-auth":"..."}}}`**; os campos no nível raiz da versão anterior da PR eram inválidos. Corrigidos.
+- `WebhookController` persiste `headers` no registro da instância e os inclui no envio; a PR passou a realizar readback do webhook e recusa divergências inclusive da chave, sem expô-la ao browser.
+- `POST /message/sendText/{instance}` usa `{"number":"<numeros>","text":"<texto>"}` conforme `textMessageSchema`. Nenhuma mensagem real foi enviada.
+- O callback contém `event`, `instance`, `data`; versão validada por código-fonte e testes sintéticos. Eventos `@lid` sem telefone verificável permanecem ignorados (fail-closed); devem ser tratados em jornada piloto com evidência antes de alegar 100% do universo de contatos.
+
+**Limites deste gate:** verificação de rota, schema e testes com mocks não comprovam persistência em produção sob restart, autorização de envio ou chegada de mensagem. As flags `FM_EVOLUTION_ENABLED` e `FM_EVOLUTION_SEND_ENABLED` continuam desligadas na versão corrente implantada. Não houve deploy, merge, novo container nem alteração de instância ou webhook real.
+
+**Critério próximo:** CI completa verde, revisão independente, merge/deploy explicitamente autorizados; após implantado, registrar webhook na instância correspondente ao tenant, comprovar `/webhook/find` real com headers sem vazamento, escanear QR com número do piloto, comprovar `open`, mensagens inbound/IA/outbound e replay, monitorar restart e executar rollback se necessário.
