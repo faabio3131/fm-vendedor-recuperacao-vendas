@@ -19,6 +19,8 @@ jobs:
       PGPASSWORD: ci_admin_only
     steps:
       - uses: actions/checkout@v4
+      - name: Backup offsite synthetic security test
+        run: bash scripts/ops/selftest_backup_offsite.sh
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: Papéis do banco

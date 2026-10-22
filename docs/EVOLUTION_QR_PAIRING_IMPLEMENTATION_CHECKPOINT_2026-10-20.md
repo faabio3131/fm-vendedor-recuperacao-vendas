@@ -112,3 +112,16 @@ webhooks e roteamento do provider, sem repetição da interface de QR já implem
 
 **Gate de merge: bloqueado** até disponibilidade de runner, testes PostgreSQL/RLS,
 frontend E2E, revisão de segurança e autorização específica do Diretor.
+
+## Reconciliação de CURRENT — 22/10/2026 (verificação direta)
+
+- GitHub `main` confirmado em `54a46f10ed3a8ebe4337a5a573f9da02571b2b85`.
+- PR #72: OPEN/DRAFT, commit `0522629`, contém AGENTS.md atualizado e ADR-0006.
+- PR #73: OPEN/DRAFT, HEAD de origem `2e777d5c7eefb8f41bb108314348798133d4e20d`; é cumulativa e **já incorpora integralmente o escopo da PR #72**.
+- Contabo: pacote implantado `b276c0c2701244130797bd0251f1e6eaf5635bb8`; os diretórios de código no host e na imagem API ativa **não contêm** `fm_seller/channels/evolution.py`. Portanto, o pareamento da PR #73 **não foi migrado/deployado**.
+- Evolução de infraestrutura: container `evolution_api` está ativo, possui uma instância reportada como `connecting`; imagem candidata `fm/evolution-pairing:pr2759-5cdf324` foi encontrada **sem container utilizando-a**, não sendo evidência de implantação do adaptador FastAPI.
+- O QR já está implementado na PR #73. NÃO reconstruir esse recorte ou restabelecer a proibição antiga de QR Code.
+- Escopo remanescente **não implementado pela PR #73**: webhook Evolution autenticado/anti-replay, conversas e status, escolha explícita de provedor por tenant, envio/outbox e respostas da IA, revogação segura e teste real fim a fim.
+- Atualização local isolada da PR #73 com a `main`: merge sem conflitos. Ruff e Mypy strict dos módulos de pareamento: PASS. Frontend lint e typecheck: PASS. Testes PostgreSQL locais: bloqueados pela senha do role `fm_owner` preexistente; 1 teste unitário PASS, 4 erros de fixture antes da execução. GitHub Actions no HEAD anterior apresentou jobs API e Web com zero etapas, causa histórica de billing/runner, não prova de regressão.
+- Sem autorização de deploy nem merge em `main` nesta reconciliação; manter a PR em Draft até concluir construção integral, testes e gates. Não habilitar `FM_WHATSAPP_LIVE` ou `FM_EVOLUTION_ENABLED` antes de certificar o fluxo.
+- Frontend Next.js 15.5.27: `npm ci`, `npm run lint`, `npm run typecheck` e `npm run build`: PASS no checkout isolado reconciliado de 22/10/2026. Teste E2E real permanece pendente.
