@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fm_seller.ai import usage
+from fm_seller.provisioning import trial
 from fm_seller.db import Conn, Database
 from fm_seller.events import normalize as n
 from fm_seller.services import audit
@@ -140,11 +141,16 @@ def overview(conn: Conn, tenant_id: uuid.UUID, now: datetime | None = None) -> d
     grace_ends = None
     if status == PAST_DUE and row["past_due_since"] is not None:
         grace_ends = row["past_due_since"] + timedelta(days=row["grace_days"])
-    state = "blocked" if blocks_service(status) else ("grace" if status == PAST_DUE else "active")
+    trial_state = trial.snapshot(conn, tenant_id, now=stamp)
+    state = "blocked" if (
+        blocks_service(status)
+        or (trial_state is not None and trial_state["status"] != "active")
+    ) else ("grace" if status == PAST_DUE else "active")
     return {
         "plan": {"key": row["plan_key"], "name": row["display_name"]},
         "status": status,
         "state": state,
+        "trial": trial_state,
         "source": row["source"],
         "started_at": row["started_at"],
         "status_since": row["status_since"],
