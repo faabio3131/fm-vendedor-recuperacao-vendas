@@ -25,7 +25,7 @@ from fm_seller.events.capture import CaptureConfig, safe_record
 from fm_seller.events.ingest import MAX_BODY, auth_method, dedupe_key
 from fm_seller.events.normalize import NORMALIZERS, CheckoutEvent
 from fm_seller.provisioning import lifecycle
-from fm_seller.security.crypto import SecretBox
+from fm_seller.security.crypto import CryptoError, SecretBox
 from fm_seller.services import audit
 
 log = logging.getLogger("fm_seller.platform")
@@ -205,9 +205,25 @@ def reprocess_platform(db: Database, box: SecretBox, *, limit: int = 100) -> int
         ).fetchall()
     done = 0
     for r in rows:
-        body = box.decrypt(
-            r["payload_encrypted"], tenant_id="platform", provider=f"platform:{r['provider']}"
-        )
+        try:
+            body = box.decrypt(
+                r["payload_encrypted"], tenant_id="platform", provider=f"platform:{r['provider']}"
+            )
+        except CryptoError:
+            # Fail closed for this commercial event, not the entire seller/recovery worker.
+            # Keep encrypted evidence for an authorized key-recovery investigation.
+            log.error(
+                "evento comercial com autenticacao criptografica invalida; isolado",
+                extra={"ctx": {"event_id": str(r["id"]), "provider": r["provider"]}},
+            )
+            with db.tx(system=True) as conn:
+                conn.execute(
+                    "UPDATE platform_events SET outcome = 'crypto_quarantined', "
+                    "error = 'cryptographic_authentication_failed', processed_at = now() "
+                    "WHERE id = %s AND outcome = ANY(%s)",
+                    (r["id"], list(RETRY_OUTCOMES)),
+                )
+            continue
         ev = NORMALIZERS[r["provider"]](body)
         if ev is None:
             continue
