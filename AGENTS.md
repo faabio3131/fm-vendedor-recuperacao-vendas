@@ -1,6 +1,6 @@
 # AGENTS.md — fm-vendedor-recuperacao-vendas
 
-Produto comercial da F&M Tecnologia. Autoridade final: Fábio (Diretor Executivo).
+Produto da FM Tecnologia. Autoridade final: Fábio (Diretor Executivo).
 
 ## Regras obrigatórias
 
@@ -37,3 +37,13 @@ Produto comercial da F&M Tecnologia. Autoridade final: Fábio (Diretor Executivo
 
 Este repositório é o único autorizado para o agente. Alterar outros repositórios exige autorização
 expressa do Fábio.
+
+
+## Release Web / Contabo — regra de continuidade (2026-10-22)
+
+- A publicação da aplicação Contabo é MANUAL no GitHub Actions (workflow `Contabo pilot release (governed)`); **merge/CI verde NÃO executam deploy**.
+- Usar somente o HEAD atual da `main`, quatro gates verdes, confirmação explícita do Diretor e autorização específica **tanto para migration real quanto para deploy real**.
+- Exigir ambiente GitHub `contabo-pilot`, segredo de habilitação deliberada, host key SSH fixada e identidade exclusiva de deploy (sem reutilizar a chave administrativa root).
+- Antes de alterar PostgreSQL, executar backup novo, validar leitura e **restaurar em banco isolado**, conferindo a versão e RLS. Não usar restore automático do banco de produção.
+- Preservar PostgreSQL/volumes, NPM, Evolution e seus bancos, chaves, tenant, números e integrações. Atualizar apenas Web, API e Worker no escopo aprovado.
+- **Visibilidade temporária: repositório público para construção e testes.** A mudança para **privado** ocorrerá SOMENTE depois de finalizar todos os testes reais internos da FM e verificar no GitHub que CI, workflow de release e integração Cloudflare funcionam com repositório privado, com aprovação humana específica. Não alterar a visibilidade automaticamente.

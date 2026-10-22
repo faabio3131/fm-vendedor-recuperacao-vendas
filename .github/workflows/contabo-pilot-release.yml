@@ -1,0 +1,176 @@
+name: Contabo pilot release (governed)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/contabo-pilot-release.yml"
+      - "scripts/ops/contabo_pilot_release.sh"
+      - "scripts/ops/contabo_release_guard.sh"
+      - "apps/api/tests/test_contabo_release_contract.py"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Somente inspect ou deploy (deploy requer duas aprovações explícitas)"
+        required: true
+        type: choice
+        options: [inspect, deploy]
+      target_sha:
+        description: "SHA de 40 caracteres, HEAD certificado da main"
+        required: true
+        type: string
+      confirmation:
+        description: "Digite FM-ATENDEVENDEIA- seguido do SHA completo"
+        required: true
+        type: string
+      approve_migrations:
+        description: "Autorização específica para aplicar migrations no banco real"
+        type: boolean
+        default: false
+      approve_deploy:
+        description: "Autorização específica para atualizar Web/API/Worker"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: contabo-pilot-release
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate controlled deploy script syntax
+        run: bash -n scripts/ops/contabo_pilot_release.sh && bash -n scripts/ops/contabo_release_guard.sh
+      - name: Verify explicit safety guards
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("scripts/ops/contabo_pilot_release.sh").read_text()
+          assert "FM_DEPLOY_APPROVE_MIGRATIONS" in source
+          assert "FM_DEPLOY_APPROVE_RELEASE" in source
+          guard = Path("scripts/ops/contabo_release_guard.sh").read_text()
+          assert 'mode="${1:-}"' in guard
+          assert "stage)" in guard and "inspect)" in guard and "deploy)" in guard
+          assert "exec /bin/bash" in guard
+          assert "pg_restore" in source
+          assert "rls_invariant.sql" in source
+          assert "SOURCE_COMMIT" in source
+          assert "docker compose" in source
+          assert "docker compose down" not in source
+          assert "volume rm" not in source
+          PY
+
+  release:
+    if: github.event_name == 'workflow_dispatch'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: contabo-pilot
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Confirm FM operator, exact main SHA and approvals
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          OPERATION: ${{ inputs.operation }}
+          APPROVE_MIGRATIONS: ${{ inputs.approve_migrations }}
+          APPROVE_DEPLOY: ${{ inputs.approve_deploy }}
+          FM_DEPLOY_ENABLED: ${{ secrets.CONTABO_DEPLOY_ENABLED }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "::error::Only main may be released"; exit 1; }
+          [[ "$GITHUB_ACTOR" == "faabio3131" ]] || { echo "::error::Director account required"; exit 1; }
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid SHA"; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$TARGET_SHA" ]] || { echo "::error::SHA is not current main"; exit 1; }
+          [[ "$CONFIRMATION" == "FM-ATENDEVENDEIA-$TARGET_SHA" ]] || { echo "::error::Confirmation mismatch"; exit 1; }
+          [[ "$FM_DEPLOY_ENABLED" == "FM-PILOTO-ATIVO" ]] || { echo "::error::Protected environment not enabled"; exit 1; }
+          if [[ "$OPERATION" == "deploy" ]]; then
+            [[ "$APPROVE_MIGRATIONS" == "true" && "$APPROVE_DEPLOY" == "true" ]] || {
+              echo "::error::Explicit migration AND deployment approvals are required"; exit 1;
+            }
+          fi
+
+      - name: Verify CI gates for the exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GH_REPO/commits/$TARGET_SHA/check-runs?per_page=100" \
+            --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv' > "$RUNNER_TEMP/ci_checks"
+          for name in api web e2e "Cloudflare Pages"; do
+            awk -F '\t' -v n="$name" '$1 == n && $2 == "completed" && $3 == "success" { found=1 } END { exit !found }' \
+              "$RUNNER_TEMP/ci_checks" || { echo "::error::Missing successful CI gate: $name"; exit 1; }
+          done
+
+      - name: Prepare immutable commit archive
+        if: inputs.operation == 'deploy'
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          git archive --format=tar HEAD | gzip -n > "$RUNNER_TEMP/source.tar.gz"
+          sha256sum "$RUNNER_TEMP/source.tar.gz" | awk '{print $1}' > "$RUNNER_TEMP/source.sha256"
+
+      - name: Prepare dedicated pinned SSH identity
+        env:
+          DEPLOY_HOST: ${{ vars.CONTABO_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.CONTABO_DEPLOY_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.CONTABO_DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.CONTABO_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && -n "$DEPLOY_HOST" ]] || exit 1
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ && "$DEPLOY_USER" != root ]] || {
+            echo "::error::Dedicated non-root deploy user required"; exit 1;
+          }
+          [[ -n "$SSH_PRIVATE_KEY" && -n "$SSH_KNOWN_HOSTS" ]] || {
+            echo "::error::Missing SSH identity/known_hosts; no insecure fallback"; exit 1;
+          }
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/contabo_deploy"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/contabo_deploy" "$HOME/.ssh/known_hosts"
+          ssh-keygen -F "$DEPLOY_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null || {
+            echo "::error::Host key not pinned for configured hostname"; exit 1;
+          }
+
+      - name: Inspect live installation (read only)
+        if: inputs.operation == 'inspect'
+        env:
+          DEPLOY_HOST: ${{ vars.CONTABO_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.CONTABO_DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          ssh -T -i "$HOME/.ssh/contabo_deploy" -o IdentitiesOnly=yes \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=12 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo -n /usr/local/sbin/fm-contabo-deploy inspect"
+
+      - name: Stage checked SHA and publish only after backup/restore
+        if: inputs.operation == 'deploy'
+        env:
+          DEPLOY_HOST: ${{ vars.CONTABO_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.CONTABO_DEPLOY_USER }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh_opts=(-i "$HOME/.ssh/contabo_deploy" -o IdentitiesOnly=yes \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=12)
+          digest="$(cat "$RUNNER_TEMP/source.sha256")"
+          ssh -T "${ssh_opts[@]}" "$remote" \
+            "sudo -n /usr/local/sbin/fm-contabo-deploy stage $TARGET_SHA $digest" \
+            < "$RUNNER_TEMP/source.tar.gz"
+          ssh -T "${ssh_opts[@]}" "$remote" \
+            "sudo -n /usr/local/sbin/fm-contabo-deploy deploy $TARGET_SHA $digest"
