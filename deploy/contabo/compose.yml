@@ -1,0 +1,150 @@
+# AtendeVendeIA on the EXISTING Contabo VPS / Nginx Proxy Manager.
+# No second reverse proxy, no exposed app or DB ports, no Evolution DB sharing.
+# Start only after supervised first-time bootstrap and preflight.
+name: fm-atendevendeia
+
+x-app-env: &app-env
+  FM_ENV: prod
+  FM_COOKIE_SECURE: "true"
+  FM_RATE_LIMIT_ENABLED: "true"
+  FM_TRUST_PROXY: "false"
+  FM_DATABASE_URL: postgresql://fm_app:${FM_APP_DB_PASSWORD:?required}@db:5432/fm_atendevendeia
+  FM_DATABASE_ADMIN_URL: postgresql://fm_owner:${FM_OWNER_DB_PASSWORD:?required}@db:5432/fm_atendevendeia
+  FM_SECRETS_KEYS: ${FM_SECRETS_KEYS:?required}
+  FM_GOOGLE_CLIENT_ID: ${FM_GOOGLE_CLIENT_ID:?required}
+  FM_WEB_ORIGIN: https://${APP_HOST:?required}
+  # External callbacks use the existing same-origin /v1 Next.js rewrite.
+  FM_PUBLIC_BASE_URL: https://${APP_HOST:?required}
+  FM_PLATFORM_CAKTO_SECRET: ${FM_PLATFORM_CAKTO_SECRET:-}
+  FM_PLATFORM_HOTMART_HOTTOK: ${FM_PLATFORM_HOTMART_HOTTOK:-}
+  FM_AI_API_KEY: ${FM_AI_API_KEY:-}
+  FM_AI_MODEL: ${FM_AI_MODEL:-gemini-3.1-flash-lite}
+  FM_FMCOMMAND_MODE: ${FM_FMCOMMAND_MODE:-off}
+  # The canonical code uses Meta Cloud API. Existing Evolution is a DIFFERENT
+  # integration and is deliberately NOT enabled by this Compose.
+  FM_WHATSAPP_LIVE: "false"
+
+x-log: &log-policy
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fm_owner
+      POSTGRES_PASSWORD: ${FM_OWNER_DB_PASSWORD:?required}
+      POSTGRES_DB: fm_atendevendeia
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks: [db_only]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fm_owner -d fm_atendevendeia"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 896m
+    cpus: 0.8
+    security_opt: [no-new-privileges:true]
+    logging: *log-policy
+
+  # Explicit, operator-triggered bootstrap; NEVER part of normal up/restart.
+  bootstrap:
+    profiles: [init]
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    image: fm-atendevendeia-api:local
+    command: ["python", "-m", "fm_seller.cli", "bootstrap"]
+    restart: "no"
+    environment:
+      <<: *app-env
+      FM_BOOTSTRAP_APP_PASSWORD: ${FM_APP_DB_PASSWORD:?required}
+      FM_BOOTSTRAP_OWNER_EMAIL: ${FM_BOOTSTRAP_OWNER_EMAIL:-}
+      FM_BOOTSTRAP_TENANT_NAME: ${FM_BOOTSTRAP_TENANT_NAME:-}
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [db_only]
+    mem_limit: 600m
+    logging: *log-policy
+
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    image: fm-atendevendeia-api:local
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [db_only, app_only]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8000/v1/health', timeout=4).status == 200"]
+      interval: 15s
+      timeout: 6s
+      retries: 6
+      start_period: 25s
+    mem_limit: 640m
+    cpus: 0.8
+    pids_limit: 200
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging: *log-policy
+
+  worker:
+    image: fm-atendevendeia-api:local
+    command: ["python", "-m", "fm_seller.cli", "worker", "--interval", "30"]
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [db_only, app_only]
+    mem_limit: 640m
+    cpus: 0.6
+    pids_limit: 200
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging: *log-policy
+
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ""
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${FM_GOOGLE_CLIENT_ID:?required}
+        API_PROXY_TARGET: http://api:8000
+    restart: unless-stopped
+    depends_on:
+      api: {condition: service_healthy}
+    # The proxy sees ONLY Web, and Web reaches API via the private app network.
+    networks:
+      app_only: {}
+      npm_edge:
+        aliases: [atendevendeia_web]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 35s
+    mem_limit: 768m
+    cpus: 0.8
+    pids_limit: 200
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging: *log-policy
+
+networks:
+  db_only:
+    internal: true
+  app_only: {}
+  npm_edge:
+    external: true
+    name: ${NPM_EDGE_NETWORK:?inspect existing NPM network before deploying}
+
+volumes:
+  db_data:

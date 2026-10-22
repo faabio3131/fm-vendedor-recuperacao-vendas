@@ -1,0 +1,57 @@
+name: Contabo NPM isolation contract
+on:
+  pull_request:
+    paths:
+      - "deploy/contabo/**"
+      - "docs/CONTABO_NPM_COMMERCIAL_LAUNCH_2026-10-20.md"
+      - ".github/workflows/contabo-compose.yml"
+  workflow_dispatch:
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    env:
+      # All values are synthetic and only used by docker compose config.
+      APP_HOST: app.atendevendeia.com.br
+      NPM_EDGE_NETWORK: npm-edge-contract-test
+      FM_OWNER_DB_PASSWORD: synthetic_owner_1234567890
+      FM_APP_DB_PASSWORD: synthetic_app_1234567890
+      FM_SECRETS_KEYS: "ci:synthetic-not-valid-at-runtime"
+      FM_GOOGLE_CLIENT_ID: "synthetic-google-client-id"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Docker Compose schema
+        run: docker compose -f deploy/contabo/compose.yml config --quiet
+      - name: Verify NPM and tenant isolation
+        run: |
+          set -euo pipefail
+          # The init profile is intentionally disabled in normal config. Enable it only
+          # for this static inspection so bootstrap is included in the JSON.
+          docker compose --profile init -f deploy/contabo/compose.yml config --format json > /tmp/contabo-compose.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads(Path("/tmp/contabo-compose.json").read_text())
+          services = config["services"]
+          assert set(services) == {"db", "bootstrap", "api", "worker", "web"}
+          assert "ports" not in services["db"]
+          assert all("ports" not in s for s in services.values())
+          assert "caddy" not in services and "evolution" not in services
+          assert services["bootstrap"]["profiles"] == ["init"]
+          assert services["api"]["environment"]["FM_WHATSAPP_LIVE"] == "false"
+          assert services["api"]["environment"]["FM_ENV"] == "prod"
+          assert services["api"]["environment"]["FM_RATE_LIMIT_ENABLED"] == "true"
+          assert services["web"]["build"]["args"]["API_PROXY_TARGET"] == "http://api:8000"
+          assert config["networks"]["db_only"]["internal"] is True
+          assert config["networks"]["npm_edge"]["external"] is True
+          networks = lambda name: set(services[name]["networks"])
+          assert "npm_edge" in networks("web")
+          assert "npm_edge" not in networks("db")
+          assert "npm_edge" not in networks("api")
+          assert "npm_edge" not in networks("worker")
+          assert "db_only" not in networks("web")
+          assert all("db_only" in networks(s) for s in ("db", "api", "worker", "bootstrap"))
+          assert all("mem_limit" in services[s] for s in ("db", "api", "worker", "web"))
+          print("Contabo NPM Compose isolation contract: PASS")
+          PY
