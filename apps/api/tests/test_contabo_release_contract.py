@@ -12,17 +12,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "ops" / "contabo_pilot_release.sh"
 WORKFLOW = ROOT / ".github" / "workflows" / "contabo-pilot-release.yml"
+GUARD = ROOT / "scripts" / "ops" / "contabo_release_guard.sh"
 
 
 def test_release_script_is_valid_bash_and_requires_two_independent_approvals() -> None:
     syntax = subprocess.run(["/bin/bash", "-n", str(SCRIPT)], check=False, capture_output=True)  # noqa: S603
     assert syntax.returncode == 0, syntax.stderr
+    guard_syntax = subprocess.run(  # noqa: S603 (fixed repository script)
+        ["/bin/bash", "-n", str(GUARD)], check=False, capture_output=True
+    )
+    assert guard_syntax.returncode == 0, guard_syntax.stderr
     text = SCRIPT.read_text()
     assert "FM_DEPLOY_APPROVE_MIGRATIONS:-}" in text
     assert "FM_DEPLOY_APPROVE_RELEASE:-}" in text
     assert "rls_invariant.sql" in text
     assert "pg_restore --exit-on-error" in text
     assert "SOURCE_COMMIT" in text
+    guard = GUARD.read_text()
+    assert "sudo" not in guard
+    assert "stage)" in guard and "deploy)" in guard and "inspect)" in guard
+    assert 'exec /bin/bash "$script" deploy' in guard
     assert "docker compose down" not in text
     assert "docker volume rm" not in text
 
@@ -52,6 +61,10 @@ def test_workflow_requires_main_exact_sha_manual_trigger_and_private_repo_safe_t
     assert "git rev-parse HEAD" in text
     assert "CONTABO_DEPLOY_ENABLED" in text
     assert "CONTABO_SSH_KNOWN_HOSTS" in text
+    assert "sudo -n /usr/local/sbin/fm-contabo-deploy inspect" in text
+    assert "sudo -n /usr/local/sbin/fm-contabo-deploy stage" in text
+    assert "sudo -n /usr/local/sbin/fm-contabo-deploy deploy" in text
+    assert "scp " not in text
     assert "StrictHostKeyChecking=yes" in text
     assert "github.actor" not in text or "GITHUB_ACTOR" in text
     assert "github.repository" in text
