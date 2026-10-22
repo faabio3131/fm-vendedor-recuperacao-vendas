@@ -74,17 +74,39 @@ class UnavailableSender:
 
 def build_sender(settings: Settings) -> MessageSender:
     """Real só com FM_WHATSAPP_LIVE ligado (e nunca em teste); senão simulador em dev/teste."""
-    if settings.whatsapp_live and settings.env != "test":
+    if settings.env == "test":
+        return SimulatedSender()
+    meta: MessageSender = UnavailableSender()
+    if settings.whatsapp_live:
         from fm_seller.channels.meta_api import MetaClient
         from fm_seller.channels.whatsapp_send import WhatsAppCloudSender
 
-        return WhatsAppCloudSender(
+        meta = WhatsAppCloudSender(
             MetaClient(
                 base=settings.meta_graph_base,
                 version=settings.meta_graph_version,
                 timeout=settings.meta_timeout_seconds,
             )
         )
-    if settings.env in ("dev", "test"):
+    if settings.evolution_enabled and settings.evolution_send_enabled:
+        from fm_seller.channels.evolution import EvolutionClient
+        from fm_seller.channels.evolution_runtime import EvolutionSender, RoutedWhatsAppSender
+
+        evolution = EvolutionSender(
+            EvolutionClient(
+                base_url=settings.evolution_api_base_url,
+                api_key=settings.evolution_api_key.get_secret_value(),
+                timeout=settings.evolution_timeout_seconds,
+            )
+        )
+        return RoutedWhatsAppSender(
+            meta,
+            evolution,
+            meta_enabled=settings.whatsapp_live,
+            evolution_enabled=True,
+        )
+    if settings.whatsapp_live:
+        return meta
+    if settings.env == "dev":
         return SimulatedSender()
     return UnavailableSender()

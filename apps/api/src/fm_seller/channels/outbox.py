@@ -146,14 +146,28 @@ def _send_one(
         ):
             reason = "nao_contatar"
         if reason is None:
-            conn_row = conn.execute(
-                "SELECT config_encrypted, status FROM connections "
-                "WHERE tenant_id = %s AND provider = %s",
-                (tenant_id, provider),
-            ).fetchone()
-            if conn_row is None or conn_row["status"] != "connected":
-                reason = "canal_nao_conectado"
+            if ctx is not None and ctx["channel"] == "whatsapp":
+                choices = conn.execute(
+                    "SELECT provider, config_encrypted FROM connections "
+                    "WHERE tenant_id = %s AND provider IN ('whatsapp_cloud', 'evolution') "
+                    "AND status = 'connected'",
+                    (tenant_id,),
+                ).fetchall()
+                if len(choices) != 1:
+                    reason = "canal_ambiguo" if choices else "canal_nao_conectado"
+                    conn_row = None
+                else:
+                    conn_row = choices[0]
+                    provider = conn_row["provider"]
             else:
+                conn_row = conn.execute(
+                    "SELECT config_encrypted, status FROM connections "
+                    "WHERE tenant_id = %s AND provider = %s",
+                    (tenant_id, provider),
+                ).fetchone()
+                if conn_row is None or conn_row["status"] != "connected":
+                    reason = "canal_nao_conectado"
+            if reason is None and conn_row is not None:
                 try:
                     config = {
                         k: str(v)
@@ -163,6 +177,11 @@ def _send_one(
                             provider=provider,
                         ).items()
                     }
+                    config["__provider"] = provider
+                    if provider == "evolution" and not getattr(
+                        senders.get("whatsapp"), "evolution_enabled", False
+                    ):
+                        reason = "canal_sem_adaptador"
                 except CryptoError:
                     reason = "credencial_ilegivel"
     if reason is not None or ctx is None:

@@ -273,6 +273,8 @@ class ConnectionService:
         return result
 
     def put(self, p: Principal, provider_key: str, values: dict[str, str]) -> dict[str, Any]:
+        if provider_key == "evolution":
+            raise AppError(409, "use_pairing_flow", "Use Conectar WhatsApp no painel.")
         if p.role not in EDIT_ROLES:
             raise forbidden("Só dono ou administrador altera conexões.")
         provider = get_provider(provider_key)
@@ -362,6 +364,8 @@ class ConnectionService:
         return out
 
     def test(self, p: Principal, provider_key: str) -> dict[str, Any]:
+        if provider_key == "evolution":
+            raise AppError(409, "use_pairing_flow", "Use Verificar conexão no painel.")
         if p.role not in EDIT_ROLES:
             raise forbidden("Só dono ou administrador testa conexões.")
         provider = get_provider(provider_key)
@@ -427,6 +431,8 @@ class ConnectionService:
         return out
 
     def delete(self, p: Principal, provider_key: str) -> None:
+        if provider_key == "evolution":
+            raise AppError(409, "revocation_not_ready", "Revogação governada ainda não disponível.")
         if p.role not in EDIT_ROLES:
             raise forbidden("Só dono ou administrador remove conexões.")
         provider = get_provider(provider_key)

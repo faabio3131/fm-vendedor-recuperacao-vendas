@@ -20,6 +20,8 @@ from fm_seller.api.routes import (
     captures,
     connections,
     control_plane,
+    evolution,
+    evolution_webhook,
     health,
     me,
     onboarding,
@@ -40,6 +42,7 @@ from fm_seller.db import Database
 from fm_seller.errors import AppError
 from fm_seller.events.ingest import EventHandler
 from fm_seller.logging_setup import setup_logging
+from fm_seller.providers.evolution_pairing import EvolutionPairingService
 from fm_seller.providers.testers import ConnectionTester, build_tester
 from fm_seller.recovery.engine import handle_event
 from fm_seller.security.crypto import SecretBox
@@ -92,6 +95,7 @@ def create_app(
     app.state.db = database
     app.state.verifier = google
     app.state.connections = ConnectionService(database, cfg, secret_box, conn_tester)
+    app.state.evolution_pairing = EvolutionPairingService(database, secret_box, cfg)
     app.state.box = secret_box
     app.state.event_handler = event_handler or handle_event
     app.state.templates = templates or build_template_gateway(cfg)
@@ -169,6 +173,8 @@ def create_app(
     app.include_router(onboarding.router, prefix="/v1")
     app.include_router(plan.router, prefix="/v1")
     app.include_router(privacy.router, prefix="/v1")
+    app.include_router(evolution.router, prefix="/v1")
+    app.include_router(evolution_webhook.router, prefix="/v1")
     app.include_router(connections.router, prefix="/v1")
     app.include_router(captures.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")  # antes do genérico: rota específica

@@ -90,6 +90,8 @@ def _account_key(request: Request, ip: str) -> str:
 def is_sensitive(request: Request) -> bool:
     """Exportação, apagamento, importação e planilha: pedido caro ou que mexe em dado pessoal."""
     path = request.url.path
+    if path == "/v1/connections/evolution/connect" and request.method == "POST":
+        return True  # QR tem segredo de pareamento temporário; aplicar limite sensível
     if path.startswith(("/v1/privacy", "/v1/admin")):
         return request.method in UNSAFE
     if path.endswith(".csv"):

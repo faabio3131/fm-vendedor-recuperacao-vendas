@@ -22,9 +22,14 @@ x-app-env: &app-env
   FM_AI_API_KEY: ${FM_AI_API_KEY:-}
   FM_AI_MODEL: ${FM_AI_MODEL:-gemini-3.1-flash-lite}
   FM_FMCOMMAND_MODE: ${FM_FMCOMMAND_MODE:-off}
-  # The canonical code uses Meta Cloud API. Existing Evolution is a DIFFERENT
-  # integration and is deliberately NOT enabled by this Compose.
+  # Meta remains separate and disabled by default.
   FM_WHATSAPP_LIVE: "false"
+  # Evolution v2.3.7 is routed through the same API + worker (fail-closed by default).
+  FM_EVOLUTION_ENABLED: ${FM_EVOLUTION_ENABLED:-false}
+  FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}
+  FM_EVOLUTION_API_BASE_URL: ${FM_EVOLUTION_API_BASE_URL:-}
+  FM_EVOLUTION_API_KEY: ${FM_EVOLUTION_API_KEY:-}
+  FM_EVOLUTION_WEBHOOK_KEY: ${FM_EVOLUTION_WEBHOOK_KEY:-}
 
 x-log: &log-policy
   driver: json-file

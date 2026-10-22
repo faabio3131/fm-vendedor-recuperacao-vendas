@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     meta_graph_version: str = "v26.0"
     meta_timeout_seconds: float = Field(default=15.0, ge=1, le=60)
 
+    # Evolution API v2 / Baileys: QR e estado somente no backend. Desligado até homologação.
+    evolution_enabled: bool = False
+    evolution_api_base_url: str = ""
+    evolution_api_key: SecretStr = SecretStr("")
+    evolution_timeout_seconds: float = Field(default=8.0, ge=2.0, le=20.0)
+    evolution_webhook_key: SecretStr = SecretStr("")
+    evolution_send_enabled: bool = False
+
     # Captura de eventos reais de checkout para conferir o formato (docs/OPERACAO.md). Desligada por
     # padrão; guarda o corpo cifrado, sem segredos, e apaga sozinha depois do prazo.
     capture_events: bool = False
@@ -120,6 +128,35 @@ class Settings(BaseSettings):
     fmcommand_contingency_hours: int = Field(default=72, ge=1, le=72)
     # Sem reconciliação bem-sucedida por este tempo, o ops-check avisa.
     fmcommand_stale_after_minutes: int = Field(default=45, ge=5, le=1440)
+
+    @model_validator(mode="after")
+    def _evolution_pairing_config_is_safe(self) -> Settings:
+        if not self.evolution_enabled:
+            return self
+        parsed = urlsplit(self.evolution_api_base_url)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in ("", "/")
+            or parsed.query
+            or parsed.fragment
+            or parsed.port not in (None, 443)
+            or len(self.evolution_api_key.get_secret_value()) < 32
+            or len(self.evolution_webhook_key.get_secret_value()) < 32
+        ):
+            raise ValueError(
+                "FM_EVOLUTION_ENABLED requer URL HTTPS:443 sem path/credenciais "
+                "e FM_EVOLUTION_API_KEY de 32+ caracteres"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _evolution_send_gate(self) -> Settings:
+        if self.evolution_send_enabled and not self.evolution_enabled:
+            raise ValueError("FM_EVOLUTION_SEND_ENABLED exige FM_EVOLUTION_ENABLED")
+        return self
 
     @model_validator(mode="after")
     def _control_plane_token_is_strong(self) -> Settings:

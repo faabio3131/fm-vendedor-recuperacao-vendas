@@ -55,6 +55,16 @@ PROVIDERS: tuple[Provider, ...] = (
         webhook=True,
     ),
     Provider(
+        key="evolution",
+        name="WhatsApp por QR Code (Evolution)",
+        group="canal",
+        phase=1,
+        feature="channel.whatsapp",
+        description="Conecte seu próprio número pelo WhatsApp no celular. "
+        "O QR é fornecido pela Evolution e exibido somente neste painel.",
+        fields=(),
+    ),
+    Provider(
         key="messenger",
         name="Facebook Messenger",
         group="canal",
