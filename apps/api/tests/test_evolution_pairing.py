@@ -105,6 +105,32 @@ def test_qr_is_ephemeral_and_connection_needs_provider_proof(client: TestClient,
     assert client.get("/v1/connections").json()[0]["status"] == "disconnected"
 
 
+
+def test_onboarding_whatsapp_requires_verified_evolution_session(
+    client: TestClient, env: Env
+) -> None:
+    _owner(client, env)
+    fake = FakeEvolution()
+    _enable(client, fake)
+
+    def whatsapp_ready() -> bool:
+        report = client.get("/v1/onboarding")
+        assert report.status_code == 200
+        return next(s["done"] for s in report.json()["steps"] if s["key"] == "whatsapp")
+
+    assert whatsapp_ready() is False
+    assert client.post("/v1/connections/evolution/connect").json()["status"] == "pending"
+    assert whatsapp_ready() is False  # QR solicitado não é conexão validada.
+
+    fake.current = "open"
+    assert client.get("/v1/connections/evolution/status").json()["connected"] is True
+    assert whatsapp_ready() is True
+
+    fake.current = "close"
+    assert client.get("/v1/connections/evolution/status").json()["connected"] is False
+    assert whatsapp_ready() is False  # Sessão desconectada não satisfaz onboarding.
+
+
 def test_tenant_and_role_isolation(client: TestClient, env: Env) -> None:
     first = _owner(client, env)
     fake = FakeEvolution()
