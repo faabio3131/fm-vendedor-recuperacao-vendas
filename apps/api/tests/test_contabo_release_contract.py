@@ -27,7 +27,7 @@ def test_release_script_is_valid_bash_and_requires_two_independent_approvals() -
     assert "FM_DEPLOY_APPROVE_RELEASE:-}" in text
     assert "rls_invariant.sql" in text
     assert "pg_restore -U fm_owner --exit-on-error" in text
-    assert "--dbname \"$testdb\"" in text
+    assert '--dbname "$testdb"' in text
     assert "SOURCE_COMMIT" in text
     guard = GUARD.read_text()
     assert "sudo -S" not in guard
