@@ -142,10 +142,14 @@ def overview(conn: Conn, tenant_id: uuid.UUID, now: datetime | None = None) -> d
     if status == PAST_DUE and row["past_due_since"] is not None:
         grace_ends = row["past_due_since"] + timedelta(days=row["grace_days"])
     trial_state = trial.snapshot(conn, tenant_id, now=stamp)
-    state = "blocked" if (
-        blocks_service(status)
-        or (trial_state is not None and trial_state["status"] != "active")
-    ) else ("grace" if status == PAST_DUE else "active")
+    state = (
+        "blocked"
+        if (
+            blocks_service(status)
+            or (trial_state is not None and trial_state["status"] != "active")
+        )
+        else ("grace" if status == PAST_DUE else "active")
+    )
     return {
         "plan": {"key": row["plan_key"], "name": row["display_name"]},
         "status": status,
