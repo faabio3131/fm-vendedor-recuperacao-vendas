@@ -23,7 +23,7 @@ class FakeEvolution:
         self.created: list[str] = []
 
     def state(self, name: str) -> str:
-        if self.current == "missing":
+        if name not in self.created or self.current == "missing":
             raise InstanceMissing()
         if self.current == "failure":
             raise AppError(503, "evolution_unreachable", "Falha de rede.")
