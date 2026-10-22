@@ -11,7 +11,8 @@ test("Meu plano: estado da assinatura, uso da IA e sem rolagem horizontal", asyn
   await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Meu plano" }).click();
   await expect(page.getByRole("heading", { name: "Meu plano" })).toBeVisible();
   await expect(page.locator(".badge", { hasText: "Ativa" })).toBeVisible();
-  await expect(page.getByText("Respostas da IA neste mês")).toBeVisible();
+  await expect(page.getByText("Interações de IA neste mês")).toBeVisible();
+  await expect(page.getByText(/cada chamada concluída com sucesso ao modelo conta como uma interação/i)).toBeVisible();
   await expect(page.getByText(/próxima cobrança ainda não é informada/)).toBeVisible();
   // plano ativo: nenhuma faixa de aviso
   await expect(page.getByText("Assinatura inativa")).toHaveCount(0);

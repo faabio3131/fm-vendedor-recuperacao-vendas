@@ -121,3 +121,28 @@ def ai_check(request: Request, _: Who) -> dict[str, Any]:
             for c in report.cases
         ],
     }
+
+
+class CommercialPlanIn(BaseModel):
+    price_monthly_cents: int = Field(ge=100, le=100_000_000)
+    ai_replies_per_month: int = Field(ge=1, le=2_000_000)
+
+
+@router.get("/plans")
+def commercial_plans(request: Request, _: Who) -> list[dict[str, Any]]:
+    with get_db(request).tx(system=True) as conn:
+        return pa.list_commercial_plans(conn)
+
+
+@router.put("/plans/{plan_key}")
+def update_commercial_plan(
+    plan_key: str, body: CommercialPlanIn, request: Request, admin: Who
+) -> dict[str, Any]:
+    with get_db(request).tx(system=True, user_id=admin.user_id) as conn:
+        return pa.update_commercial_plan(
+            conn,
+            admin,
+            plan_key,
+            price_monthly_cents=body.price_monthly_cents,
+            ai_replies_per_month=body.ai_replies_per_month,
+        )

@@ -68,11 +68,12 @@ function Plan() {
         </p>
       </div>
       <div className="card">
-        <strong>Respostas da IA neste mês</strong>
+        <strong>Interações de IA neste mês</strong>
         <p>
           <strong>{plan.ai.replies}</strong>
-          {plan.ai.limit !== null ? ` de ${plan.ai.limit} do seu plano (${plan.ai.percent}%)` : " (sem limite no seu plano)"}
+          {plan.ai.limit !== null ? ` de ${plan.ai.limit} do seu plano (${plan.ai.percent}%)` : " (franquia não configurada; contate o suporte)"}
         </p>
+        <p className="muted">Cada chamada concluída com sucesso ao modelo conta como uma interação, inclusive quando a IA transfere o atendimento para uma pessoa. Falhas do modelo, mensagens recebidas e atendimento humano não consomem a franquia.</p>
         <p className="muted">Limite diário de contatos novos por número: {plan.number_daily_limit}.</p>
       </div>
     </>

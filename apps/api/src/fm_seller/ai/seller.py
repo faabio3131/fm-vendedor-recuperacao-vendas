@@ -178,10 +178,17 @@ def _handle_conversation(
     ).fetchone():
         return "ignored"
 
+    # Transaction lock serializes IA quota checks across workers for this tenant.
+    # Unlike SELECT FOR UPDATE, it does not depend on UPDATE RLS of tenant_plans.
+    conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+        (f"fmav:ai:quota:{tenant_id}",),
+    )
     plan = conn.execute(
-        "SELECT status FROM tenant_plans WHERE tenant_id = %s", (tenant_id,)
+        "SELECT status FROM tenant_plans WHERE tenant_id = %s",
+        (tenant_id,),
     ).fetchone()
-    if plan is not None and blocks_service(plan["status"]):
+    if plan is None or blocks_service(plan["status"]):
         _handoff(conn, tenant_id, conv_id, "assinatura_inativa", notify=False)
         return "handoffs"
 
@@ -210,7 +217,8 @@ def _handle_conversation(
 
     tz = settings["timezone"]
     limit = usage.monthly_limit(conn, tenant_id)
-    if limit is not None and usage.month_usage(conn, tenant_id, tz)["calls"] >= limit:
+    if limit is None or usage.month_usage(conn, tenant_id, tz)["calls"] >= limit:
+        # Missing/invalid quota is a configuration error, never a free unlimited tier.
         _handoff(conn, tenant_id, conv_id, "limite_do_plano", notify=True)
         return "handoffs"
 
