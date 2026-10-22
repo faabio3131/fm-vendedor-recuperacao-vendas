@@ -7,7 +7,9 @@ x-app-env: &app-env
   FM_ENV: prod
   FM_COOKIE_SECURE: "true"
   FM_RATE_LIMIT_ENABLED: "true"
-  FM_TRUST_PROXY: "false"
+  # Enable only after proving the exact Web-to-API TCP peer and forwarded-hop chain.
+  FM_TRUST_PROXY: ${FM_TRUST_PROXY:-false}
+  FM_TRUSTED_PROXY_CIDRS: ${FM_TRUSTED_PROXY_CIDRS:-}
   FM_DATABASE_URL: postgresql://fm_app:${FM_APP_DB_PASSWORD:?required}@db:5432/fm_atendevendeia
   FM_DATABASE_ADMIN_URL: postgresql://fm_owner:${FM_OWNER_DB_PASSWORD:?required}@db:5432/fm_atendevendeia
   FM_SECRETS_KEYS: ${FM_SECRETS_KEYS:?required}
