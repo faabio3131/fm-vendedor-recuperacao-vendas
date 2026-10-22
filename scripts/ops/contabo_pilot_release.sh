@@ -120,7 +120,7 @@ docker exec "$db" psql -U fm_owner -d postgres -v ON_ERROR_STOP=1 \
   -c "CREATE DATABASE $testdb" >/dev/null
 restore_created=1
 docker exec -i -e PGOPTIONS='-c app.system=on' "$db" \
-  pg_restore --exit-on-error --no-owner --enable-row-security \
+  pg_restore -U fm_owner --exit-on-error --no-owner --enable-row-security \
   --dbname "$testdb" < "$backup" >/dev/null
 bad_rls="$(docker exec -i "$db" psql -U fm_owner -d "$testdb" -At \
   < "$source/scripts/ops/rls_invariant.sql")"
