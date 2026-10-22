@@ -1,4 +1,5 @@
 """Pareamento Evolution no boundary canônico de conexões, sem gravar QR/segredo no banco."""
+
 from __future__ import annotations
 
 import hashlib
@@ -17,8 +18,13 @@ _TTL_SECONDS = 30  # limite local conservador; a Evolution pode expirar antes
 
 
 class EvolutionPairingService:
-    def __init__(self, db: Database, box: SecretBox, settings: Settings,
-                 client: EvolutionClient | None = None) -> None:
+    def __init__(
+        self,
+        db: Database,
+        box: SecretBox,
+        settings: Settings,
+        client: EvolutionClient | None = None,
+    ) -> None:
         self._db = db
         self._box = box
         self._settings = settings
@@ -84,8 +90,11 @@ class EvolutionPairingService:
                 (p.tenant_id, _PROVIDER, name, blob, json.dumps({})),
             )
             audit(
-                conn, tenant_id=p.tenant_id, actor=p.user_id,
-                action="evolution.pairing.requested", target=_PROVIDER,
+                conn,
+                tenant_id=p.tenant_id,
+                actor=p.user_id,
+                action="evolution.pairing.requested",
+                target=_PROVIDER,
             )
         # Releitura sempre escopada: evita assumir ownership após corrida.
         bound = self._bound_instance(p)
@@ -96,8 +105,7 @@ class EvolutionPairingService:
     def _set_status(self, p: Principal, status: str, verified: bool = False) -> None:
         with self._db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
             previous = conn.execute(
-                "SELECT status FROM connections WHERE tenant_id = %s AND provider = %s "
-                "FOR UPDATE",
+                "SELECT status FROM connections WHERE tenant_id = %s AND provider = %s FOR UPDATE",
                 (p.tenant_id, _PROVIDER),
             ).fetchone()
             conn.execute(
@@ -108,8 +116,11 @@ class EvolutionPairingService:
             )
             if verified and previous is not None and previous["status"] != "connected":
                 audit(
-                    conn, tenant_id=p.tenant_id, actor=p.user_id,
-                    action="evolution.session.verified", target=_PROVIDER,
+                    conn,
+                    tenant_id=p.tenant_id,
+                    actor=p.user_id,
+                    action="evolution.session.verified",
+                    target=_PROVIDER,
                 )
 
     def status(self, p: Principal) -> dict[str, Any]:
@@ -158,6 +169,8 @@ class EvolutionPairingService:
             raise
         self._set_status(p, "pending")
         return {
-            "status": "pending", "connected": False,
-            "qr_code": qr_code, "expires_in_seconds": _TTL_SECONDS,
+            "status": "pending",
+            "connected": False,
+            "qr_code": qr_code,
+            "expires_in_seconds": _TTL_SECONDS,
         }

@@ -61,7 +61,7 @@ PROVIDERS: tuple[Provider, ...] = (
         phase=1,
         feature="channel.whatsapp",
         description="Conecte seu próprio número pelo WhatsApp no celular. "
-                    "O QR é fornecido pela Evolution e exibido somente neste painel.",
+        "O QR é fornecido pela Evolution e exibido somente neste painel.",
         fields=(),
     ),
     Provider(

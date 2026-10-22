@@ -1,4 +1,5 @@
 """Provas internas da jornada QR sem acessar Contabo ou contas reais."""
+
 from __future__ import annotations
 
 import base64
@@ -64,9 +65,7 @@ def test_off_by_default_and_generic_mutations_blocked(client: TestClient, env: E
     assert client.get("/v1/connections").json() == []
 
 
-def test_qr_is_ephemeral_and_connection_needs_provider_proof(
-    client: TestClient, env: Env
-) -> None:
+def test_qr_is_ephemeral_and_connection_needs_provider_proof(client: TestClient, env: Env) -> None:
     tenant = _owner(client, env)
     fake = FakeEvolution()
     _enable(client, fake)
@@ -80,7 +79,8 @@ def test_qr_is_ephemeral_and_connection_needs_provider_proof(
     assert client.get("/v1/connections/evolution/status").json()["connected"] is False
     rows = env.sql(
         "SELECT config_encrypted, config_hint::text, status "
-        "FROM connections WHERE tenant_id = %s AND provider = 'evolution'", (tenant,)
+        "FROM connections WHERE tenant_id = %s AND provider = 'evolution'",
+        (tenant,),
     )
     assert len(rows) == 1 and rows[0][2] == "pending"
     assert QR not in str(rows) and "data:image/png" not in str(rows)

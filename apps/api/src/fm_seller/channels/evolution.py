@@ -3,6 +3,7 @@
 Somente o backend usa a chave da plataforma. Não reutilizar para envio até que
 webhooks, roteamento de saída e versão instalada estejam certificados.
 """
+
 from __future__ import annotations
 
 import base64
@@ -41,7 +42,9 @@ class EvolutionClient:
                 timeout=self._timeout, follow_redirects=False, trust_env=False
             ) as client:
                 response = client.request(
-                    method, f"{self._base}{route}", headers={"apikey": self._key},
+                    method,
+                    f"{self._base}{route}",
+                    headers={"apikey": self._key},
                     json=body,
                 )
         except httpx.RequestError:
@@ -89,7 +92,8 @@ class EvolutionClient:
     def create(self, name: str) -> None:
         safe = self._name(name)
         self._call(
-            "POST", "/instance/create",
+            "POST",
+            "/instance/create",
             body={"instanceName": safe, "qrcode": True, "integration": "WHATSAPP-BAILEYS"},
         )
 
@@ -102,7 +106,8 @@ class EvolutionClient:
             raw = nested.get("base64")
         if not isinstance(raw, str):
             raise AppError(
-                502, "evolution_qr_unavailable",
+                502,
+                "evolution_qr_unavailable",
                 "A Evolution não retornou uma imagem QR. Confira a versão instalada.",
             )
         encoded = raw.removeprefix("data:image/png;base64,")

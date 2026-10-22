@@ -1,4 +1,5 @@
 """Jornada QR do AtendeVendeIA. Nunca serve credenciais da Evolution ao navegador."""
+
 from __future__ import annotations
 
 from typing import Annotated, Any, cast
