@@ -69,6 +69,17 @@ export type MyPlan = {
   grace_days?: number;
   grace_ends_at: string | null;
   grace_days_left: number | null;
+  trial?: {
+    status: "active" | "expired" | "exhausted";
+    started_at: string | null;
+    expires_at: string | null;
+    limit: number;
+    used: number;
+    reserved: number;
+    remaining: number;
+    warn_at: number;
+    conversion_prompt: boolean;
+  } | null;
   ai: AiUsage;
   number_daily_limit: number;
 };

@@ -275,6 +275,10 @@ def set_plan_status(
 
 
 def change_plan(db: Database, admin: Admin, tenant_id: uuid.UUID, plan_key: str) -> dict[str, Any]:
+    if plan_key == "av-trial":
+        raise bad_request(
+            "trial_requires_grant", "Use a concessão de trial, com validade e limite registrados."
+        )
     with db.tx(system=True) as conn:
         _exists(conn, tenant_id)
         if conn.execute("SELECT 1 FROM plans WHERE key = %s", (plan_key,)).fetchone() is None:

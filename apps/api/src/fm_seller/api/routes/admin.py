@@ -15,6 +15,7 @@ from fm_seller.ai.check import run_check
 from fm_seller.ai.gemini import GeminiModel
 from fm_seller.api.deps import COOKIE, get_db
 from fm_seller.errors import AppError
+from fm_seller.provisioning import trial
 from fm_seller.recovery.senders import build_sender
 
 router = APIRouter(prefix="/admin", tags=["plataforma"])
@@ -72,6 +73,12 @@ def reactivate(tenant_id: uuid.UUID, request: Request, admin: Who) -> dict[str, 
 @router.put("/clients/{tenant_id}/plan")
 def change_plan(tenant_id: uuid.UUID, body: PlanIn, request: Request, admin: Who) -> dict[str, Any]:
     return pa.change_plan(get_db(request), admin, tenant_id, body.plan)
+
+
+@router.post("/clients/{tenant_id}/trial")
+def grant_internal_trial(tenant_id: uuid.UUID, request: Request, admin: Who) -> dict[str, Any]:
+    """Manually granted by a platform administrator; no public trial enrollment."""
+    return trial.start(get_db(request), tenant_id, actor=admin.user_id)
 
 
 @router.post("/clients/{tenant_id}/resend-invite")

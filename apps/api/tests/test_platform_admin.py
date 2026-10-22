@@ -392,7 +392,7 @@ def test_commercial_plan_catalog_admin_only_and_audited(
     # Commercial plans have identical capabilities; legacy tiers remain unchanged.
     rows = env.sql(
         "SELECT key, price_monthly_cents, limits->>'ai_replies_per_month', features "
-        "FROM plans WHERE key LIKE 'av-%%' ORDER BY phase"
+        "FROM plans WHERE key LIKE 'av-%%' AND price_monthly_cents IS NOT NULL ORDER BY phase"
     )
     assert [(r[0], r[1], r[2]) for r in rows] == [
         ("av-essencial", 12990, "500"),

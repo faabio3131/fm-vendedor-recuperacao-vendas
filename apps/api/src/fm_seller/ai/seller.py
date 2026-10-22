@@ -23,6 +23,7 @@ from fm_seller.channels.outbound import enqueue_text
 from fm_seller.channels.social import identity_of
 from fm_seller.db import Conn, Database
 from fm_seller.money import format_brl
+from fm_seller.provisioning import trial
 from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.optout import normalize
 
@@ -190,6 +191,9 @@ def _handle_conversation(
     ).fetchone()
     if plan is None or blocks_service(plan["status"]):
         _handoff(conn, tenant_id, conv_id, "assinatura_inativa", notify=False)
+        return "handoffs"
+    if trial.blocked(conn, tenant_id, now=now):
+        _handoff(conn, tenant_id, conv_id, "trial_limit_or_expired", notify=False)
         return "handoffs"
 
     settings = conn.execute(

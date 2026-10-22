@@ -25,6 +25,7 @@ from fm_seller.db import Conn, Database
 from fm_seller.events import normalize as n
 from fm_seller.events.normalize import CheckoutEvent
 from fm_seller.money import format_brl
+from fm_seller.provisioning import trial
 from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.cases import close_case as _close_case
 from fm_seller.recovery.defaults import default_steps
@@ -407,6 +408,16 @@ def _process(
             _set_step(conn, step.id, "failed", "canal_sem_adaptador")
         return "failed"
 
+    # Shared across conversational AI and recovery, serialized per tenant.
+    reservation = trial.reserve(
+        db, step.tenant_id, source_kind="recovery", source_id=step.id, now=now
+    )
+    if reservation not in ("paid", "reserved"):
+        with db.tx(tenant_id=step.tenant_id) as conn:
+            _set_step(conn, step.id, "skipped", "trial_limit_or_expired")
+            _finish_if_done(conn, step.case_id, now)
+        return "skipped"
+
     try:
         provider_id = sender.send(config, message)
     except SendError as exc:
@@ -438,6 +449,20 @@ def _process(
                 "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
             )
         _finish_if_done(conn, step.case_id, now)
+    if reservation == "reserved":
+        trial.finalize(
+            db,
+            step.tenant_id,
+            source_kind="recovery",
+            source_id=step.id,
+            outcome=(
+                "sent"
+                if outcome == "sent"
+                else "uncertain"
+                if detail and detail.startswith("resultado_incerto")
+                else "failed"
+            ),
+        )
     return outcome
 
 
@@ -466,6 +491,8 @@ def _check(conn: Conn, box: SecretBox, step: _Step, now: datetime) -> _Decision 
         return ("skipped", "skipped", "cliente_suspenso", None)
     if blocks_service(ctx["plan_status"]):
         return ("skipped", "skipped", "assinatura_inativa", None)
+    if trial.blocked(conn, step.tenant_id, now=now):
+        return ("skipped", "skipped", "trial_limit_or_expired", None)
     settings = load_settings(conn, step.tenant_id)
     if not settings.may_send:
         return ("skipped", "skipped", "recuperacao_desligada", None)
