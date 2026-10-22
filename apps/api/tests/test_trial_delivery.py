@@ -23,9 +23,7 @@ def _tenant(env: Env, db: Database, client: TestClient) -> uuid.UUID:
     email = unique_email("trial-send")
     tenant_id = uuid.UUID(env.tenant("Trial integrado", email))
     assert login(client, email).status_code == 200
-    actor = env.sql(
-        "SELECT user_id FROM memberships WHERE tenant_id = %s", (tenant_id,)
-    )[0][0]
+    actor = env.sql("SELECT user_id FROM memberships WHERE tenant_id = %s", (tenant_id,))[0][0]
     assert trial.start(db, tenant_id, actor=actor, now=NOW)["status"] == "active"
     return tenant_id
 
@@ -65,9 +63,7 @@ def test_outbox_sends_only_last_trial_message_across_two_claimed(
         assert state["remaining"] == 0
 
 
-def test_expired_trial_prevents_new_model_call(
-    env: Env, db: Database, client: TestClient
-) -> None:
+def test_expired_trial_prevents_new_model_call(env: Env, db: Database, client: TestClient) -> None:
     tenant_id = _tenant(env, db, client)
     env.sql("UPDATE messages SET handled = true WHERE direction = 'in'")
     with db.tx(tenant_id=tenant_id) as conn:
@@ -81,6 +77,6 @@ def test_expired_trial_prevents_new_model_call(
     result = run_ai_replies(db, model, now=NOW + timedelta(days=7))
     assert result.handoffs >= 1
     assert model.calls == []
-    assert env.sql(
-        "SELECT status, handoff_reason FROM conversations WHERE id = %s", (conv,)
-    ) == [("human", "trial_limit_or_expired")]
+    assert env.sql("SELECT status, handoff_reason FROM conversations WHERE id = %s", (conv,)) == [
+        ("human", "trial_limit_or_expired")
+    ]
