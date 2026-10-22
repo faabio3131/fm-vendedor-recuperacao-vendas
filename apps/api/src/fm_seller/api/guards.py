@@ -6,6 +6,7 @@ Tudo aqui é independente de rota: a regra olha método e caminho. Ver docs/SEGU
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
 import uuid
@@ -49,12 +50,34 @@ def security_headers(cfg: Settings) -> dict[str, str]:
     return headers
 
 
-def client_ip(request: Request, trust_proxy: bool) -> str:
-    if trust_proxy:
-        forwarded = request.headers.get("x-forwarded-for", "")
-        if forwarded:
-            return forwarded.split(",")[-1].strip()[:64] or "desconhecido"
-    return request.client.host if request.client else "desconhecido"
+def client_ip(request: Request, trust_proxy: bool, trusted_proxy_cidrs: str = "") -> str:
+    """Só aceita XFF do peer autorizado. Seleciona o primeiro salto não confiável à direita."""
+    peer = request.client.host if request.client else "desconhecido"
+    if not trust_proxy or not trusted_proxy_cidrs.strip():
+        return peer
+    try:
+        networks = tuple(
+            ipaddress.ip_network(part.strip(), strict=False)
+            for part in trusted_proxy_cidrs.split(",")
+            if part.strip()
+        )
+        peer_ip = ipaddress.ip_address(peer)
+        if not any(peer_ip in network for network in networks):
+            return peer
+        headers = request.headers.getlist("x-forwarded-for")
+        if len(headers) != 1 or not headers[0].strip():
+            return peer
+        hops = [part.strip() for part in headers[0].split(",")]
+        if not hops or len(hops) > 32:
+            return peer
+        addresses = [ipaddress.ip_address(part) for part in hops]
+        # Ignore IPs de proxies confiáveis; o primeiro não confiável é o cliente real.
+        for address in reversed(addresses):
+            if not any(address in network for network in networks):
+                return str(address)
+    except ValueError:
+        return peer
+    return peer
 
 
 def _account_key(request: Request, ip: str) -> str:
@@ -97,7 +120,7 @@ class Guards:
         if not cfg.rate_limit_enabled:
             return None
         path = request.url.path
-        ip = client_ip(request, cfg.trust_proxy)
+        ip = client_ip(request, cfg.trust_proxy, cfg.trusted_proxy_cidrs)
         lim = self.limiter
         if path.startswith(WEBHOOKS):
             fail_key, window = f"whfail:{ip}", 600
@@ -127,7 +150,9 @@ class Guards:
             and request.url.path.startswith(WEBHOOKS)
             and status in FAILED_WEBHOOK
         ):
-            self.limiter.add(f"whfail:{client_ip(request, self.cfg.trust_proxy)}")
+            self.limiter.add(
+                f"whfail:{client_ip(request, self.cfg.trust_proxy, self.cfg.trusted_proxy_cidrs)}"
+            )
 
 
 class BodyTooLarge(Exception):
