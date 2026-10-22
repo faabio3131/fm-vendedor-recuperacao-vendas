@@ -192,9 +192,7 @@ def _send_one(
     # never consume the trial; only automated outbound messages are metered.
     reserved = "paid"
     if row["author"] in ("bot", "recovery"):
-        reserved = trial.reserve(
-            db, tenant_id, source_kind="bot", source_id=message_id, now=now
-        )
+        reserved = trial.reserve(db, tenant_id, source_kind="bot", source_id=message_id, now=now)
         if reserved not in ("paid", "reserved"):
             _finish(db, tenant_id, message_id, "failed", "trial_limit_or_expired", None)
             return False
@@ -203,9 +201,7 @@ def _send_one(
     except SendError as exc:
         _finish(db, tenant_id, message_id, "failed", str(exc)[:200], None)
         if reserved == "reserved":
-            trial.finalize(
-                db, tenant_id, source_kind="bot", source_id=message_id, outcome="failed"
-            )
+            trial.finalize(db, tenant_id, source_kind="bot", source_id=message_id, outcome="failed")
         return False
     except Exception as exc:
         log.exception("envio de texto com resultado incerto")
