@@ -19,15 +19,20 @@ antes de aprovação específica do Diretor.
      `CONTABO_SSH_KNOWN_HOSTS` (host key obtida por canal confiável e conferida),
      `CONTABO_DEPLOY_ENABLED` com o valor `FM-PILOTO-ATIVO` apenas
      depois do inventário e aprovação humana.
-3. Criar credenciais SSH **exclusivas para o workflow** e configurar o usuário
-   no servidor com permissão estritamente limitada às operações de deploy da
-   aplicação. A chave `contabo_admin_ed25519` do computador **não é** a
-   chave do workflow. Nunca fazer upload dela ao GitHub.
-4. Garantir que esse usuário tenha acesso ao Docker e escrita em
-   `/home/SaaS/atendevendeia/incoming`, `releases`, `backups`, `repo`
-   e `SOURCE_COMMIT`. Essa concessão de privilégios reais precisa de
-   autorização específica e revisão, pois controle de Docker equivale
-   praticamente a root. **Não executar provisionamento automaticamente.**
+3. Criar uma chave SSH **nova e exclusiva para o workflow** e uma conta
+   `fm_deploy`, sem ingresso no grupo Docker nem acesso ao `.env` ou à árvore
+   de dados. A chave `contabo_admin_ed25519` do computador **não é** a
+   chave do workflow; nunca fazer upload dela ao GitHub.
+4. Instalar na Contabo um comando **protegido e de propriedade root**:
+   `/usr/local/sbin/fm-contabo-deploy`, baseado em
+   `scripts/ops/contabo_release_guard.sh`, e seu executor root-owned em
+   `/usr/local/libexec/fm-atendevendeia-pilot-release.sh`.
+   Em sudoers permitir somente essa entrada, sem `sudo su`, sem Docker direto
+   e sem permitir que `fm_deploy` modifique qualquer um dos scripts.
+   O comando protegido aceita apenas `inspect`, `stage` e `deploy` com
+   parâmetros rigidamente validados; o pacote deve ter SHA256 esperado.
+   A instalação do executor com poderes de root exige revisão e autorização
+   específica. **Não modificar a Evolution ou o NPM.**
 5. Preservar fora do Git o `/home/SaaS/atendevendeia/.env`. Não trocar
    NPM, Evolution, certificados ou banco por outro conjunto de serviços.
 
@@ -41,7 +46,8 @@ Abrir **Actions → Contabo pilot release (governed) → Run workflow**.
   **approve_deploy**. Esses dois campos equivalem a aprovações específicas
   naquele despacho; não selecioná-los antecipadamente.
 - O workflow exige quatro checks verdes do mesmo SHA: `api`, `web`, `e2e`
-  e `Cloudflare Pages`. Transfere um pacote `git archive`, que funciona
+  e `Cloudflare Pages`. Transfere o pacote `git archive` ao comando protegido
+  via SSH autenticado, sem conceder shell privilegiado à identidade; funciona
   mesmo se o repositório estiver **privado** e a instalação não tiver `.git`.
 - No servidor o script verifica a instalação e o esquema canônicos, gera
   novo dump RLS-safe, restaura em banco isolado e valida RLS antes de
