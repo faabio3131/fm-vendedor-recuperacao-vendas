@@ -126,7 +126,7 @@ function Steps() {
                 <details className="guide">
                   <summary>Como configurar {s.title.toLowerCase()}</summary>
                   <ol>
-                    {GUIDES[s.key].map((instruction, index) => (
+                    {(GUIDES[s.key] ?? []).map((instruction, index) => (
                       <li key={index}>{instruction}</li>
                     ))}
                   </ol>
