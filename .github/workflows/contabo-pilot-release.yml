@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/contabo-pilot-release.yml"
       - "scripts/ops/contabo_pilot_release.sh"
+      - "scripts/ops/contabo_release_guard.sh"
       - "apps/api/tests/test_contabo_release_contract.py"
   workflow_dispatch:
     inputs:
@@ -46,7 +47,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Validate controlled deploy script syntax
-        run: bash -n scripts/ops/contabo_pilot_release.sh
+        run: bash -n scripts/ops/contabo_pilot_release.sh && bash -n scripts/ops/contabo_release_guard.sh
       - name: Verify explicit safety guards
         run: |
           python3 - <<'PY'
@@ -54,6 +55,10 @@ jobs:
           source = Path("scripts/ops/contabo_pilot_release.sh").read_text()
           assert "FM_DEPLOY_APPROVE_MIGRATIONS" in source
           assert "FM_DEPLOY_APPROVE_RELEASE" in source
+          guard = Path("scripts/ops/contabo_release_guard.sh").read_text()
+          assert 'mode="${1:-}"' in guard
+          assert "stage)" in guard and "inspect)" in guard and "deploy)" in guard
+          assert "exec /bin/bash" in guard
           assert "pg_restore" in source
           assert "rls_invariant.sql" in source
           assert "SOURCE_COMMIT" in source
@@ -149,7 +154,8 @@ jobs:
           set -euo pipefail
           ssh -T -i "$HOME/.ssh/contabo_deploy" -o IdentitiesOnly=yes \
             -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=12 \
-            "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- inspect" < scripts/ops/contabo_pilot_release.sh
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo -n /usr/local/sbin/fm-contabo-deploy inspect"
 
       - name: Stage checked SHA and publish only after backup/restore
         if: inputs.operation == 'deploy'
@@ -162,9 +168,9 @@ jobs:
           remote="$DEPLOY_USER@$DEPLOY_HOST"
           ssh_opts=(-i "$HOME/.ssh/contabo_deploy" -o IdentitiesOnly=yes \
             -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=12)
-          scp "${ssh_opts[@]}" "$RUNNER_TEMP/source.tar.gz" \
-            "$remote:/home/SaaS/atendevendeia/incoming/$TARGET_SHA.tar.gz"
           digest="$(cat "$RUNNER_TEMP/source.sha256")"
           ssh -T "${ssh_opts[@]}" "$remote" \
-            "FM_DEPLOY_SHA=$TARGET_SHA FM_DEPLOY_DIGEST=$digest FM_DEPLOY_APPROVE_MIGRATIONS=YES FM_DEPLOY_APPROVE_RELEASE=YES bash -s -- deploy" \
-            < scripts/ops/contabo_pilot_release.sh
+            "sudo -n /usr/local/sbin/fm-contabo-deploy stage $TARGET_SHA $digest" \
+            < "$RUNNER_TEMP/source.tar.gz"
+          ssh -T "${ssh_opts[@]}" "$remote" \
+            "sudo -n /usr/local/sbin/fm-contabo-deploy deploy $TARGET_SHA $digest"
