@@ -1,6 +1,6 @@
 # AGENTS.md — fm-vendedor-recuperacao-vendas
 
-Produto comercial da F&M Tecnologia. Autoridade final: Fábio (Diretor Executivo).
+Produto da FM Tecnologia. Autoridade final: Fábio (Diretor Executivo).
 
 ## Regras obrigatórias
 
