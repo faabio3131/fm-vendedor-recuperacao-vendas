@@ -53,6 +53,8 @@ class EvolutionClient:
             ) from None
         if response.status_code == 404:
             raise InstanceMissing()
+        if response.status_code >= 500:
+            raise AppError(503, "evolution_uncertain", "Falha da Evolution; resultado incerto.")
         if response.status_code >= 400:
             raise AppError(502, "evolution_rejected", "A Evolution recusou a operação.") from None
         if len(response.content) > _MAX_RESPONSE:
@@ -96,6 +98,33 @@ class EvolutionClient:
             "/instance/create",
             body={"instanceName": safe, "qrcode": True, "integration": "WHATSAPP-BAILEYS"},
         )
+
+    def configure_webhook(self, name: str, url: str, token: str) -> None:
+        """Instance-scoped callback with authenticated header; no global webhooks."""
+        safe = self._name(name)
+        if not url.startswith("https://") or len(token) < 32:
+            raise AppError(503, "webhook_config_invalid", "Configuração do webhook inválida.")
+        payload = self._call(
+            "POST",
+            f"/webhook/set/{safe}",
+            body={
+                "enabled": True,
+                "url": url,
+                "webhookByEvents": False,
+                "webhookBase64": False,
+                "events": ["MESSAGES_UPSERT", "MESSAGES_UPDATE"],
+                "headers": {"x-fm-evolution-auth": token},
+            },
+        )
+        # Provider versions differ in wrapper shape. Never accept a clear rejection.
+        webhook = payload.get("webhook")
+        if isinstance(webhook, dict):
+            item = webhook.get("webhook", webhook)
+            if isinstance(item, dict) and (
+                item.get("enabled") is False
+                or (isinstance(item.get("url"), str) and item["url"] != url)
+            ):
+                raise AppError(502, "webhook_config_mismatch", "Webhook divergente.")
 
     def qr(self, name: str) -> str:
         safe = self._name(name)

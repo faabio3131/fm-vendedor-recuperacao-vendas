@@ -8,6 +8,7 @@ import json
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from fm_seller.channels.evolution import EvolutionClient, InstanceMissing
 from fm_seller.errors import AppError
@@ -33,6 +34,9 @@ class FakeEvolution:
         self.created.append(name)
         self.current = "connecting"
 
+    def configure_webhook(self, name: str, url: str, token: str) -> None:
+        assert name in self.created and url.startswith("http") and len(token) >= 32
+
     def qr(self, name: str) -> str:
         return QR
 
@@ -48,7 +52,12 @@ def _enable(client: TestClient, fake: FakeEvolution) -> None:
     from typing import Any, cast
 
     service = cast(Any, client.app).state.evolution_pairing
-    service._settings = service._settings.model_copy(update={"evolution_enabled": True})
+    service._settings = service._settings.model_copy(
+        update={
+            "evolution_enabled": True,
+            "evolution_webhook_key": SecretStr("x" * 40),
+        }
+    )
     service.client = fake
 
 

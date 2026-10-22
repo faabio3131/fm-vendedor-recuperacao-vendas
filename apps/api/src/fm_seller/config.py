@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     evolution_api_base_url: str = ""
     evolution_api_key: SecretStr = SecretStr("")
     evolution_timeout_seconds: float = Field(default=8.0, ge=2.0, le=20.0)
+    evolution_webhook_key: SecretStr = SecretStr("")
+    evolution_send_enabled: bool = False
 
     # Captura de eventos reais de checkout para conferir o formato (docs/OPERACAO.md). Desligada por
     # padrão; guarda o corpo cifrado, sem segredos, e apaga sozinha depois do prazo.
@@ -142,11 +144,18 @@ class Settings(BaseSettings):
             or parsed.fragment
             or parsed.port not in (None, 443)
             or len(self.evolution_api_key.get_secret_value()) < 32
+            or len(self.evolution_webhook_key.get_secret_value()) < 32
         ):
             raise ValueError(
                 "FM_EVOLUTION_ENABLED requer URL HTTPS:443 sem path/credenciais "
                 "e FM_EVOLUTION_API_KEY de 32+ caracteres"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _evolution_send_gate(self) -> Settings:
+        if self.evolution_send_enabled and not self.evolution_enabled:
+            raise ValueError("FM_EVOLUTION_SEND_ENABLED exige FM_EVOLUTION_ENABLED")
         return self
 
     @model_validator(mode="after")

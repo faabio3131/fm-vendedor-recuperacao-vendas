@@ -402,6 +402,10 @@ def _process(
                 _finish_if_done(conn, step.case_id, now)
             return outcome
         message, config = verdict.message, verdict.config
+    if config.get("__provider") == "evolution" and not getattr(sender, "evolution_enabled", False):
+        with db.tx(tenant_id=step.tenant_id) as conn:
+            _set_step(conn, step.id, "failed", "canal_sem_adaptador")
+        return "failed"
 
     try:
         provider_id = sender.send(config, message)
@@ -510,21 +514,25 @@ def _check(conn: Conn, box: SecretBox, step: _Step, now: datetime) -> _Decision 
         "WHERE tenant_id = %s AND key = %s",
         (step.tenant_id, step.template_key),
     ).fetchone()
-    if tpl is None or tpl["meta_status"] != "approved":
-        return ("skipped", "skipped", "template_nao_aprovado", None)
-    conn_row = conn.execute(
-        "SELECT config_encrypted, status FROM connections "
-        "WHERE tenant_id = %s AND provider = 'whatsapp_cloud'",
+    choices = conn.execute(
+        "SELECT provider, config_encrypted FROM connections "
+        "WHERE tenant_id = %s AND provider IN ('whatsapp_cloud', 'evolution') "
+        "AND status = 'connected'",
         (step.tenant_id,),
-    ).fetchone()
-    if conn_row is None or conn_row["status"] != "connected":
-        return ("skipped", "skipped", "canal_nao_conectado", None)
+    ).fetchall()
+    if len(choices) != 1:
+        reason = "canal_ambiguo" if choices else "canal_nao_conectado"
+        return ("skipped", "skipped", reason, None)
+    provider = choices[0]["provider"]
+    if tpl is None or (provider == "whatsapp_cloud" and tpl["meta_status"] != "approved"):
+        return ("skipped", "skipped", "template_nao_aprovado", None)
     try:
         config = box.decrypt(
-            conn_row["config_encrypted"], tenant_id=str(step.tenant_id), provider="whatsapp_cloud"
+            choices[0]["config_encrypted"], tenant_id=str(step.tenant_id), provider=provider
         )
     except CryptoError:
         return ("skipped", "skipped", "credencial_ilegivel", None)
+    config["__provider"] = provider
 
     body = render(
         tpl["body"],

@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 from fm_seller.channels.evolution import EvolutionClient, InstanceMissing
+from fm_seller.channels.evolution_runtime import webhook_token
 from fm_seller.config import Settings
 from fm_seller.db import Database
 from fm_seller.errors import AppError, forbidden
@@ -155,6 +156,9 @@ class EvolutionPairingService:
             except InstanceMissing:
                 self.client.create(name)
                 state = "connecting"
+            token = webhook_token(self._settings, p.tenant_id, name)
+            url = self._settings.public_base_url.rstrip("/") + (f"/v1/webhooks/evolution/{name}")
+            self.client.configure_webhook(name, url, token)
             if state == "open":
                 self._set_status(p, "connected", verified=True)
                 return {"status": "connected", "connected": True}

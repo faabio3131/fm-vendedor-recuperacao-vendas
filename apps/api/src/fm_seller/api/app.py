@@ -21,6 +21,7 @@ from fm_seller.api.routes import (
     connections,
     control_plane,
     evolution,
+    evolution_webhook,
     health,
     me,
     onboarding,
@@ -173,6 +174,7 @@ def create_app(
     app.include_router(plan.router, prefix="/v1")
     app.include_router(privacy.router, prefix="/v1")
     app.include_router(evolution.router, prefix="/v1")
+    app.include_router(evolution_webhook.router, prefix="/v1")
     app.include_router(connections.router, prefix="/v1")
     app.include_router(captures.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")  # antes do genérico: rota específica
