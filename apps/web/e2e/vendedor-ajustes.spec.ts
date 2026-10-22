@@ -10,6 +10,7 @@ test("Vendedor IA: confirmação de salvamento junto ao botão, sem gravar duas 
 
   const persona = page.getByLabel("Tom de voz (opcional)");
   await expect(persona).toBeVisible();
+  await expect(persona).toBeEnabled(); // Await authoritative settings before typing.
   const original = await persona.inputValue();
   const updated = "Atendimento claro e objetivo para certificação visual E2E.";
   const save = page.getByRole("button", { name: "Salvar ajustes" });
