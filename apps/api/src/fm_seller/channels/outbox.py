@@ -21,6 +21,7 @@ from typing import Any
 
 from fm_seller.channels.social import BY_CHANNEL, identity_of
 from fm_seller.db import Database
+from fm_seller.provisioning import trial
 from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.senders import MessageSender, SendError
 from fm_seller.security.crypto import CryptoError, SecretBox
@@ -187,16 +188,36 @@ def _send_one(
     if reason is not None or ctx is None:
         _finish(db, tenant_id, message_id, "failed", reason, None)
         return False
+    # Shared cap across chatbot and recovery. Human replies and system opt-out receipts
+    # never consume the trial; only automated outbound messages are metered.
+    reserved = "paid"
+    if row["author"] in ("bot", "recovery"):
+        reserved = trial.reserve(
+            db, tenant_id, source_kind="bot", source_id=message_id, now=now
+        )
+        if reserved not in ("paid", "reserved"):
+            _finish(db, tenant_id, message_id, "failed", "trial_limit_or_expired", None)
+            return False
     try:
         provider_id = senders[ctx["channel"]].send_text(config, recipient, row["body"])
     except SendError as exc:
         _finish(db, tenant_id, message_id, "failed", str(exc)[:200], None)
+        if reserved == "reserved":
+            trial.finalize(
+                db, tenant_id, source_kind="bot", source_id=message_id, outcome="failed"
+            )
         return False
     except Exception as exc:
         log.exception("envio de texto com resultado incerto")
         _finish(
             db, tenant_id, message_id, "failed", f"resultado_incerto: {type(exc).__name__}", None
         )
+        if reserved == "reserved":
+            trial.finalize(
+                db, tenant_id, source_kind="bot", source_id=message_id, outcome="uncertain"
+            )
         return False
     _finish(db, tenant_id, message_id, "sent", None, provider_id)
+    if reserved == "reserved":
+        trial.finalize(db, tenant_id, source_kind="bot", source_id=message_id, outcome="sent")
     return True
