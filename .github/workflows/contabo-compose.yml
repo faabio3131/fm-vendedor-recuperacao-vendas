@@ -25,7 +25,9 @@ jobs:
       - name: Verify NPM and tenant isolation
         run: |
           set -euo pipefail
-          docker compose -f deploy/contabo/compose.yml config --format json > /tmp/contabo-compose.json
+          # The init profile is intentionally disabled in normal config. Enable it only
+          # for this static inspection so bootstrap is included in the JSON.
+          docker compose --profile init -f deploy/contabo/compose.yml config --format json > /tmp/contabo-compose.json
           python3 - <<'PY'
           import json
           from pathlib import Path
