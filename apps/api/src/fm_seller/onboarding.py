@@ -82,9 +82,9 @@ def steps(facts: dict[str, Any]) -> list[dict[str, Any]]:
         _step(
             "whatsapp",
             "WhatsApp conectado e testado",
-            "whatsapp_cloud" in connected,
+            bool(connected & {"whatsapp_cloud", "evolution"}),
             why="É por onde a recuperação envia as mensagens prontas.",
-            todo="Conecte o WhatsApp: cadastre os dados do número na central de conexões e teste.",
+            todo="Conecte e verifique uma sessão WhatsApp na central de conexões (Meta ou Evolution).",
             href="/connections",
             action="Conectar WhatsApp",
             blocks=(RECOVERY,),
