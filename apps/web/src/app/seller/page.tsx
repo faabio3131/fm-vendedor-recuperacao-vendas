@@ -135,7 +135,7 @@ function Seller() {
         <textarea
           id="persona"
           maxLength={600}
-          disabled={!canEdit || savingSettings}
+          disabled={!settings || !canEdit || savingSettings}
           value={persona}
           onChange={(e) => {
             setPersona(e.target.value);
