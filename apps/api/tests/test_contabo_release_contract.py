@@ -14,7 +14,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "contabo-pilot-release.yml"
 
 
 def test_release_script_is_valid_bash_and_requires_two_independent_approvals() -> None:
-    syntax = subprocess.run(["bash", "-n", str(SCRIPT)], check=False, capture_output=True)
+    syntax = subprocess.run(["/bin/bash", "-n", str(SCRIPT)], check=False, capture_output=True)  # noqa: S603
     assert syntax.returncode == 0, syntax.stderr
     text = SCRIPT.read_text()
     assert 'FM_DEPLOY_APPROVE_MIGRATIONS:-}' in text
@@ -28,8 +28,8 @@ def test_release_script_is_valid_bash_and_requires_two_independent_approvals() -
 
 def test_release_fails_closed_without_any_credentials_or_approval() -> None:
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}
-    res = subprocess.run(
-        ["bash", str(SCRIPT), "deploy"],
+    res = subprocess.run(  # noqa: S603 (fixed repository script)
+        ["/bin/bash", str(SCRIPT), "deploy"],
         capture_output=True, text=True, env=env, check=False, timeout=5,
     )
     assert res.returncode != 0
