@@ -383,3 +383,53 @@ def test_loadtest_counts_latency_and_errors_and_refuses_remote_servers_by_defaul
         Namespace(api="https://api.example.com", seconds=1, concurrency=1, remote=False)
     )
     assert refused == 2 and "só roda contra endereço local" in capsys.readouterr().out
+
+
+def test_commercial_plan_catalog_admin_only_and_audited(
+    admin: Any, client: TestClient, env: Env
+) -> None:
+    c, _ = admin
+    # Commercial plans have identical capabilities; legacy tiers remain unchanged.
+    rows = env.sql(
+        "SELECT key, price_monthly_cents, limits->>'ai_replies_per_month', features "
+        "FROM plans WHERE key LIKE 'av-%%' ORDER BY phase"
+    )
+    assert [(r[0], r[1], r[2]) for r in rows] == [
+        ("av-essencial", 12990, "500"),
+        ("av-profissional", 19990, "5000"),
+        ("av-escala", 39990, "15000"),
+    ]
+    assert rows[0][3] == rows[1][3] == rows[2][3]
+    assert c.get("/v1/admin/plans").status_code == 200
+    assert client.get("/v1/admin/plans").status_code in (401, 403)
+
+    bad = c.put(
+        "/v1/admin/plans/fase-1",
+        json={"price_monthly_cents": 12000, "ai_replies_per_month": 99},
+    )
+    assert bad.status_code == 400
+    assert (
+        c.put(
+            "/v1/admin/plans/av-essencial",
+            json={"price_monthly_cents": 0, "ai_replies_per_month": 500},
+        ).status_code
+        == 422
+    )
+
+    body = {"price_monthly_cents": 12990, "ai_replies_per_month": 600}
+    update = c.put("/v1/admin/plans/av-essencial", json=body)
+    assert update.status_code == 200, update.text
+    assert update.json()["ai_replies_per_month"] == 600
+    history = env.sql(
+        "SELECT old_price_cents, new_price_cents, old_quota, new_quota "
+        "FROM platform_plan_changes WHERE plan_key = 'av-essencial'"
+    )
+    assert history == [(12990, 12990, 500, 600)]
+    # Idempotency: an identical admin request does not duplicate an audit event.
+    assert c.put("/v1/admin/plans/av-essencial", json=body).status_code == 200
+    assert env.sql("SELECT count(*) FROM platform_plan_changes WHERE plan_key='av-essencial'") == [
+        (1,)
+    ]
+    assert env.sql(
+        "SELECT limits->>'ai_replies_per_month' FROM plans WHERE key='av-essencial'"
+    ) == [("600",)]

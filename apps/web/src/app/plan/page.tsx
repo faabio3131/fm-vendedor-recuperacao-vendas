@@ -71,7 +71,7 @@ function Plan() {
         <strong>Respostas da IA neste mês</strong>
         <p>
           <strong>{plan.ai.replies}</strong>
-          {plan.ai.limit !== null ? ` de ${plan.ai.limit} do seu plano (${plan.ai.percent}%)` : " (sem limite no seu plano)"}
+          {plan.ai.limit !== null ? ` de ${plan.ai.limit} do seu plano (${plan.ai.percent}%)` : " (franquia não configurada; contate o suporte)"}
         </p>
         <p className="muted">Limite diário de contatos novos por número: {plan.number_daily_limit}.</p>
       </div>

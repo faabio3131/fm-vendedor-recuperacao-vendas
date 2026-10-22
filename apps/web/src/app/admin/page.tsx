@@ -31,6 +31,12 @@ function age(seconds: number | null): string {
   return `${Math.round(seconds / 3600)} h`;
 }
 
+type CommercialPlan = {
+  key: string; name: string; price_monthly_cents: number;
+  ai_replies_per_month: number; active: boolean;
+};
+type PlanDraft = { price: string; quota: string };
+
 function Admin() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
@@ -40,6 +46,8 @@ function Admin() {
   const [health, setHealth] = useState<AdminHealth | null>(null);
   const [note, setNote] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
   const [plans, setPlans] = useState<Record<string, string>>({});
+  const [commercial, setCommercial] = useState<CommercialPlan[] | null>(null);
+  const [planDrafts, setPlanDrafts] = useState<Record<string, PlanDraft>>({});
   const [aiBusy, setAiBusy] = useState(false);
   const [aiResult, setAiResult] = useState<AdminAiCheck | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -60,6 +68,7 @@ function Admin() {
   const load = useCallback(() => {
     api<AdminClients>("/v1/admin/clients?limit=100").then(setClients).catch(() => undefined);
     api<AdminMetrics>("/v1/admin/metrics").then(setMetrics).catch(() => undefined);
+    api<CommercialPlan[]>("/v1/admin/plans").then(setCommercial).catch(() => undefined);
     api<AdminHealth>("/v1/admin/health").then(setHealth).catch(() => undefined);
   }, []);
 
@@ -83,6 +92,34 @@ function Admin() {
       load();
     } catch (e) {
       setNote({ kind: "bad", text: message(e) });
+    }
+  }
+
+  async function saveCommercial(p: CommercialPlan) {
+    const draft = planDrafts[p.key] ?? {
+      price: (p.price_monthly_cents / 100).toFixed(2),
+      quota: String(p.ai_replies_per_month),
+    };
+    const price = Number(draft.price.replace(",", "."));
+    const quota = Number(draft.quota);
+    if (!Number.isFinite(price) || price <= 0 || !Number.isSafeInteger(quota) || quota < 1) {
+      setNote({ kind: "bad", text: "Preço ou franquia inválidos." });
+      return;
+    }
+    try {
+      const updated = await api<CommercialPlan>(`/v1/admin/plans/${p.key}`, {
+        method: "PUT",
+        body: JSON.stringify({ price_monthly_cents: Math.round(price * 100), ai_replies_per_month: quota }),
+      });
+      setCommercial((prev) => prev?.map((item) => item.key === p.key ? updated : item) ?? null);
+      setPlanDrafts((prev) => {
+        const next = { ...prev };
+        delete next[p.key];
+        return next;
+      });
+      setNote({ kind: "ok", text: `Plano ${p.name} atualizado com auditoria.` });
+    } catch (error) {
+      setNote({ kind: "bad", text: message(error) });
     }
   }
 
@@ -230,6 +267,56 @@ function Admin() {
                 {metrics.clients.deletion_pending > 0 && ` · ${metrics.clients.deletion_pending} com exclusão marcada`}
               </div>
             </div>
+          </div>
+        </section>
+      )}
+
+      {commercial && (
+        <section className="card" aria-labelledby="commercial-plans-title" style={{ marginTop: 16 }}>
+          <h2 id="commercial-plans-title">Planos comerciais — AtendeVendeIA</h2>
+          <p className="muted">
+            As mesmas funções para os três planos. Aqui você define mensalidade e franquia de
+            interações de IA. Valores não criam checkout nem cobrança automaticamente.
+          </p>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr><th>Plano</th><th>Mensalidade (R$)</th><th>Interações IA/mês</th><th>Salvar</th></tr>
+              </thead>
+              <tbody>
+                {commercial.map((p) => {
+                  const edit = planDrafts[p.key] ?? {
+                    price: (p.price_monthly_cents / 100).toFixed(2),
+                    quota: String(p.ai_replies_per_month),
+                  };
+                  return (
+                    <tr key={p.key}>
+                      <td><strong>{p.name}</strong></td>
+                      <td>
+                        <input aria-label={`Preço de ${p.name}`} type="text" inputMode="decimal"
+                          value={edit.price}
+                          onChange={(e) => setPlanDrafts((prev) => ({
+                            ...prev, [p.key]: { ...edit, price: e.target.value },
+                          }))}/>
+                      </td>
+                      <td>
+                        <input aria-label={`Franquia de ${p.name}`} type="number" min="1" max="2000000"
+                          value={edit.quota}
+                          onChange={(e) => setPlanDrafts((prev) => ({
+                            ...prev, [p.key]: { ...edit, quota: e.target.value },
+                          }))}/>
+                      </td>
+                      <td>
+                        <button disabled={
+                          edit.price === (p.price_monthly_cents / 100).toFixed(2) &&
+                          edit.quota === String(p.ai_replies_per_month)
+                        } onClick={() => void saveCommercial(p)}>Salvar</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </section>
       )}

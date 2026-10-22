@@ -354,3 +354,73 @@ def revoke_admin(admin_url: str, email: str) -> bool:
         )
         conn.commit()
     return bool(gone)
+
+
+# Commercial Launch / local plan authority
+# This catalog remains local until explicit Command handoff; never a parallel
+# billing engine. There is no checkout issuance or payment claim in these APIs.
+
+COMMERCIAL_PLANS = ("av-essencial", "av-profissional", "av-escala")
+
+
+def list_commercial_plans(conn: Conn) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT key, display_name, price_monthly_cents, limits, active "
+        "FROM plans WHERE key = ANY(%s) ORDER BY phase",
+        (list(COMMERCIAL_PLANS),),
+    ).fetchall()
+    return [
+        {
+            "key": r["key"],
+            "name": r["display_name"],
+            "price_monthly_cents": r["price_monthly_cents"],
+            "ai_replies_per_month": r["limits"].get("ai_replies_per_month"),
+            "active": r["active"],
+        }
+        for r in rows
+    ]
+
+
+def update_commercial_plan(
+    conn: Conn, admin: Admin, key: str, *, price_monthly_cents: int, ai_replies_per_month: int
+) -> dict[str, Any]:
+    if key not in COMMERCIAL_PLANS:
+        raise bad_request("plan_not_commercial", "Este plano não pertence ao catálogo comercial.")
+    row = conn.execute(
+        "SELECT key, display_name, price_monthly_cents, limits, active "
+        "FROM plans WHERE key = %s FOR UPDATE",
+        (key,),
+    ).fetchone()
+    if row is None:
+        raise not_found()
+    previous_price = row["price_monthly_cents"]
+    previous_quota = row["limits"].get("ai_replies_per_month")
+    if not isinstance(previous_price, int) or not isinstance(previous_quota, int):
+        raise bad_request("plan_not_configured", "Plano sem configuração comercial válida.")
+    if previous_price != price_monthly_cents or previous_quota != ai_replies_per_month:
+        conn.execute(
+            "UPDATE plans SET price_monthly_cents = %s, "
+            "limits = jsonb_set(limits, '{ai_replies_per_month}', to_jsonb(%s::int), true) "
+            "WHERE key = %s",
+            (price_monthly_cents, ai_replies_per_month, key),
+        )
+        conn.execute(
+            "INSERT INTO platform_plan_changes "
+            "(actor_user_id, plan_key, old_price_cents, new_price_cents, old_quota, new_quota) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (
+                admin.user_id,
+                key,
+                previous_price,
+                price_monthly_cents,
+                previous_quota,
+                ai_replies_per_month,
+            ),
+        )
+    return {
+        "key": key,
+        "name": row["display_name"],
+        "price_monthly_cents": price_monthly_cents,
+        "ai_replies_per_month": ai_replies_per_month,
+        "active": row["active"],
+    }

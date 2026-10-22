@@ -178,10 +178,14 @@ def _handle_conversation(
     ).fetchone():
         return "ignored"
 
+    # Lock the subscription row across quota check, model call and usage write.
+    # Without this, two workers can both observe quota-1 and exceed the plan.
+    # PostgreSQL serializes concurrent calls for the SAME tenant only.
     plan = conn.execute(
-        "SELECT status FROM tenant_plans WHERE tenant_id = %s", (tenant_id,)
+        "SELECT tp.status FROM tenant_plans tp WHERE tp.tenant_id = %s FOR UPDATE OF tp",
+        (tenant_id,),
     ).fetchone()
-    if plan is not None and blocks_service(plan["status"]):
+    if plan is None or blocks_service(plan["status"]):
         _handoff(conn, tenant_id, conv_id, "assinatura_inativa", notify=False)
         return "handoffs"
 
@@ -210,7 +214,8 @@ def _handle_conversation(
 
     tz = settings["timezone"]
     limit = usage.monthly_limit(conn, tenant_id)
-    if limit is not None and usage.month_usage(conn, tenant_id, tz)["calls"] >= limit:
+    if limit is None or usage.month_usage(conn, tenant_id, tz)["calls"] >= limit:
+        # Missing/invalid quota is a configuration error, never a free unlimited tier.
         _handoff(conn, tenant_id, conv_id, "limite_do_plano", notify=True)
         return "handoffs"
 

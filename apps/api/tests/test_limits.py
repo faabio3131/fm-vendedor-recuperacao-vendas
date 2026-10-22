@@ -68,7 +68,7 @@ def test_plan_limit_hands_off_when_reached_and_keeps_counting_nothing_more(
     assert s.outbound()[-1][1].startswith("Certo! Vou chamar uma pessoa")
 
 
-def test_limit_zero_blocks_everything_and_missing_limit_means_unlimited(
+def test_limit_zero_and_missing_limit_both_fail_closed(
     s: Setup,
     db: Database,
 ) -> None:
@@ -77,16 +77,15 @@ def test_limit_zero_blocks_everything_and_missing_limit_means_unlimited(
     s.say("oi")
     run_ai_replies(db, SimulatedAiModel(forced=OK))
     assert s.conv_state() == ("human", "limite_do_plano")
-    # outro cliente, plano sem limite
+    # Sem limite configurado, nunca conceder uso ilimitado involuntário.
     other = Setup(s.env, db)
     _plan(s.env, "teste-sem-limite", "{}")
     _use_plan(other, "teste-sem-limite")
-    s.env.sql(
-        "INSERT INTO ai_usage (tenant_id, day, calls) VALUES (%s, current_date, 100000)",
-        (other.tid,),
-    )
     other.say("oi")
-    assert run_ai_replies(db, SimulatedAiModel(forced=OK)).replied == 1
+    model = SimulatedAiModel(forced=OK)
+    assert run_ai_replies(db, model).handoffs == 1
+    assert model.calls == []
+    assert other.conv_state() == ("human", "limite_do_plano")
 
 
 def test_usage_from_last_month_does_not_count(s: Setup, db: Database) -> None:
@@ -196,3 +195,51 @@ def test_provisional_plan_limits_are_data(env: Env, key: str) -> None:
     assert env.sql("SELECT limits->>'ai_replies_per_month' FROM plans WHERE key = %s", (key,)) == [
         ("1000",)
     ]
+
+
+def test_same_tenant_parallel_ia_calls_never_exceed_quota(
+    s: Setup,
+    db: Database,
+) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import UTC, datetime
+    from threading import Event
+
+    from fm_seller.ai.seller import _handle_conversation
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    _plan(s.env, "teste-concorrencia-1", '{"ai_replies_per_month": 1}')
+    _use_plan(s, "teste-concorrencia-1")
+    s.say("primeiro atendimento")
+    with db.tx(tenant_id=s.tenant) as conn:
+        _, other_conv = upsert_conversation(conn, s.tenant, "5511999995555", "Segundo")
+    s.env.sql(
+        "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, "
+        "status, handled) VALUES (%s, %s, 'in', 'customer', 'segundo atendimento', "
+        "'received', false)",
+        (s.tid, other_conv),
+    )
+
+    started, release = Event(), Event()
+
+    class PausingModel(SimulatedAiModel):
+        def reply(self, ctx: object) -> AiReply:
+            started.set()
+            assert release.wait(timeout=7), "O modelo de teste não foi liberado"
+            return OK
+
+    model = PausingModel()
+
+    def handle(conv_id: object) -> str:
+        with db.tx(tenant_id=s.tenant) as conn:
+            return _handle_conversation(conn, model, s.tenant, conv_id, datetime.now(UTC))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(handle, s.conv)
+        assert started.wait(timeout=7), "A primeira IA não iniciou"
+        second = pool.submit(handle, other_conv)
+        release.set()
+        outcomes = sorted([first.result(timeout=15), second.result(timeout=15)])
+
+    assert outcomes == ["handoffs", "replied"]
+    assert _usage(s)[0] == 1
