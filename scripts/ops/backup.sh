@@ -33,9 +33,16 @@ fi
 pg_dump --format=custom --no-owner --enable-row-security --file "$out" "$FM_DATABASE_ADMIN_URL"
 
 # Conferência mínima: o arquivo precisa listar o conteúdo e conter a tabela de migrations.
-pg_restore --list "$out" | grep -q "TABLE public schema_migrations" || {
+# With pipefail, grep -q may exit before pg_restore finishes writing the TOC,
+# yielding SIGPIPE (141) and rejecting a valid backup. Consume the entire TOC first.
+if ! toc="$(pg_restore --list "$out")"; then
+  echo "ERRO: pg_restore não conseguiu ler o índice do backup; descartando $out" >&2
+  rm -f "$out"
+  exit 1
+fi
+if [[ "$toc" != *"TABLE public schema_migrations"* ]]; then
   echo "ERRO: backup gerado mas sem a tabela schema_migrations; descartando $out" >&2
   rm -f "$out"
   exit 1
-}
+fi
 echo "Backup gerado: $out ($(wc -c <"$out") bytes)"
