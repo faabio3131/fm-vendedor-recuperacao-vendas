@@ -178,11 +178,14 @@ def _handle_conversation(
     ).fetchone():
         return "ignored"
 
-    # Lock the subscription row across quota check, model call and usage write.
-    # Without this, two workers can both observe quota-1 and exceed the plan.
-    # PostgreSQL serializes concurrent calls for the SAME tenant only.
+    # Transaction lock serializes IA quota checks across workers for this tenant.
+    # Unlike SELECT FOR UPDATE, it does not depend on UPDATE RLS of tenant_plans.
+    conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+        (f"fmav:ai:quota:{tenant_id}",),
+    )
     plan = conn.execute(
-        "SELECT tp.status FROM tenant_plans tp WHERE tp.tenant_id = %s FOR UPDATE OF tp",
+        "SELECT status FROM tenant_plans WHERE tenant_id = %s",
         (tenant_id,),
     ).fetchone()
     if plan is None or blocks_service(plan["status"]):
