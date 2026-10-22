@@ -16,8 +16,8 @@ test("Primeiros passos: lista do estado real, ações e sem rolagem horizontal",
   await expect(page.getByRole("progressbar", { name: "Progresso dos primeiros passos" })).toBeVisible();
   const list = page.getByRole("list", { name: "Lista de passos" });
   await expect(list.getByRole("listitem")).toHaveCount(8);
-  await expect(list.getByText("WhatsApp conectado e testado")).toBeVisible();
-  await expect(list.getByText("Ao menos uma oferta ativa")).toBeVisible();
+  await expect(list.getByText("WhatsApp conectado e testado", { exact: true })).toBeVisible();
+  await expect(list.getByText("Ao menos uma oferta ativa", { exact: true })).toBeVisible();
   // item pendente traz o que fazer e um botão que leva à tela certa
   const pending = list.getByRole("listitem").filter({ hasText: "Falta" }).first();
   await expect(pending.getByRole("link")).toBeVisible();
