@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 import pytest
@@ -230,7 +231,7 @@ def test_same_tenant_parallel_ia_calls_never_exceed_quota(
 
     model = PausingModel()
 
-    def handle(conv_id: object) -> str:
+    def handle(conv_id: uuid.UUID) -> str:
         with db.tx(tenant_id=s.tenant) as conn:
             return _handle_conversation(conn, model, s.tenant, conv_id, datetime.now(UTC))
 
