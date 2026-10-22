@@ -170,7 +170,7 @@ def finalize(
     source_id: uuid.UUID,
     outcome: str,
 ) -> bool:
-    """Finalize once. 'uncertain' consumes capacity to avoid accidental over-issuance."""
+    """Finalize once. Uncertain delivery holds a reserved slot pending reconciliation."""
     if outcome not in ("sent", "failed", "uncertain"):
         raise ValueError("outcome inválido")
     with db.tx(system=True) as conn:
@@ -183,17 +183,22 @@ def finalize(
             "WHERE tenant_id = %s AND source_kind = %s AND source_id = %s FOR UPDATE",
             (tenant_id, source_kind, source_id),
         ).fetchone()
-        if row is None or row["status"] != "reserved":
+        if row is None or row["status"] not in ("reserved", "uncertain"):
+            return False
+        if row["status"] == "uncertain" and outcome == "uncertain":
             return False
         conn.execute(
             "UPDATE trial_message_ledger SET status = %s, finalized_at = now() "
             "WHERE tenant_id = %s AND source_kind = %s AND source_id = %s",
             (outcome, tenant_id, source_kind, source_id),
         )
-        consumed = outcome != "failed"
+        if outcome == "uncertain":
+            # Unknown delivery must not be reported as sent. Keep the slot reserved
+            # until a provider receipt or governed manual reconciliation proves outcome.
+            return True
         conn.execute(
             "UPDATE tenant_plans SET trial_messages_reserved = trial_messages_reserved - 1, "
             "trial_messages_sent = trial_messages_sent + %s WHERE tenant_id = %s",
-            (1 if consumed else 0, tenant_id),
+            (1 if outcome == "sent" else 0, tenant_id),
         )
         return True
