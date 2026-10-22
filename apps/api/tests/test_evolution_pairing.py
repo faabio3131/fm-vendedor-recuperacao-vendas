@@ -105,7 +105,6 @@ def test_qr_is_ephemeral_and_connection_needs_provider_proof(client: TestClient,
     assert client.get("/v1/connections").json()[0]["status"] == "disconnected"
 
 
-
 def test_onboarding_whatsapp_requires_verified_evolution_session(
     client: TestClient, env: Env
 ) -> None:
