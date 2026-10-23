@@ -71,6 +71,12 @@ def test_webhook_to_registered_price_link_to_evolution_ack(
 ) -> None:
     """Real DB/API flow, authentic webhook, one outbound and monotonic read receipt."""
     env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    # The integration suite shares a synthetic DB across tests. Its older outbox
+    # rows must not be claimed as part of this new tenant's end-to-end case.
+    env.sql(
+        "UPDATE messages SET status='failed', error='qa_preexisting_queue' "
+        "WHERE direction='out' AND status='queued'"
+    )
     tenant, instance, key = _provision(client, env)
     offer_id = _setup_offer(env, tenant)
     inbound = _webhook(client, instance, key, "commercial-flow-1", "Quanto custa?")
