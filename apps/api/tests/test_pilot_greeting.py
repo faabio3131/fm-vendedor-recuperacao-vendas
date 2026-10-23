@@ -218,7 +218,7 @@ def test_commercial_pilot_settings_fail_closed() -> None:
         evolution_send_enabled=False,
         whatsapp_live=False,
     )
-    assert good._pilot_commercial_gate() is good
+    assert cast(Any, good)._pilot_commercial_gate() is good
     for override in (
         {"pilot_greeting_enabled": False},
         {"pilot_commercial_offer_id": ""},
@@ -232,7 +232,7 @@ def test_commercial_pilot_settings_fail_closed() -> None:
         for key, value in override.items():
             setattr(bad, key, value)
         with pytest.raises(ValueError):
-            bad._pilot_commercial_gate()
+            cast(Any, bad)._pilot_commercial_gate()
 
 
 def test_commercial_pilot_sender_rejects_unregistered_prices_links_and_campaigns() -> None:
