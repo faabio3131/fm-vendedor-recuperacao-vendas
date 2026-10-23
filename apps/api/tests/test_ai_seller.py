@@ -95,9 +95,9 @@ def test_canonical_price_and_link_need_no_model_or_ai_quota(s: Setup, db: Databa
         "queued",
     )
     assert s.conv_state() == ("bot", None)
-    assert s.env.sql("SELECT calls,tokens_in,tokens_out FROM ai_usage WHERE tenant_id=%s", (s.tid,)) == [
-        (100000, 0, 0)
-    ]
+    assert s.env.sql(
+        "SELECT calls,tokens_in,tokens_out FROM ai_usage WHERE tenant_id=%s", (s.tid,)
+    ) == [(100000, 0, 0)]
     assert run_ai_replies(db, UnavailableAiModel()).replied == 0
     assert len(s.outbound()) == 2
 
