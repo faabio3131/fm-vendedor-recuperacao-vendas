@@ -98,8 +98,11 @@ class EvolutionClient:
         found = self._call(
             "POST",
             f"/chat/findMessages/{name}",
-            body={"where": {"key": {"id": message_id, "remoteJid": remote_jid}},
-                  "page": 1, "offset": 10},
+            body={
+                "where": {"key": {"id": message_id, "remoteJid": remote_jid}},
+                "page": 1,
+                "offset": 10,
+            },
         )
         collection = found.get("messages", found.get("records"))
         if isinstance(collection, dict):
@@ -107,7 +110,8 @@ class EvolutionClient:
         if not isinstance(collection, list):
             raise AppError(502, "audio_lookup_invalid", "Consulta de áudio inválida.")
         matches = [
-            item for item in collection
+            item
+            for item in collection
             if isinstance(item, dict)
             and isinstance(item.get("key"), dict)
             and item["key"].get("id") == message_id
@@ -124,8 +128,11 @@ class EvolutionClient:
             if isinstance(payload.get("audioMessage"), dict):
                 break
             nested = next(
-                (payload[k] for k in ("ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2")
-                 if isinstance(payload.get(k), dict)),
+                (
+                    payload[k]
+                    for k in ("ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2")
+                    if isinstance(payload.get(k), dict)
+                ),
                 None,
             )
             if nested is None or not isinstance(nested.get("message"), dict):
@@ -136,6 +143,7 @@ class EvolutionClient:
             raise AppError(502, "audio_message_invalid", "Mídia não é áudio.")
         mime = str(audio_meta.get("mimetype", "")).split(";")[0].strip().lower()
         from fm_seller.channels.voice import ALLOWED_MIME
+
         if mime not in ALLOWED_MIME:
             raise AppError(502, "audio_mime_invalid", "Formato de áudio não permitido.")
         result = self._call(
