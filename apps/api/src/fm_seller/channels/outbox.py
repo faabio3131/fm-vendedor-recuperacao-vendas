@@ -214,6 +214,40 @@ def _send_one(
                         reason = "canal_sem_adaptador"
                 except CryptoError:
                     reason = "credencial_ilegivel"
+        # The outbox revalidates the same canonical offer at the exact send moment.
+        # A disabled offer or altered checkout cannot leave the authorized pilot.
+        route = senders.get("whatsapp")
+        pilot_sender = getattr(route, "evolution", None)
+        if (
+            reason is None
+            and getattr(route, "pilot_only", False)
+            and getattr(pilot_sender, "commercial_enabled", False)
+        ):
+            from urllib.parse import urlsplit
+
+            from fm_seller.money import format_brl
+
+            offer = conn.execute(
+                "SELECT price_cents, payment_url FROM offers "
+                "WHERE tenant_id = %s AND id = %s AND active",
+                (tenant_id, pilot_sender.offer_id),
+            ).fetchone()
+            parsed = urlsplit(offer["payment_url"]) if offer else None
+            if (
+                row["author"] != "bot"
+                or tenant_id != pilot_sender.tenant_id
+                or not parsed
+                or parsed.scheme != "https"
+                or parsed.hostname != pilot_sender.checkout_host
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.fragment
+                or parsed.port not in (None, 443)
+            ):
+                reason = "piloto_comercial_sem_checkout_autorizado"
+            else:
+                config["__pilot_allowed_url"] = offer["payment_url"]
+                config["__pilot_allowed_price"] = format_brl(offer["price_cents"])
     if (
         getattr(senders.get("whatsapp"), "pilot_only", False)
         and ctx is not None
