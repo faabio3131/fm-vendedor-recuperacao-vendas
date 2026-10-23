@@ -104,7 +104,7 @@ class PilotCommercialSender(PilotGreetingSender):
         urls = re.findall(r"https?://[^\s<>]+", body, re.I)
         if any(found.rstrip(".,;!?") != url for found in urls):
             raise SendError("piloto comercial: link fora da oferta canônica")
-        values = re.findall(r"r\$\s*[0-9][0-9.]*,[0-9]{2}(?=$|[\s.!?;])", body, re.I)
+        values = re.findall(r"r\$\s*[0-9][0-9.]*,[0-9]{2}(?=$|[\s.!?;:])", body, re.I)
         if any(v.replace(" ", "") != price.replace(" ", "") for v in values):
             raise SendError("piloto comercial: preço fora do cadastro")
         return EvolutionSender.send_text(self, config, to_phone, body)
