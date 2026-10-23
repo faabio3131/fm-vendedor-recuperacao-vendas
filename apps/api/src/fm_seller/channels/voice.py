@@ -17,8 +17,8 @@ from typing import Protocol
 
 from fm_seller.channels.evolution import EvolutionClient
 from fm_seller.channels.inbound import apply_opt_out
-from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_text
 from fm_seller.channels.meta_api import MetaClient, MetaError
+from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_text
 from fm_seller.db import Database
 from fm_seller.errors import AppError
 from fm_seller.recovery.optout import is_opt_out
