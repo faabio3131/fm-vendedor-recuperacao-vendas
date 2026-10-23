@@ -428,4 +428,13 @@ class SellerService:
             ).fetchone()
             if row is None:
                 raise not_found("Conversa não encontrada.")
+            if status == "bot":
+                # Handoff may have queued a bot notice while status was human.
+                # Never release stale bot messages when the operator resumes automation.
+                conn.execute(
+                    "UPDATE messages SET status = 'failed', error = 'cancelado_na_retomada' "
+                    "WHERE tenant_id = %s AND conversation_id = %s AND direction = 'out' "
+                    "AND author = 'bot' AND status = 'queued'",
+                    (p.tenant_id, conv_id),
+                )
         return {"status": status}
