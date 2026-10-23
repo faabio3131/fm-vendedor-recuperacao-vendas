@@ -21,6 +21,7 @@ from typing import Any
 
 from fm_seller.channels.social import BY_CHANNEL, identity_of
 from fm_seller.db import Database
+from fm_seller.channels.outbound import HANDOFF_MESSAGE
 from fm_seller.provisioning import trial
 from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.senders import MessageSender, SendError
