@@ -68,26 +68,39 @@ def __import_normalize(text: str) -> str:
 
 
 def demo_requested_volume(text: str, *, direct_answer: bool = False) -> int | None:
-    """Accept only explicit monthly reply volume or a number answering our question."""
-    clean = __import_normalize(text)
-    if not direct_answer and not any(
-        word in set(clean.split()) for word in ("respostas", "mensagens", "atendimentos")
+    """Parse stated monthly volume, including Brazilian grouping and 'mil'.
+
+    Never interpret a price, decimal or unrelated number as a usage estimate.
+    """
+    from fm_seller.recovery.optout import normalize
+
+    clean = normalize(text)
+    digit_count = r"(?:[1-9][0-9]{0,5}|[1-9][0-9]{0,2}(?:\.[0-9]{3})+)"
+    count_token = rf"(?:{digit_count}|[1-9][0-9]{{0,2}}\s+mil)"
+
+    def parse(candidate: str) -> int | None:
+        if not re.fullmatch(count_token, candidate, re.IGNORECASE):
+            return None
+        if candidate.lower().endswith(" mil"):
+            amount = int(candidate[:-4]) * 1000
+        else:
+            amount = int(candidate.replace(".", ""))
+        return amount if 1 <= amount <= 999_999 else None
+
+    if direct_answer:
+        answer = parse(text.strip())
+        if answer is not None:
+            return answer
+    if not direct_answer and not (
+        ("por mes" in clean or "mensais" in clean)
+        and set(clean.split()) & {"respostas", "mensagens", "atendimentos"}
     ):
         return None
-    if direct_answer and re.fullmatch(r"[1-9][0-9]{0,5}", text.strip()):
-        return int(text.strip())
-    normalized_text = __import_normalize(text)
-    if "por mes" not in normalized_text and "mensais" not in normalized_text and not direct_answer:
-        return None
     match = re.search(
-        r"(?<![0-9])([1-9][0-9]{0,2}(?:\.[0-9]{3})+|[1-9][0-9]{0,5})"
-        r"\s+(?:respostas|mensagens|atendimentos)\b",
+        rf"(?<![0-9.,])({count_token})\s+(?:respostas|mensagens|atendimentos)\b",
         text.lower(),
     )
-    if not match:
-        return None
-    return int(match.group(1).replace(".", ""))
-
+    return parse(match.group(1)) if match else None
 
 class PilotGreetingSender(EvolutionSender):
     """Restrict the existing Evolution transport to the sole approved contact/instance."""
