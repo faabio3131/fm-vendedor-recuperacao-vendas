@@ -136,7 +136,17 @@ def ingest_evolution(
             contact_id, conv_id = upsert_conversation(
                 conn, tenant_id, phone, str(data.get("pushName", ""))[:200]
             )
-            audio_enabled = audio is not None and settings.voice_transcription
+            audio_enabled = bool(
+                audio is not None
+                and settings.voice_transcription
+                and (
+                    not settings.pilot_greeting_enabled
+                    or (
+                        str(tenant_id) == settings.pilot_greeting_tenant_id
+                        and phone == settings.pilot_greeting_phone
+                    )
+                )
+            )
             record_inbound(
                 conn,
                 tenant_id,
