@@ -123,7 +123,8 @@ def steps(facts: dict[str, Any]) -> list[dict[str, Any]]:
             ),
             evolution_without_meta or facts["approved_templates"] > 0,
             why=(
-                "Na Evolution não há homologação de templates na Meta; consentimento, regras do canal "
+                "Na Evolution não há homologação de templates na Meta; "
+                "consentimento, regras do canal "
                 "e limites continuam obrigatórios."
                 if evolution_without_meta
                 else "Na Cloud API, os templates aplicáveis precisam de aprovação da Meta."
