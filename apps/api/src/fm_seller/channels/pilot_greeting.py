@@ -15,7 +15,7 @@ from fm_seller.config import Settings
 from fm_seller.recovery.senders import OutboundMessage, SendError
 
 GREETINGS = frozenset({"oi", "ola", "bom dia", "boa tarde", "boa noite", "teste anaclara fm"})
-UNSAFE_OUTBOUND = re.compile(r"https?://|www[.]|r[$]|\\b(?:pix|reais|comprar|pagamento|pagar)\\b", re.I)
+UNSAFE_OUTBOUND = re.compile(r"https?://|www[.]|r[$]|\b(?:pix|reais|comprar|pagamento|pagar)\b", re.I)
 
 
 def pilot_contact(settings: Settings | None, tenant_id: uuid.UUID, phone: str | None) -> bool:
