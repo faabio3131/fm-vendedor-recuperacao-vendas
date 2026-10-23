@@ -21,10 +21,13 @@ from typing import Any
 
 from fm_seller.ai import usage
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
-from fm_seller.channels.outbound import enqueue_text
+from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_text
 from fm_seller.channels.pilot_greeting import (
     DEMO_PAGE,
+    DEMO_VOLUME_QUESTION,
     demo_plan_listing_requested,
+    demo_recommendation_requested,
+    demo_requested_volume,
     greeting_only,
     pilot_contact,
 )
@@ -37,7 +40,6 @@ from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.optout import normalize
 
 log = logging.getLogger("fm_seller.seller")
-HANDOFF_MESSAGE = "Certo! Vou chamar uma pessoa da equipe para continuar com você."
 MAX_BOT_REPLIES_PER_HOUR = 10
 HISTORY = 10
 _HUMAN = ("atendente", "humano", "pessoa", "falar com alguem", "gerente", "responsavel")
@@ -344,6 +346,54 @@ def _handle_conversation(
         enqueue_text(conn, tenant_id, conv_id, "bot", text)
         conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
         return "replied"
+    # Small, deterministic qualification: don't hand off when the contact asks for
+    # advice without first supplying the monthly usage needed to choose a tier.
+    if demo and len(inbound) == 1:
+        question = inbound[0]["body"]
+        recommends = demo_recommendation_requested(question)
+        previous = conn.execute(
+            "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
+            "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
+            (conv_id,),
+        ).fetchone()
+        answering_volume = bool(previous and previous["body"] == DEMO_VOLUME_QUESTION)
+        if recommends or answering_volume:
+            volume = demo_requested_volume(question, direct_answer=answering_volume)
+            if volume is None:
+                text = DEMO_VOLUME_QUESTION
+            else:
+                tiers = sorted(
+                    (
+                        (int(o["quota"]), o)
+                        for o in offer_rows
+                        if o["quota"] and str(o["quota"]).isdigit()
+                    ),
+                    key=lambda entry: entry[0],
+                )
+                if len(tiers) != 3:
+                    _handoff(conn, tenant_id, conv_id, "catalogo_fm_incompleto", notify=False)
+                    return "handoffs"
+                suitable = next((o for cap, o in tiers if volume <= cap), None)
+                if suitable is None:
+                    text = (
+                        "Esse volume supera as franquias disponíveis. "
+                        "Posso encaminhar sua necessidade à equipe da FM Tecnologia."
+                    )
+                else:
+                    cap = int(suitable["quota"])
+                    pretty_cap = f"{cap:,}".replace(",", ".")
+                    text = (
+                        f"Pelo volume informado, recomendo {suitable['name']}: "
+                        f"{format_brl(suitable['price_cents'])}/mês, com até "
+                        f"{pretty_cap} respostas de IA mensais. "
+                        "Quer conhecer mais detalhes?"
+                    )
+            enqueue_text(conn, tenant_id, conv_id, "bot", text)
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
+            return "replied"
+
     # A definite price/link intent and a unique name can be served from registered
     # commercial data at zero model tokens. Preserve the regular plan/tenant guards,
     # opt-out, human handoff and hourly rate limit above this branch.

@@ -13,8 +13,10 @@ from fm_seller.ai.gemini import build_system_prompt
 from fm_seller.ai.model import AiContext, AiReply, SimulatedAiModel
 from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.evolution_runtime import RoutedWhatsAppSender
+from fm_seller.channels.outbound import HANDOFF_MESSAGE
 from fm_seller.channels.outbox import flush_outbox
 from fm_seller.channels.pilot_greeting import (
+    DEMO_VOLUME_QUESTION,
     PilotDemoSender,
     PilotGreetingSender,
     demo_plan_listing_requested,
@@ -348,6 +350,125 @@ def test_pilot_demo_plan_listing_intent_is_narrow() -> None:
     assert not demo_plan_listing_requested("Quais planos estão disponíveis?")
     assert not demo_plan_listing_requested("Quero falar com uma pessoa")
     assert not demo_plan_listing_requested("Quero informações sobre o Essencial")
+
+
+def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
+    env: Env, db: Database
+) -> None:
+    from fm_seller.ai.model import UnavailableAiModel
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    tid = uuid.UUID(env.tenant("FM consultiva", unique_email("pilot-advice")))
+    env.sql(
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) VALUES (%s,false,'AnaClara')",
+        (str(tid),),
+    )
+    with db.tx(tenant_id=tid) as conn:
+        _, cv = upsert_conversation(conn, tid, PHONE, "Contato autorizado")
+    settings = _pilot(tid)
+    settings.pilot_demo_enabled = True
+
+    def ask(body: str) -> None:
+        env.sql(
+            "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,status,handled) "
+            "VALUES (%s,%s,'in','customer',%s,'received',false)",
+            (str(tid), cv, body),
+        )
+
+    model = UnavailableAiModel()
+    ask("Qual plano que recomenda pra mim?")
+    first = run_ai_replies(db, model, pilot_settings=settings)
+    assert first.replied == 1 and first.handoffs == 0
+    assert env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out'",
+        (cv,),
+    ) == [(DEMO_VOLUME_QUESTION,)]
+    ask("800")
+    second = run_ai_replies(db, model, pilot_settings=settings)
+    assert second.replied == 1 and second.handoffs == 0
+    sent = env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out' "
+        "ORDER BY created_at",
+        (cv,),
+    )
+    assert len(sent) == 2
+    assert "Profissional" in sent[1][0] and "R$ 199,90" in sent[1][0]
+    assert "1.000 respostas" in sent[1][0]
+    assert env.sql("SELECT status FROM conversations WHERE id=%s", (cv,)) == [("bot",)]
+    assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
+    allowed = PilotDemoSender(cast(Any, FakeSendClient()), tenant_id=tid, phone=PHONE)
+    cfg = {
+        "__provider": "evolution",
+        "instance_name": "fmav-" + hashlib.sha256(tid.bytes).hexdigest()[:32],
+        "__demo_prices": "R$ 129,90|R$ 199,90|R$ 399,90",
+        "__demo_quotas": "500|1.000|3.000|1000|3000",
+    }
+    assert allowed.send_text(cfg, PHONE, sent[1][0]) == "ABC123"
+
+
+def test_pilot_advice_qualifies_instead_of_guessing() -> None:
+    from fm_seller.channels.pilot_greeting import (
+        demo_recommendation_requested,
+        demo_requested_volume,
+    )
+
+    assert demo_recommendation_requested("Qual plano que você recomenda pra mim?")
+    assert demo_recommendation_requested("Qual seria o plano ideal?")
+    assert not demo_recommendation_requested("Qual o melhor atendimento?")
+    assert demo_requested_volume("Preciso de 800 respostas por mês") == 800
+    assert demo_requested_volume("1.500 respostas por mês") == 1500
+    assert demo_requested_volume("3 vendedores na empresa") is None
+    assert demo_requested_volume("800", direct_answer=True) == 800
+    assert demo_requested_volume("R$ 800", direct_answer=True) is None
+
+
+def test_pilot_handoff_notice_is_claimable_only_for_authorized_human_transition(
+    env: Env, db: Database
+) -> None:
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    env.sql("UPDATE messages SET status='failed' WHERE direction='out' AND status='queued'")
+    tid = uuid.UUID(env.tenant("Piloto handoff", unique_email("handoff-notice")))
+    with db.tx(tenant_id=tid) as conn:
+        _, cv = upsert_conversation(conn, tid, PHONE, "Contato autorizado")
+    env.sql(
+        "UPDATE conversations SET status='human', handoff_reason='modelo_pediu', "
+        "last_inbound_at=now() WHERE id=%s",
+        (cv,),
+    )
+    env.sql(
+        "INSERT INTO messages (tenant_id,conversation_id,direction,author,body,status) "
+        "VALUES (%s,%s,'out','bot',%s,'queued')",
+        (str(tid), cv, HANDOFF_MESSAGE),
+    )
+    env.sql(
+        "INSERT INTO messages (tenant_id,conversation_id,direction,author,body,status) "
+        "VALUES (%s,%s,'out','bot','Resposta antiga proibida','queued')",
+        (str(tid), cv),
+    )
+    fake = FakeSendClient()
+    route = RoutedWhatsAppSender(
+        SimulatedSender(),
+        PilotDemoSender(cast(Any, fake), tenant_id=tid, phone=PHONE),
+        meta_enabled=False,
+        evolution_enabled=True,
+        pilot_tenant_id=tid,
+        pilot_phone=PHONE,
+    )
+    result = flush_outbox(db, SecretBox(SecretBox.generate_key_spec()), route)
+    # Claiming is independent of provider credentials; an unavailable connection
+    # fails closed but the correct notice no longer hangs in queued forever.
+    assert result.claimed == 1 and result.failed == 1
+    assert env.sql(
+        "SELECT status FROM messages WHERE conversation_id=%s AND body=%s",
+        (cv, HANDOFF_MESSAGE),
+    ) == [("failed",)]
+    assert env.sql(
+        "SELECT status FROM messages WHERE conversation_id=%s AND body='Resposta antiga proibida'",
+        (cv,),
+    ) == [("queued",)]
+    assert fake.sent == []
 
 
 def test_pilot_demo_sender_denies_other_contact_arbitrary_prices_and_checkout() -> None:

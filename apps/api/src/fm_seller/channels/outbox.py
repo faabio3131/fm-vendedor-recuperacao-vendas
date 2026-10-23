@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from fm_seller.channels.outbound import HANDOFF_MESSAGE
 from fm_seller.channels.social import BY_CHANNEL, identity_of
 from fm_seller.db import Database
 from fm_seller.provisioning import trial
@@ -70,7 +71,8 @@ def flush_outbox(
                 "JOIN contacts ct ON ct.id=cv.contact_id AND ct.tenant_id=cv.tenant_id "
                 "WHERE m.direction='out' AND m.status='queued' AND cv.channel='whatsapp' "
                 "AND m.author='bot' AND m.tenant_id=%s AND cv.tenant_id=m.tenant_id "
-                "AND cv.status='bot' AND ct.phone=%s "
+                "AND (cv.status='bot' OR (cv.status='human' "
+                "AND cv.handoff_reason IS NOT NULL AND m.body=%s)) AND ct.phone=%s "
                 "AND cv.last_inbound_at IS NOT NULL "
                 "AND m.created_at >= cv.last_inbound_at AND cv.last_inbound_at >= %s "
                 "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
@@ -78,6 +80,7 @@ def flush_outbox(
                 (
                     now,
                     getattr(sender, "pilot_tenant_id", None),
+                    HANDOFF_MESSAGE,
                     getattr(sender, "pilot_phone", ""),
                     now - timedelta(minutes=10),
                     limit,

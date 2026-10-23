@@ -45,6 +45,50 @@ def demo_plan_listing_requested(text: str) -> bool:
     )
 
 
+# A single qualified turn is deterministic: it does not ask the model to
+# invent a recommendation or burn tokens just to request an essential fact.
+DEMO_VOLUME_QUESTION = (
+    "Para indicar o plano mais adequado, quantas respostas de IA sua empresa espera usar por mês?"
+)
+
+
+def demo_recommendation_requested(text: str) -> bool:
+    """Only an explicit request for plan advice, not arbitrary 'melhor' questions."""
+    words = set(__import_normalize(text).split())
+    return bool(words & {"plano", "planos"}) and any(
+        word.startswith(("recomend", "indic", "suger")) or word in {"melhor", "ideal"}
+        for word in words
+    )
+
+
+def __import_normalize(text: str) -> str:
+    from fm_seller.recovery.optout import normalize
+
+    return normalize(text)
+
+
+def demo_requested_volume(text: str, *, direct_answer: bool = False) -> int | None:
+    """Accept only explicit monthly reply volume or a number answering our question."""
+    clean = __import_normalize(text)
+    if not direct_answer and not any(
+        word in set(clean.split()) for word in ("respostas", "mensagens", "atendimentos")
+    ):
+        return None
+    if direct_answer and re.fullmatch(r"[1-9][0-9]{0,5}", text.strip()):
+        return int(text.strip())
+    normalized_text = __import_normalize(text)
+    if "por mes" not in normalized_text and "mensais" not in normalized_text and not direct_answer:
+        return None
+    match = re.search(
+        r"(?<![0-9])([1-9][0-9]{0,2}(?:\.[0-9]{3})+|[1-9][0-9]{0,5})"
+        r"\s+(?:respostas|mensagens|atendimentos)\b",
+        text.lower(),
+    )
+    if not match:
+        return None
+    return int(match.group(1).replace(".", ""))
+
+
 class PilotGreetingSender(EvolutionSender):
     """Restrict the existing Evolution transport to the sole approved contact/instance."""
 
