@@ -97,7 +97,10 @@ def test_export_finds_by_phone_email_and_channel_and_has_everything(
         "AND action = 'privacy.contact_exported'",
         (tid,),
     )
-    assert audit_rows and all(str(contact) == r[0] for r in audit_rows[:1])
+    # PostgreSQL does not guarantee row order without ORDER BY. Require an audit
+    # event for each of the three lookups and one for the social contact instead.
+    assert len(audit_rows) == 4
+    assert sum(target == str(contact) for target, _ in audit_rows) == 3
     blob = json.dumps(audit_rows)
     for pii in (PHONE, EMAIL, "Maria", BODY):
         assert pii not in blob  # a auditoria guarda o id interno, nunca o dado da pessoa
