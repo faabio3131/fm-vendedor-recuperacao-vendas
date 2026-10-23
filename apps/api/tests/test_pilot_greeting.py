@@ -311,8 +311,7 @@ def test_pilot_demo_prices_ignore_exhausted_model_quota_but_keep_pilot_scope(
     env.sql("UPDATE messages SET handled=true WHERE direction='in'")
     tid = uuid.UUID(env.tenant("FM demo sem tokens", unique_email("pilot-zero-tokens")))
     env.sql(
-        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) "
-        "VALUES (%s,false,'AnaClara')",
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) VALUES (%s,false,'AnaClara')",
         (str(tid),),
     )
     env.sql(
