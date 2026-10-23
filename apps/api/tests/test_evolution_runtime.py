@@ -11,18 +11,18 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from fm_seller.channels import voice
+from fm_seller.channels.evolution import EvolutionClient
 from fm_seller.channels.evolution_runtime import (
     EvolutionSender,
     RoutedWhatsAppSender,
     webhook_token,
 )
-from fm_seller.channels import voice
-from fm_seller.channels.evolution import EvolutionClient
 from fm_seller.errors import AppError
 from fm_seller.recovery.senders import SendError, SimulatedSender
 from tests.conftest import Env, login, unique_email
-from tests.test_voice import FakeMeta, FakeTranscriber
 from tests.test_evolution_pairing import FakeEvolution
+from tests.test_voice import FakeMeta, FakeTranscriber
 
 
 def _provision(client: TestClient, env: Env) -> tuple[str, str, str]:
