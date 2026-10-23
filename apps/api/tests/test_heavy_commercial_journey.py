@@ -204,8 +204,10 @@ def test_realistic_two_turn_price_then_checkout_then_human_handoff(
     model = SimulatedAiModel()
     fake = FakeSendClient()
     sender = RoutedWhatsAppSender(
-        SimulatedSender(), EvolutionSender(cast(Any, fake)),
-        meta_enabled=False, evolution_enabled=True,
+        SimulatedSender(),
+        EvolutionSender(cast(Any, fake)),
+        meta_enabled=False,
+        evolution_enabled=True,
     )
 
     assert _webhook(client, instance, key, "multi-turn-price", "Qual o preco?")["messages"] == 1
@@ -222,14 +224,13 @@ def test_realistic_two_turn_price_then_checkout_then_human_handoff(
     assert len(fake.sent) == 2
     assert fake.sent[1]["text"].count(PAYMENT_LINK) == 1
     assert len(model.calls) == 2
-    assert any(
-        role == "assistant" and "R$ 197,00" in body for role, body in model.calls[1].history
-    )
+    assert any(role == "assistant" and "R$ 197,00" in body for role, body in model.calls[1].history)
 
     before = len(model.calls)
-    assert _webhook(
-        client, instance, key, "multi-turn-human", "Quero falar com atendente"
-    )["messages"] == 1
+    assert (
+        _webhook(client, instance, key, "multi-turn-human", "Quero falar com atendente")["messages"]
+        == 1
+    )
     assert run_ai_replies(db, model).handoffs == 1
     assert len(model.calls) == before
     assert env.sql(
@@ -251,14 +252,12 @@ def test_optout_mid_sales_blocks_future_model_replies(
     assert _webhook(client, instance, key, "optout-initial", "Quanto custa?")["messages"] == 1
     assert run_ai_replies(db, model).replied == 1
     assert _webhook(client, instance, key, "optout-command", "SAIR")["opt_outs"] == 1
-    assert env.sql(
-        "SELECT identity FROM suppressions WHERE tenant_id=%s", (tenant,)
-    ) == [(PHONE,)]
+    assert env.sql("SELECT identity FROM suppressions WHERE tenant_id=%s", (tenant,)) == [(PHONE,)]
     calls = len(model.calls)
     assert _webhook(client, instance, key, "optout-followup", "Quero comprar")["messages"] == 1
     assert run_ai_replies(db, model).replied == 0
     assert len(model.calls) == calls
     assert env.sql(
-        "SELECT count(*) FROM messages WHERE tenant_id=%s "
-        "AND direction='out' AND author='bot'", (tenant,)
+        "SELECT count(*) FROM messages WHERE tenant_id=%s AND direction='out' AND author='bot'",
+        (tenant,),
     ) == [(1,)]
