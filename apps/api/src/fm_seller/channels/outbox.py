@@ -80,6 +80,7 @@ def flush_outbox(
                 (
                     now,
                     getattr(sender, "pilot_tenant_id", None),
+                    HANDOFF_MESSAGE,
                     getattr(sender, "pilot_phone", ""),
                     now - timedelta(minutes=10),
                     limit,
