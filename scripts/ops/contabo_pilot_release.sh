@@ -54,7 +54,8 @@ mkdir -m 700 "$release" "$source"
 tar -xzf "$incoming" --no-same-owner -C "$source"
 for item in "$source/deploy/contabo/compose.yml" "$source/scripts/ops/rls_invariant.sql" \
   "$source/scripts/ops/rls_not_system_readable.sql" \
-  "$source/apps/api/src/fm_seller/migrations/0016_internal_trial.sql"; do
+  "$source/apps/api/src/fm_seller/migrations/0016_internal_trial.sql" \
+  "$source/apps/api/src/fm_seller/migrations/0017_commercial_quotas_60pct.sql"; do
   [[ -f "$item" ]] || { echo "Incomplete source archive" >&2; exit 1; }
 done
 printf '%s\n' "$digest" > "$release/source.sha256"
@@ -77,7 +78,7 @@ docker compose --env-file "$root/.env" -f "$source/deploy/contabo/compose.yml" c
 last="$(docker exec "$db" psql -U fm_owner -d "$db_name" -Atc \
   'SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1')"
 case "$last" in
-  0014_audio_cliente.sql|0015_commercial_plans.sql|0016_internal_trial.sql) ;;
+  0014_audio_cliente.sql|0015_commercial_plans.sql|0016_internal_trial.sql|0017_commercial_quotas_60pct.sql) ;;
   *) echo "Unexpected schema baseline: $last" >&2; exit 1 ;;
 esac
 echo "Checked DB baseline: $last"
@@ -150,7 +151,7 @@ docker compose --env-file "$root/.env" -f "$source/deploy/contabo/compose.yml" \
   run --rm --no-deps api python -m fm_seller.cli migrate
 latest="$(docker exec "$db" psql -U fm_owner -d "$db_name" -Atc \
   'SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1')"
-[[ "$latest" == "0016_internal_trial.sql" ]] || {
+[[ "$latest" == "0017_commercial_quotas_60pct.sql" ]] || {
   echo "Database did not reach the expected target migration" >&2; exit 1;
 }
 
