@@ -17,6 +17,7 @@ from fm_seller.channels.outbox import flush_outbox
 from fm_seller.channels.pilot_greeting import (
     PilotDemoSender,
     PilotGreetingSender,
+    demo_plan_listing_requested,
     greeting_only,
     pilot_contact,
 )
@@ -239,6 +240,76 @@ def test_pilot_demo_uses_live_commercial_plans_with_global_ai_off(env: Env, db: 
         "SELECT body FROM messages WHERE conversation_id=%s AND direction='out'",
         (cv,),
     ) == [("Essencial custa R$ 129,90 por mês. Veja " + DEMO_PAGE,)]
+
+
+def test_pilot_demo_lists_all_live_plans_without_model_inventing_prices(
+    env: Env, db: Database
+) -> None:
+    from fm_seller.channels.pilot_greeting import DEMO_PAGE
+    from fm_seller.channels.whatsapp import upsert_conversation
+    from fm_seller.money import format_brl
+
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    tid = uuid.UUID(env.tenant("FM catálogo demonstrativo", unique_email("pilot-multiplan")))
+    env.sql(
+        "INSERT INTO tenant_settings (tenant_id, ai_enabled, ai_persona) "
+        "VALUES (%s,false,'AnaClara')",
+        (str(tid),),
+    )
+    with db.tx(tenant_id=tid) as conn:
+        _, cv = upsert_conversation(conn, tid, PHONE, "Cliente QA")
+    env.sql(
+        "INSERT INTO messages (tenant_id,conversation_id,direction,author,body,status,handled) "
+        "VALUES (%s,%s,'in','customer','Quais são os planos e quais os valores?',"
+        "'received',false)",
+        (str(tid), cv),
+    )
+    model = SimulatedAiModel(
+        forced=AiReply("R$ 1,00, compre em https://nao-aprovado.test")
+    )
+    settings = _pilot(tid)
+    settings.pilot_demo_enabled = True
+    stats = run_ai_replies(db, model, pilot_settings=settings)
+    assert stats.replied == 1 and stats.handoffs == 0
+    assert not model.calls  # A listagem de preços não depende de criatividade do modelo.
+    sent = env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out'",
+        (cv,),
+    )
+    assert len(sent) == 1
+    body = sent[0][0]
+    rows = env.sql(
+        "SELECT display_name, price_monthly_cents, limits->>'ai_replies_per_month' "
+        "FROM plans WHERE key IN ('av-essencial','av-profissional','av-escala') "
+        "AND active ORDER BY phase"
+    )
+    assert len(rows) == 3 and DEMO_PAGE in body and len(body) <= 850
+    for name, cents, quota in rows:
+        assert name in body
+        assert format_brl(cents) in body
+        assert f"{int(quota):,}".replace(",", ".") in body
+    assert "https://nao-aprovado.test" not in body
+
+    fake = FakeSendClient()
+    pilot = PilotDemoSender(cast(Any, fake), tenant_id=tid, phone=PHONE)
+    cfg = {
+        "__provider": "evolution",
+        "instance_name": "fmav-" + hashlib.sha256(tid.bytes).hexdigest()[:32],
+        "__demo_prices": "|".join(format_brl(r[1]) for r in rows),
+        "__demo_quotas": "|".join(
+            str(r[2]) + "|" + f"{int(r[2]):,}".replace(",", ".") for r in rows
+        ),
+    }
+    assert pilot.send_text(cfg, PHONE, body) == "ABC123"
+    assert len(fake.sent) == 1
+
+
+def test_pilot_demo_plan_listing_intent_is_narrow() -> None:
+    assert demo_plan_listing_requested("Quais são os planos e quais os valores?")
+    assert demo_plan_listing_requested("Lista de planos e preços")
+    assert not demo_plan_listing_requested("Oi!")
+    assert not demo_plan_listing_requested("Quero falar com uma pessoa")
+    assert not demo_plan_listing_requested("Quero informações sobre o Essencial")
 
 
 def test_pilot_demo_sender_denies_other_contact_arbitrary_prices_and_checkout() -> None:
