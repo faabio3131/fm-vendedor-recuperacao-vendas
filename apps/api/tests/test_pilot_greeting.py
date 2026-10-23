@@ -352,8 +352,22 @@ def test_pilot_demo_plan_listing_intent_is_narrow() -> None:
     assert not demo_plan_listing_requested("Quero informações sobre o Essencial")
 
 
+@pytest.mark.parametrize(
+    ("volume", "expected_plan", "expected_price", "expected_quota"),
+    [
+        ("800", "Profissional", "R$ 199,90", "1.000"),
+        ("2.000", "Escala", "R$ 399,90", "3.000"),
+        ("2000", "Escala", "R$ 399,90", "3.000"),
+        ("2 mil", "Escala", "R$ 399,90", "3.000"),
+    ],
+)
 def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
-    env: Env, db: Database
+    env: Env,
+    db: Database,
+    volume: str,
+    expected_plan: str,
+    expected_price: str,
+    expected_quota: str,
 ) -> None:
     from fm_seller.ai.model import UnavailableAiModel
     from fm_seller.channels.whatsapp import upsert_conversation
@@ -384,7 +398,7 @@ def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
         "SELECT body FROM messages WHERE conversation_id=%s AND direction='out'",
         (cv,),
     ) == [(DEMO_VOLUME_QUESTION,)]
-    ask("800")
+    ask(volume)
     second = run_ai_replies(db, model, pilot_settings=settings)
     assert second.replied == 1 and second.handoffs == 0
     sent = env.sql(
@@ -393,8 +407,8 @@ def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
         (cv,),
     )
     assert len(sent) == 2
-    assert "Profissional" in sent[1][0] and "R$ 199,90" in sent[1][0]
-    assert "1.000 respostas" in sent[1][0]
+    assert expected_plan in sent[1][0] and expected_price in sent[1][0]
+    assert f"{expected_quota} respostas" in sent[1][0]
     assert env.sql("SELECT status FROM conversations WHERE id=%s", (cv,)) == [("bot",)]
     assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
     allowed = PilotDemoSender(cast(Any, FakeSendClient()), tenant_id=tid, phone=PHONE)
@@ -405,6 +419,55 @@ def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
         "__demo_quotas": "500|1.000|3.000|1000|3000",
     }
     assert allowed.send_text(cfg, PHONE, sent[1][0]) == "ABC123"
+    # Actual observed failure: "Quero" after the plan recommendation must not
+    # produce resposta_invalida/handoff just because Gemini writes a raw price.
+    ask("Quero")
+    third = run_ai_replies(db, model, pilot_settings=settings)
+    assert third.replied == 1 and third.handoffs == 0
+    details = env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (cv,),
+    )[0][0]
+    assert expected_plan in details and expected_price in details
+    assert f"{expected_quota} respostas" in details
+    assert "não são respostas ilimitadas" in details.lower()
+    assert allowed.send_text(cfg, PHONE, details) == "ABC123"
+    # Follow-up should preserve the previously recommended tier, without
+    # asking for a person or consuming any language-model tokens.
+    ask("O que esse plano faz?")
+    fourth = run_ai_replies(db, model, pilot_settings=settings)
+    assert fourth.replied == 1 and fourth.handoffs == 0
+    features = env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (cv,),
+    )[0][0]
+    assert "Vendedor IA" in features and "Conversas" in features
+    assert allowed.send_text(cfg, PHONE, features) == "ABC123"
+    ask("Como contratar?")
+    fifth = run_ai_replies(db, model, pilot_settings=settings)
+    assert fifth.replied == 1 and fifth.handoffs == 0
+    contract = env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (cv,),
+    )[0][0]
+    assert "contratação é assistida" in contract
+    assert allowed.send_text(cfg, PHONE, contract) == "ABC123"
+    ask("O que esse plano não faz?")
+    sixth = run_ai_replies(db, model, pilot_settings=settings)
+    assert sixth.replied == 1 and sixth.handoffs == 0
+    exclusions = env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (cv,),
+    )[0][0]
+    assert "não oferece respostas de IA ilimitadas" in exclusions
+    assert "não ativa assinatura automaticamente" in exclusions
+    assert allowed.send_text(cfg, PHONE, exclusions) == "ABC123"
+    assert env.sql("SELECT status FROM conversations WHERE id=%s", (cv,)) == [("bot",)]
+    assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
 
 
 def test_pilot_advice_qualifies_instead_of_guessing() -> None:
@@ -512,6 +575,8 @@ def test_pilot_demo_prompt_explains_assisted_sale_only() -> None:
         pilot_demo=True,
     )
     prompt = build_system_prompt(ctx)
+    assert "AnaClara" in prompt
+    assert "TOM CADASTRADO" in prompt
     assert "contratação automática" in prompt
     assert "não checkout" in prompt
     assert "av-essencial" in prompt

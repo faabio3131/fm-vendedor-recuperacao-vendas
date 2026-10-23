@@ -16,7 +16,7 @@ from typing import Any
 
 from fm_seller.channels.evolution import EvolutionClient
 from fm_seller.channels.inbound import record_inbound
-from fm_seller.channels.whatsapp import load_connection, upsert_conversation
+from fm_seller.channels.whatsapp import AUDIO_PLACEHOLDER, load_connection, upsert_conversation
 from fm_seller.config import Settings
 from fm_seller.db import Database
 from fm_seller.errors import AppError
@@ -36,6 +36,29 @@ STATUS = {
     "ERROR": "failed",
 }
 _ORDER = ("sent", "delivered", "read")
+
+
+def _audio_message(message: dict[str, Any]) -> dict[str, Any] | None:
+    """Recognize voice notes including ephemeral wrappers, not arbitrary attachments."""
+    candidate: Any = message
+    for _ in range(4):
+        if not isinstance(candidate, dict):
+            return None
+        audio = candidate.get("audioMessage")
+        if isinstance(audio, dict):
+            return audio
+        wrapper = next(
+            (
+                candidate[k]
+                for k in ("ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2")
+                if isinstance(candidate.get(k), dict)
+            ),
+            None,
+        )
+        if wrapper is None:
+            return None
+        candidate = wrapper.get("message")
+    return None
 
 
 def webhook_token(settings: Settings, tenant_id: uuid.UUID, instance: str) -> str:
@@ -107,10 +130,22 @@ def ingest_evolution(
             if not phone:
                 return counts
             text = msg.get("conversation") or (msg.get("extendedTextMessage") or {}).get("text")
-            if not isinstance(text, str) or not text.strip():
-                return counts  # Unsupported media never triggers a fabricated IA reply.
+            audio = _audio_message(msg)
+            if (not isinstance(text, str) or not text.strip()) and audio is None:
+                return counts  # Unsupported media cannot fabricate a text reply.
             contact_id, conv_id = upsert_conversation(
                 conn, tenant_id, phone, str(data.get("pushName", ""))[:200]
+            )
+            audio_enabled = bool(
+                audio is not None
+                and settings.voice_transcription
+                and (
+                    not settings.pilot_greeting_enabled
+                    or (
+                        str(tenant_id) == settings.pilot_greeting_tenant_id
+                        and phone == settings.pilot_greeting_phone
+                    )
+                )
             )
             record_inbound(
                 conn,
@@ -118,10 +153,25 @@ def ingest_evolution(
                 contact_id=contact_id,
                 conv_id=conv_id,
                 identity=phone,
-                text=text[:4000],
+                text=(
+                    AUDIO_PLACEHOLDER
+                    if audio_enabled
+                    else "[áudio recebido; transcrição desativada]"
+                    if audio is not None
+                    else str(text)[:4000]
+                ),
                 message_id="evo:" + message_id,
                 counts=counts,
+                media_id="evo:" + message_id if audio_enabled else None,
             )
+            if audio is not None and not audio_enabled:
+                # Still show the real inbound in the operator inbox, without
+                # asking the model to hallucinate what an untranscribed audio said.
+                conn.execute(
+                    "UPDATE messages SET handled = true, media_status = 'failed' "
+                    "WHERE tenant_id = %s AND provider_message_id = %s AND direction = 'in'",
+                    (tenant_id, "evo:" + message_id),
+                )
         else:
             key = data.get("key")
             identifier = (key or {}).get("id") if isinstance(key, dict) else None

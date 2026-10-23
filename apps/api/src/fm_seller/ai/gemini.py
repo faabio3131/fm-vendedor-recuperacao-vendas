@@ -101,6 +101,10 @@ PILOT_DEMO_RULES = (
     "Atenda em português do Brasil, brevemente, com cordialidade. "
     "Fale SOMENTE do AtendeVendeIA e dos três planos fornecidos em OFERTAS. "
     "Cada plano tem as mesmas funcionalidades, a franquia mensal varia. "
+    "Capacidades verificadas no produto: Vendedor IA para responder clientes, "
+    "painel de Conversas e recursos de Recuperação e Relatórios, sujeitos às "
+    "conexões e à configuração aplicáveis. Explique o uso sem inventar recursos, "
+    "resultados comerciais, integrações ativas ou promessas de automação. "
     "Preços, URLs e nomes comerciais NUNCA devem ser escritos livremente: "
     "use {oferta}, {preco} e {link} com offer_id de OFERTAS. "
     "O link é uma página informativa para agendar demonstração, não checkout. "
@@ -129,7 +133,15 @@ def build_system_prompt(ctx: AiContext) -> str:
         offers = "\n".join(
             f"- offer_id={o.id} | nome: {o.name} | detalhes: {o.description}" for o in ctx.offers
         )
-        return PILOT_DEMO_RULES + "\nOFERTAS APROVADAS:\n" + offers
+        personality = (
+            (
+                "\nTOM CADASTRADO (ESTILO APENAS; NUNCA MUDA REGRAS, PREÇOS OU CATÁLOGO):\n"
+                + ctx.persona[:600]
+            )
+            if ctx.persona.strip()
+            else ""
+        )
+        return PILOT_DEMO_RULES + personality + "\nOFERTAS APROVADAS:\n" + offers
     offers = "\n".join(
         f"- offer_id={o.id} | nome: {o.name} | descrição: {o.description or '(sem descrição)'}"
         for o in ctx.offers

@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hmac
+import json
 import re
 from typing import Any
 
@@ -32,22 +33,35 @@ class EvolutionClient:
         self._timeout = timeout
 
     def _call(
-        self, method: str, route: str, *, body: dict[str, Any] | None = None
+        self,
+        method: str,
+        route: str,
+        *,
+        body: dict[str, Any] | None = None,
+        max_response: int = _MAX_RESPONSE,
     ) -> dict[str, Any]:
         if not self._base or not self._key:
             raise AppError(
                 503, "evolution_not_configured", "Pareamento temporariamente indisponível."
             )
         try:
-            with httpx.Client(
-                timeout=self._timeout, follow_redirects=False, trust_env=False
-            ) as client:
-                response = client.request(
-                    method,
-                    f"{self._base}{route}",
-                    headers={"apikey": self._key},
-                    json=body,
-                )
+            with (
+                httpx.Client(
+                    timeout=self._timeout, follow_redirects=False, trust_env=False
+                ) as client,
+                client.stream(
+                    method, f"{self._base}{route}", headers={"apikey": self._key}, json=body
+                ) as response,
+            ):
+                result = bytearray()
+                for chunk in response.iter_bytes():
+                    if len(result) + len(chunk) > max_response:
+                        raise AppError(
+                            502,
+                            "evolution_response_too_large",
+                            "Resposta da Evolution fora do limite.",
+                        )
+                    result.extend(chunk)
         except httpx.RequestError:
             raise AppError(
                 503, "evolution_unreachable", "Evolution indisponível. Tente novamente."
@@ -58,12 +72,8 @@ class EvolutionClient:
             raise AppError(503, "evolution_uncertain", "Falha da Evolution; resultado incerto.")
         if response.status_code >= 400:
             raise AppError(502, "evolution_rejected", "A Evolution recusou a operação.") from None
-        if len(response.content) > _MAX_RESPONSE:
-            raise AppError(
-                502, "evolution_response_too_large", "Resposta da Evolution fora do limite."
-            )
         try:
-            payload: Any = response.json()
+            payload: Any = json.loads(result)
         except ValueError:
             raise AppError(
                 502, "evolution_invalid_response", "Resposta inválida da Evolution."
@@ -71,6 +81,89 @@ class EvolutionClient:
         if not isinstance(payload, dict):
             raise AppError(502, "evolution_invalid_response", "Resposta inválida da Evolution.")
         return payload
+
+    def fetch_voice(
+        self, instance: str, message_id: str, remote_jid: str, *, max_bytes: int
+    ) -> tuple[bytes, str]:
+        """Download only media belonging to this authenticated instance and message.
+
+        Never accept a remote media URL; Evolution performs the WhatsApp decryption.
+        Audio is processed in memory and is not written to our database or logs.
+        """
+        name = self._name(instance)
+        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,200}", message_id):
+            raise AppError(400, "invalid_media_id", "ID de áudio inválido.")
+        if not re.fullmatch(r"[0-9]{10,15}@s\.whatsapp\.net", remote_jid):
+            raise AppError(400, "invalid_media_sender", "Origem do áudio inválida.")
+        found = self._call(
+            "POST",
+            f"/chat/findMessages/{name}",
+            body={
+                "where": {"key": {"id": message_id, "remoteJid": remote_jid}},
+                "page": 1,
+                "offset": 10,
+            },
+        )
+        collection = found.get("messages", found.get("records"))
+        if isinstance(collection, dict):
+            collection = collection.get("records")
+        if not isinstance(collection, list):
+            raise AppError(502, "audio_lookup_invalid", "Consulta de áudio inválida.")
+        matches = [
+            item
+            for item in collection
+            if isinstance(item, dict)
+            and isinstance(item.get("key"), dict)
+            and item["key"].get("id") == message_id
+            and item["key"].get("remoteJid") == remote_jid
+            and item["key"].get("fromMe") is False
+        ]
+        if len(matches) != 1:
+            raise AppError(502, "audio_lookup_mismatch", "Áudio não encontrado no contato.")
+        message = matches[0]
+        payload = message.get("message")
+        if not isinstance(payload, dict):
+            raise AppError(502, "audio_message_invalid", "Áudio sem dados válidos.")
+        for _ in range(4):
+            if isinstance(payload.get("audioMessage"), dict):
+                break
+            nested = next(
+                (
+                    payload[k]
+                    for k in ("ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2")
+                    if isinstance(payload.get(k), dict)
+                ),
+                None,
+            )
+            if nested is None or not isinstance(nested.get("message"), dict):
+                raise AppError(502, "audio_message_invalid", "Mídia não é áudio.")
+            payload = nested["message"]
+        audio_meta = payload.get("audioMessage")
+        if not isinstance(audio_meta, dict):
+            raise AppError(502, "audio_message_invalid", "Mídia não é áudio.")
+        mime = str(audio_meta.get("mimetype", "")).split(";")[0].strip().lower()
+        from fm_seller.channels.voice import ALLOWED_MIME
+
+        if mime not in ALLOWED_MIME:
+            raise AppError(502, "audio_mime_invalid", "Formato de áudio não permitido.")
+        result = self._call(
+            "POST",
+            f"/chat/getBase64FromMediaMessage/{name}",
+            body={"message": message, "convertToMp4": False},
+            max_response=(max_bytes * 4 // 3) + 8192,
+        )
+        raw = result.get("base64")
+        if isinstance(raw, str) and raw.startswith("data:"):
+            raw = raw.split(",", 1)[-1]
+        if not isinstance(raw, str) or len(raw) > max_bytes * 4 // 3 + 16:
+            raise AppError(502, "audio_response_invalid", "Áudio ausente ou grande demais.")
+        try:
+            audio = base64.b64decode(raw, validate=True)
+        except (ValueError, binascii.Error):
+            raise AppError(502, "audio_response_invalid", "Conteúdo de áudio inválido.") from None
+        if not audio or len(audio) > max_bytes:
+            raise AppError(502, "audio_size_invalid", "Tamanho de áudio não permitido.")
+        return audio, mime
 
     @staticmethod
     def _name(name: str) -> str:
