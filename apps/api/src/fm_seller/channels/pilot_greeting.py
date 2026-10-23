@@ -79,9 +79,8 @@ def demo_requested_volume(text: str, *, direct_answer: bool = False) -> int | No
     if direct_answer and re.fullmatch(r"[1-9][0-9]{0,5}", text.strip()):
         return int(text.strip())
     normalized_text = __import_normalize(text)
-    if "por mes" not in normalized_text and "mensais" not in normalized_text:
-        if not direct_answer:
-            return None
+    if "por mes" not in normalized_text and "mensais" not in normalized_text and not direct_answer:
+        return None
     match = re.search(
         r"(?<![0-9])([1-9][0-9]{0,2}(?:\.[0-9]{3})+|[1-9][0-9]{0,5})"
         r"\s+(?:respostas|mensagens|atendimentos)\b",
