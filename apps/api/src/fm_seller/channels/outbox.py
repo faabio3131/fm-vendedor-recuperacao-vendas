@@ -217,11 +217,11 @@ def _send_one(
         # The outbox revalidates the same canonical offer at the exact send moment.
         # A disabled offer or altered checkout cannot leave the authorized pilot.
         route = senders.get("whatsapp")
-        pilot_sender = getattr(route, "evolution", None)
+        commercial_sender: Any = getattr(route, "evolution", None)
         if (
             reason is None
             and getattr(route, "pilot_only", False)
-            and getattr(pilot_sender, "commercial_enabled", False)
+            and getattr(commercial_sender, "commercial_enabled", False)
         ):
             from urllib.parse import urlsplit
 
@@ -230,15 +230,16 @@ def _send_one(
             offer = conn.execute(
                 "SELECT price_cents, payment_url FROM offers "
                 "WHERE tenant_id = %s AND id = %s AND active",
-                (tenant_id, pilot_sender.offer_id),
+                (tenant_id, commercial_sender.offer_id),
             ).fetchone()
             parsed = urlsplit(offer["payment_url"]) if offer else None
             if (
-                row["author"] != "bot"
-                or tenant_id != pilot_sender.tenant_id
+                offer is None
+                or row["author"] != "bot"
+                or tenant_id != commercial_sender.tenant_id
                 or not parsed
                 or parsed.scheme != "https"
-                or parsed.hostname != pilot_sender.checkout_host
+                or parsed.hostname != commercial_sender.checkout_host
                 or parsed.username is not None
                 or parsed.password is not None
                 or parsed.fragment
