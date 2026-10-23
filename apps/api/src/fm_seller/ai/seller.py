@@ -92,7 +92,7 @@ def catalog_offer_reply(
         offer
         for offer in offer_rows
         if isinstance(offer["name"], str)
-        and (name := normalize(offer["name"]))
+        and len(name := normalize(offer["name"])) >= 4
         and re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", phrase)
     ]
     if len(matched) != 1:
