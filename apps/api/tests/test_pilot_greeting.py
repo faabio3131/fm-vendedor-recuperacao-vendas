@@ -340,7 +340,9 @@ def test_commercial_pilot_uses_single_authorized_offer_and_outbox(
         "SELECT count(*) FROM messages WHERE conversation_id=%s AND status='queued'",
         (cv,),
     ) == [(1,)]
-    assert env.sql("SELECT count(*) FROM messages WHERE conversation_id=%s", (outside_cv,)) == [(0,)]
+    assert env.sql(
+        "SELECT count(*) FROM messages WHERE conversation_id=%s", (outside_cv,)
+    ) == [(0,)]
     with pytest.raises(SendError):
         route.send_text({"__provider": "evolution"}, PHONE, "Pague em " + url)
     assert fake.sent == []
