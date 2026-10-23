@@ -93,7 +93,7 @@ def build_sender(settings: Settings) -> MessageSender:
     ):
         from fm_seller.channels.evolution import EvolutionClient
         from fm_seller.channels.evolution_runtime import EvolutionSender, RoutedWhatsAppSender
-        from fm_seller.channels.pilot_greeting import PilotGreetingSender
+        from fm_seller.channels.pilot_greeting import PilotCommercialSender, PilotGreetingSender
 
         client = EvolutionClient(
             base_url=settings.evolution_api_base_url,
@@ -105,11 +105,20 @@ def build_sender(settings: Settings) -> MessageSender:
             if settings.pilot_greeting_enabled
             else None
         )
-        evolution: MessageSender = (
-            PilotGreetingSender(client, tenant_id=pilot_id, phone=settings.pilot_greeting_phone)
-            if pilot_id is not None
-            else EvolutionSender(client)
-        )
+        if pilot_id is not None and settings.pilot_commercial_enabled:
+            evolution: MessageSender = PilotCommercialSender(
+                client,
+                tenant_id=pilot_id,
+                phone=settings.pilot_greeting_phone,
+                offer_id=uuid.UUID(settings.pilot_commercial_offer_id),
+                checkout_host=settings.pilot_commercial_checkout_host,
+            )
+        elif pilot_id is not None:
+            evolution = PilotGreetingSender(
+                client, tenant_id=pilot_id, phone=settings.pilot_greeting_phone
+            )
+        else:
+            evolution = EvolutionSender(client)
         return RoutedWhatsAppSender(
             meta,
             evolution,

@@ -194,7 +194,12 @@ def _handle_conversation(
     pilot = locked["channel"] == "whatsapp" and pilot_contact(
         pilot_settings, tenant_id, locked["phone"]
     )
-    if pilot and (len(inbound) != 1 or not greeting_only(inbound[0]["body"])):
+    commercial_pilot = bool(pilot and pilot_settings and pilot_settings.pilot_commercial_enabled)
+    if (
+        pilot
+        and not commercial_pilot
+        and (len(inbound) != 1 or not greeting_only(inbound[0]["body"]))
+    ):
         _handoff(conn, tenant_id, conv_id, "piloto_somente_saudacao", notify=False)
         return "handoffs"
     if conn.execute(
@@ -250,16 +255,25 @@ def _handle_conversation(
         _handoff(conn, tenant_id, conv_id, "limite_do_plano", notify=True)
         return "handoffs"
 
-    # Piloto não expõe ofertas ao modelo, mesmo se cadastradas futuramente.
-    offer_rows = (
-        []
-        if pilot
-        else conn.execute(
+    # Piloto comercial enxerga apenas a oferta autorizada. Piloto de saudação vê nenhuma.
+    if commercial_pilot:
+        assert pilot_settings is not None
+        offer_rows = conn.execute(
+            "SELECT id, name, description, price_cents, payment_url FROM offers "
+            "WHERE tenant_id = %s AND id = %s AND active",
+            (tenant_id, uuid.UUID(pilot_settings.pilot_commercial_offer_id)),
+        ).fetchall()
+    elif pilot:
+        offer_rows = []
+    else:
+        offer_rows = conn.execute(
             "SELECT id, name, description, price_cents, payment_url FROM offers "
             "WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 20",
             (tenant_id,),
         ).fetchall()
-    )
+    if not offer_rows and commercial_pilot:
+        _handoff(conn, tenant_id, conv_id, "piloto_sem_oferta_autorizada", notify=False)
+        return "handoffs"
     if not offer_rows and not pilot:
         _handoff(conn, tenant_id, conv_id, "sem_ofertas", notify=True)
         return "handoffs"
@@ -281,13 +295,13 @@ def _handle_conversation(
         ),
         history=(
             (("customer", inbound[0]["body"]),)
-            if pilot
+            if pilot and not commercial_pilot
             else tuple(
                 ("customer" if h["direction"] == "in" else "assistant", h["body"])
                 for h in reversed(history)
             )
         ),
-        pilot_greeting=pilot,
+        pilot_greeting=pilot and not commercial_pilot,
     )
     proposal = propose(model, ctx, registry)
     if proposal.failed:

@@ -14,6 +14,7 @@ from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.evolution_runtime import RoutedWhatsAppSender
 from fm_seller.channels.outbox import flush_outbox
 from fm_seller.channels.pilot_greeting import (
+    PilotCommercialSender,
     PilotGreetingSender,
     greeting_only,
     pilot_contact,
@@ -201,4 +202,156 @@ def test_pilot_outbox_rejects_old_queue_and_human_conversation(env: Env, db: Dat
     env.sql("UPDATE messages SET created_at=now() WHERE conversation_id=%s", (cv,))
     env.sql("UPDATE conversations SET status='human' WHERE id=%s", (cv,))
     assert flush_outbox(db, SecretBox(SecretBox.generate_key_spec()), sender).claimed == 0
+    assert fake.sent == []
+
+
+def test_commercial_pilot_settings_fail_closed() -> None:
+    tid = uuid.uuid4()
+    offer = uuid.uuid4()
+    good = Settings.model_construct(
+        pilot_greeting_enabled=True,
+        pilot_commercial_enabled=True,
+        pilot_greeting_tenant_id=str(tid),
+        pilot_greeting_phone=PHONE,
+        pilot_commercial_offer_id=str(offer),
+        pilot_commercial_checkout_host="checkout.provider.com.br",
+        evolution_send_enabled=False,
+        whatsapp_live=False,
+    )
+    assert cast(Any, good)._pilot_commercial_gate() is good
+    for override in (
+        {"pilot_greeting_enabled": False},
+        {"pilot_commercial_offer_id": ""},
+        {"pilot_commercial_checkout_host": "pay.example.test"},
+        {"evolution_send_enabled": True},
+        {"whatsapp_live": True},
+    ):
+        from copy import copy
+
+        bad = copy(good)
+        for key, value in override.items():
+            setattr(bad, key, value)
+        with pytest.raises(ValueError):
+            cast(Any, bad)._pilot_commercial_gate()
+
+
+def test_commercial_pilot_sender_rejects_unregistered_prices_links_and_campaigns() -> None:
+    tid = uuid.uuid4()
+    fake = FakeSendClient()
+    link = "https://checkout.provider.com.br/offer123"
+    sender = PilotCommercialSender(
+        cast(Any, fake),
+        tenant_id=tid,
+        phone=PHONE,
+        offer_id=uuid.uuid4(),
+        checkout_host="checkout.provider.com.br",
+    )
+    config = {
+        "__provider": "evolution",
+        "instance_name": "fmav-" + hashlib.sha256(tid.bytes).hexdigest()[:32],
+        "__pilot_allowed_url": link,
+        "__pilot_allowed_price": "R$ 197,00",
+    }
+    route = RoutedWhatsAppSender(
+        SimulatedSender(),
+        sender,
+        meta_enabled=False,
+        evolution_enabled=True,
+        pilot_tenant_id=tid,
+        pilot_phone=PHONE,
+    )
+    text = "Curso autorizado custa R$ 197,00: " + link
+    assert route.send_text(config, PHONE, text) == "ABC123"
+    for cfg, number, msg in (
+        (config, "5511977008888", text),
+        ({**config, "__pilot_allowed_url": ""}, PHONE, text),
+        (config, PHONE, "R$ 1,00: " + link),
+        (config, PHONE, "Acesse https://golpe.example/pix"),
+        (config, PHONE, "Pague via Pix"),
+        ({**config, "instance_name": "fmav-" + "0" * 32}, PHONE, text),
+    ):
+        with pytest.raises(SendError):
+            route.send_text(cfg, number, msg)
+    with pytest.raises(SendError):
+        route.send(config, OutboundMessage(tid, PHONE, "cart", "Recuperar venda"))
+    assert fake.sent == [{"number": PHONE, "text": text}]
+
+
+def test_commercial_pilot_uses_single_authorized_offer_and_outbox(
+    env: Env, db: Database, client: Any
+) -> None:
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    env.sql("UPDATE messages SET status='failed' WHERE direction='out' AND status='queued'")
+    tid = uuid.UUID(env.tenant("Piloto Comercial QA", unique_email("pilot-commercial")))
+    env.sql(
+        "INSERT INTO tenant_settings (tenant_id,ai_enabled,ai_persona) "
+        "VALUES (%s,false,'AnaClara')",
+        (str(tid),),
+    )
+    url = "https://checkout.provider.com.br/produto-qa-sem-checkout"
+    offer = env.sql(
+        "INSERT INTO offers(tenant_id,name,description,price_cents,payment_url,active) "
+        "VALUES (%s,'Produto Controlado','Somente teste',19700,%s,true) RETURNING id",
+        (str(tid), url),
+    )[0][0]
+    env.sql(
+        "INSERT INTO offers(tenant_id,name,description,price_cents,payment_url,active) "
+        "VALUES (%s,'Outra Oferta','Não autorizada',9900,%s,true)",
+        (str(tid), "https://checkout.example.test/other"),
+    )
+    with db.tx(tenant_id=tid) as conn:
+        _, cv = upsert_conversation(conn, tid, PHONE, "QA")
+        _, outside_cv = upsert_conversation(conn, tid, "5511977009999", "Outro contato")
+    env.sql(
+        "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,status,handled) "
+        "VALUES (%s,%s,'in','customer','Qual o preço e o link?','received',false)",
+        (str(tid), cv),
+    )
+    env.sql(
+        "UPDATE conversations SET last_inbound_at=now() WHERE id=%s",
+        (cv,),
+    )
+    settings = Settings.model_construct(
+        pilot_greeting_enabled=True,
+        pilot_commercial_enabled=True,
+        pilot_greeting_tenant_id=str(tid),
+        pilot_greeting_phone=PHONE,
+        pilot_commercial_offer_id=str(offer),
+        pilot_commercial_checkout_host="checkout.provider.com.br",
+    )
+    model = SimulatedAiModel(
+        forced=AiReply("A {oferta} custa {preco}. Compre em {link}", offer_id=str(offer))
+    )
+    assert run_ai_replies(db, model, pilot_settings=settings).replied == 1
+    assert len(model.calls) == 1
+    assert [o.name for o in model.calls[0].offers] == ["Produto Controlado"]
+    assert not model.calls[0].pilot_greeting
+    fake = FakeSendClient()
+    route = RoutedWhatsAppSender(
+        SimulatedSender(),
+        PilotCommercialSender(
+            cast(Any, fake),
+            tenant_id=tid,
+            phone=PHONE,
+            offer_id=offer,
+            checkout_host="checkout.provider.com.br",
+        ),
+        meta_enabled=False,
+        evolution_enabled=True,
+        pilot_tenant_id=tid,
+        pilot_phone=PHONE,
+    )
+    # Sender only sees the catalog after the connection is configured; never
+    # create a real Evolution/WhatsApp connection in an integration fixture.
+    assert env.sql(
+        "SELECT count(*) FROM messages WHERE conversation_id=%s AND status='queued'",
+        (cv,),
+    ) == [(1,)]
+    assert env.sql("SELECT count(*) FROM messages WHERE conversation_id=%s", (outside_cv,)) == [
+        (0,)
+    ]
+    with pytest.raises(SendError):
+        route.send_text({"__provider": "evolution"}, PHONE, "Pague em " + url)
     assert fake.sent == []

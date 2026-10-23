@@ -17,6 +17,8 @@ from fm_seller.ai.model import AiReply, SimulatedAiModel
 from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.evolution_runtime import EvolutionSender, RoutedWhatsAppSender
 from fm_seller.channels.outbox import flush_outbox
+from fm_seller.channels.pilot_greeting import PilotCommercialSender
+from fm_seller.config import Settings
 from fm_seller.db import Database
 from fm_seller.recovery.senders import SimulatedSender
 from tests.conftest import Env
@@ -191,3 +193,63 @@ def test_40_inbound_events_eight_concurrent_workers_generate_one_reply(
         "SELECT count(*) FROM messages WHERE tenant_id=%s AND direction='out'",
         (tenant,),
     ) == [(1,)]
+
+
+def test_commercial_pilot_real_db_webhook_to_simulated_provider_and_revocation(
+    env: Env, db: Database, client: TestClient
+) -> None:
+    """Exact tenant/contact/offer through one canonical path; no real checkout or WhatsApp."""
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    env.sql("UPDATE messages SET status='failed' WHERE direction='out' AND status='queued'")
+    tenant, instance, key = _provision(client, env)
+    offer_id = _setup_offer(env, tenant)
+    env.sql("UPDATE tenant_settings SET ai_enabled=false WHERE tenant_id=%s", (tenant,))
+    settings = Settings.model_construct(
+        pilot_greeting_enabled=True,
+        pilot_commercial_enabled=True,
+        pilot_greeting_tenant_id=tenant,
+        pilot_greeting_phone=PHONE,
+        pilot_commercial_offer_id=offer_id,
+        pilot_commercial_checkout_host="checkout.example.test",
+    )
+    assert _webhook(client, instance, key, "pilot-sale-1", "Qual o preço?")["messages"] == 1
+    model = SimulatedAiModel(
+        forced=AiReply("{oferta} custa {preco}. Acesse {link}", offer_id=offer_id)
+    )
+    assert run_ai_replies(db, model, pilot_settings=settings).replied == 1
+    assert len(model.calls) == 1
+    assert [o.name for o in model.calls[0].offers] == ["Produto QA"]
+    fake = FakeSendClient()
+    sender = RoutedWhatsAppSender(
+        SimulatedSender(),
+        PilotCommercialSender(
+            cast(Any, fake),
+            tenant_id=uuid.UUID(tenant),
+            phone=PHONE,
+            offer_id=uuid.UUID(offer_id),
+            checkout_host="checkout.example.test",
+        ),
+        meta_enabled=False,
+        evolution_enabled=True,
+        pilot_tenant_id=uuid.UUID(tenant),
+        pilot_phone=PHONE,
+    )
+    first = flush_outbox(db, env.box, sender)
+    assert (first.sent, first.failed) == (1, 0), env.sql(
+        "SELECT status, error FROM messages WHERE tenant_id=%s AND direction='out'",
+        (tenant,),
+    )
+    assert fake.sent == [
+        {"number": PHONE, "text": "Produto QA custa R$ 197,00. Acesse " + PAYMENT_LINK}
+    ]
+    assert _webhook(client, instance, key, "pilot-sale-1", "Qual o preço?")["duplicates"] == 1
+    assert flush_outbox(db, env.box, sender).sent == 0
+    assert _webhook(client, instance, key, "pilot-sale-2", "Quero comprar")["messages"] == 1
+    assert run_ai_replies(db, model, pilot_settings=settings).replied == 1
+    env.sql(
+        "UPDATE offers SET active=false WHERE tenant_id=%s AND id=%s",
+        (tenant, offer_id),
+    )
+    blocked = flush_outbox(db, env.box, sender)
+    assert (blocked.sent, blocked.failed) == (0, 1)
+    assert len(fake.sent) == 1
