@@ -216,7 +216,10 @@ class Settings(BaseSettings):
             or host.endswith((".test", ".example", ".invalid", ".local", ".localhost"))
             or host in ("localhost", "example.com")
         ):
-            raise ValueError("Piloto comercial exige oferta UUID, checkout HTTPS autorizado e piloto exclusivo")
+            raise ValueError(
+                "Piloto comercial exige oferta UUID, checkout HTTPS autorizado "
+                "e piloto exclusivo"
+            )
         return self
 
     @model_validator(mode="after")
