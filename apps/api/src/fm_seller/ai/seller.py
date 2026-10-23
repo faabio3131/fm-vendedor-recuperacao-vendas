@@ -151,16 +151,43 @@ def demo_plan_details_reply(
     """
     phrase = normalize(question).strip("?!., ")
     affirmative = phrase in {
-        "quero", "sim", "sim quero", "quero sim", "quero conhecer", "sim quero conhecer",
-        "quero saber mais", "sim quero saber mais", "pode explicar", "me explica",
-        "me explique", "pode", "claro", "gostaria",
+        "quero",
+        "sim",
+        "sim quero",
+        "quero sim",
+        "quero conhecer",
+        "sim quero conhecer",
+        "quero saber mais",
+        "sim quero saber mais",
+        "pode explicar",
+        "me explica",
+        "me explique",
+        "pode",
+        "claro",
+        "gostaria",
     }
     terms = set(phrase.split())
-    informational = bool(terms & {
-        "funciona", "funcionalidades", "recursos", "beneficios", "detalhes", "explicar",
-        "faz", "inclui", "franquia", "consumo", "limite", "limites", "contratar",
-        "contratacao", "contabiliza", "contabilizado",
-    })
+    informational = bool(
+        terms
+        & {
+            "funciona",
+            "funcionalidades",
+            "recursos",
+            "beneficios",
+            "detalhes",
+            "explicar",
+            "faz",
+            "inclui",
+            "franquia",
+            "consumo",
+            "limite",
+            "limites",
+            "contratar",
+            "contratacao",
+            "contabiliza",
+            "contabilizado",
+        }
+    )
     if not affirmative and not informational:
         return None
     matching_previous: list[Mapping[str, Any]] = []
@@ -177,7 +204,8 @@ def demo_plan_details_reply(
             previous_bot in (recommended, earlier_price)
             or (
                 quota.isdigit()
-                and previous_bot in {
+                and previous_bot
+                in {
                     _demo_detail_text(offer, kind)
                     for kind in ("overview", "features", "usage", "contract")
                 }
@@ -185,11 +213,10 @@ def demo_plan_details_reply(
         ):
             matching_previous.append(offer)
     named = [
-        offer for offer in offer_rows
+        offer
+        for offer in offer_rows
         if isinstance(offer.get("name"), str)
-        and re.search(
-            rf"(?<![a-z0-9]){re.escape(normalize(offer['name']))}(?![a-z0-9])", phrase
-        )
+        and re.search(rf"(?<![a-z0-9]){re.escape(normalize(offer['name']))}(?![a-z0-9])", phrase)
     ]
     if affirmative:
         if len(matching_previous) != 1:
