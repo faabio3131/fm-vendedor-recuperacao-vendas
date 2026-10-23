@@ -93,7 +93,7 @@ class EvolutionClient:
         name = self._name(instance)
         if not re.fullmatch(r"[a-zA-Z0-9_-]{1,200}", message_id):
             raise AppError(400, "invalid_media_id", "ID de áudio inválido.")
-        if not re.fullmatch(r"[0-9]{10,15}@s\\.whatsapp\\.net", remote_jid):
+        if not re.fullmatch(r"[0-9]{10,15}@s\.whatsapp\.net", remote_jid):
             raise AppError(400, "invalid_media_sender", "Origem do áudio inválida.")
         found = self._call(
             "POST",
