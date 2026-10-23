@@ -236,8 +236,7 @@ def _send_one(
                     format_brl(r["price_monthly_cents"]) for r in plans
                 )
                 config["__demo_quotas"] = "|".join(
-                    str(r["quota"]) + "|" + f"{int(r['quota']):,}".replace(",", ".")
-                    for r in plans
+                    str(r["quota"]) + "|" + f"{int(r['quota']):,}".replace(",", ".") for r in plans
                 )
     if (
         getattr(senders.get("whatsapp"), "pilot_only", False)
