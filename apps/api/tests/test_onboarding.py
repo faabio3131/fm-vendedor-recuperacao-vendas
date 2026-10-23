@@ -172,3 +172,31 @@ def test_response_never_carries_credentials(client: TestClient, env: Env) -> Non
     connect_whatsapp(client, env, tid)
     text = client.get("/v1/onboarding").text
     assert "EAAG" not in text and "1055550001" not in text and "2077770002" not in text
+
+
+def test_evolution_only_does_not_require_meta_template_approval() -> None:
+    """Evolution and Meta Cloud API have different template requirements."""
+    from fm_seller.onboarding import steps
+
+    facts = {
+        "connected": {"evolution"},
+        "offers": 0,
+        "approved_templates": 0,
+        "evolution_without_meta": True,
+        "ai_enabled": False,
+        "persona": True,
+        "recovery_enabled": False,
+        "consent": False,
+    }
+    items = {step["key"]: step for step in steps(facts)}
+    assert items["whatsapp"]["done"]
+    assert items["templates"]["done"]
+    assert "Evolution" in items["templates"]["title"]
+    facts["connected"] = {"whatsapp_cloud"}
+    facts["evolution_without_meta"] = False
+    items = {step["key"]: step for step in steps(facts)}
+    assert not items["templates"]["done"]
+    assert "Meta" in items["templates"]["title"]
+    facts["approved_templates"] = 1
+    items = {step["key"]: step for step in steps(facts)}
+    assert items["templates"]["done"]
