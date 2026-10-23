@@ -328,7 +328,8 @@ def _voice_step(
                     api_key=settings.evolution_api_key.get_secret_value(),
                     timeout=settings.evolution_timeout_seconds,
                 )
-                if settings.evolution_enabled else None
+                if settings.evolution_enabled
+                else None
             ),
         )
         return dict(stats.__dict__)
