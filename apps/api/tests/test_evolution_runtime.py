@@ -213,9 +213,10 @@ def test_evolution_audio_uses_existing_transcription_worker_and_opt_out(
     )
     path = f"/v1/webhooks/evolution/{instance}"
     raw = _audio_event(instance, wrapped=True)
-    assert client.post(path, content=raw, headers={"x-fm-evolution-auth": token}).json()[
-        "messages"
-    ] == 1
+    assert (
+        client.post(path, content=raw, headers={"x-fm-evolution-auth": token}).json()["messages"]
+        == 1
+    )
     assert env.sql(
         "SELECT handled,media_id,media_status FROM messages WHERE tenant_id=%s",
         (tenant,),
@@ -274,6 +275,7 @@ def test_evolution_voice_media_source_validation() -> None:
         "key": {"id": msg_id, "remoteJid": jid, "fromMe": False},
         "message": {"audioMessage": {"mimetype": "audio/ogg; codecs=opus"}},
     }
+
     class FakeMediaClient(EvolutionClient):
         def __init__(self) -> None:
             super().__init__(base_url="https://evolution.test", api_key="fake")
