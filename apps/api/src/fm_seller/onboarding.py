@@ -46,6 +46,7 @@ def _facts(conn: Conn) -> dict[str, Any]:
         "connected": connected,
         "offers": int(offers["c"]),
         "approved_templates": int(approved["c"]),
+        "evolution_without_meta": "evolution" in connected and "whatsapp_cloud" not in connected,
         "ai_enabled": bool(s.get("ai_enabled", False)),
         "persona": bool(str(s.get("ai_persona", "")).strip()),
         "recovery_enabled": bool(s.get("recovery_enabled", False)),
@@ -78,6 +79,7 @@ def _step(
 
 def steps(facts: dict[str, Any]) -> list[dict[str, Any]]:
     connected: set[str] = facts["connected"]
+    evolution_without_meta = bool(facts.get("evolution_without_meta", False))
     return [
         _step(
             "whatsapp",
@@ -114,9 +116,18 @@ def steps(facts: dict[str, Any]) -> list[dict[str, Any]]:
         ),
         _step(
             "templates",
-            "Mensagens aprovadas pela Meta",
-            facts["approved_templates"] > 0,
-            why="Fora da janela de 24 h, o WhatsApp só entrega mensagem pronta aprovada pela Meta.",
+            (
+                "Evolution: mensagens sem aprovação de template Meta"
+                if evolution_without_meta
+                else "Mensagens aprovadas pela Meta"
+            ),
+            evolution_without_meta or facts["approved_templates"] > 0,
+            why=(
+                "Na Evolution não há homologação de templates na Meta; consentimento, regras do canal "
+                "e limites continuam obrigatórios."
+                if evolution_without_meta
+                else "Na Cloud API, os templates aplicáveis precisam de aprovação da Meta."
+            ),
             todo="Envie os textos para aprovação em Recuperação > Mensagens.",
             href="/recovery",
             action="Enviar mensagens para aprovação",
