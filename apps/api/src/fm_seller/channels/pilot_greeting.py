@@ -41,7 +41,7 @@ def demo_plan_listing_requested(text: str) -> bool:
 
     words = set(normalize(text).split())
     return "planos" in words and bool(
-        words & {"quais", "valores", "valor", "precos", "preco", "custam", "quanto", "lista"}
+        words & {"valores", "valor", "precos", "preco", "custam", "quanto"}
     )
 
 
