@@ -38,7 +38,7 @@ def test_pilot_gate_exact_tenant_number_and_greetings() -> None:
     settings = _pilot(tid)
     assert pilot_contact(settings, tid, PHONE)
     assert not pilot_contact(settings, uuid.uuid4(), PHONE)
-    assert not pilot_contact(settings, tid, "5511989486075")
+    assert not pilot_contact(settings, tid, "5511977008899")
     assert not pilot_contact(Settings.model_construct(pilot_greeting_enabled=False), tid, PHONE)
     assert greeting_only("Oi!")
     assert greeting_only("oi")
@@ -67,7 +67,7 @@ def test_pilot_sender_restricts_recipient_instance_and_content() -> None:
     assert route.pilot_only
     assert route.send_text(cfg, PHONE, "Olá, sou a AnaClara!") == "ABC123"
     for config, phone, text in (
-        (cfg, "5511989486075", "Oi"),
+        (cfg, "5511977008899", "Oi"),
         ({**cfg, "instance_name": "fmav-" + "a" * 32}, PHONE, "Oi"),
         ({**cfg, "__provider": "whatsapp_cloud"}, PHONE, "Oi"),
         (cfg, PHONE, "Compre por https://example.test"),
