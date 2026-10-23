@@ -21,7 +21,7 @@ from typing import Any
 
 from fm_seller.ai import usage
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
-from fm_seller.channels.outbound import enqueue_text
+from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_text
 from fm_seller.channels.pilot_greeting import (
     DEMO_PAGE,
     demo_plan_listing_requested,
