@@ -307,6 +307,7 @@ def _voice_step(
     """Transcreve áudios de clientes antes do vendedor IA; só ligado por FM_VOICE_TRANSCRIPTION."""
     if settings is None or not settings.voice_transcription or not hasattr(model, "transcribe"):
         return {}
+    from fm_seller.channels.evolution import EvolutionClient
     from fm_seller.channels.meta_api import MetaClient
     from fm_seller.channels.voice import Transcriber, transcribe_pending
 
@@ -321,6 +322,14 @@ def _voice_step(
                 timeout=settings.meta_timeout_seconds,
             ),
             max_bytes=settings.voice_max_bytes,
+            evolution=(
+                EvolutionClient(
+                    base_url=settings.evolution_api_base_url,
+                    api_key=settings.evolution_api_key.get_secret_value(),
+                    timeout=settings.evolution_timeout_seconds,
+                )
+                if settings.evolution_enabled else None
+            ),
         )
         return dict(stats.__dict__)
     except Exception:
