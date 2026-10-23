@@ -536,10 +536,11 @@ def _handle_conversation(
                         "Posso encaminhar sua necessidade à equipe da FM Tecnologia."
                     )
                 else:
-                    text = _demo_recommendation_line(suitable)
-                    if text is None:
+                    recommended_text = _demo_recommendation_line(suitable)
+                    if recommended_text is None:
                         _handoff(conn, tenant_id, conv_id, "catalogo_fm_incompleto", notify=False)
                         return "handoffs"
+                    text = recommended_text
             enqueue_text(conn, tenant_id, conv_id, "bot", text)
             conn.execute(
                 "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
