@@ -171,7 +171,10 @@ def test_webhook_token_isolation_and_fail_closed(client: TestClient) -> None:
     with pytest.raises(AppError):
         webhook_token(
             cfg.model_copy(update={"evolution_webhook_key": SecretStr("")}), uuid.uuid4(), instance
-        )def _audio_event(instance: str, mid: str = "voice1", *, wrapped: bool = False) -> bytes:
+        )
+
+
+def _audio_event(instance: str, mid: str = "voice1", *, wrapped: bool = False) -> bytes:
     message: dict[str, Any] = {"audioMessage": {"mimetype": "audio/ogg; codecs=opus", "ptt": True}}
     if wrapped:
         message = {"ephemeralMessage": {"message": message}}
