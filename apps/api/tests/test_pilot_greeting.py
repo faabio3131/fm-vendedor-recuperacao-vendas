@@ -361,8 +361,7 @@ def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
     env.sql("UPDATE messages SET handled=true WHERE direction='in'")
     tid = uuid.UUID(env.tenant("FM consultiva", unique_email("pilot-advice")))
     env.sql(
-        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) "
-        "VALUES (%s,false,'AnaClara')",
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) VALUES (%s,false,'AnaClara')",
         (str(tid),),
     )
     with db.tx(tenant_id=tid) as conn:
