@@ -614,6 +614,15 @@ def test_messenger_and_instagram_share_the_same_tenant_ai_quota(
     )
     assert run_ai_replies(db, first_model).replied == 1
     assert len(first_model.calls) == 1
+    assert env.sql(
+        "SELECT tp.plan_key, p.limits->>'ai_replies_per_month' "
+        "FROM tenant_plans tp JOIN plans p ON p.key=tp.plan_key "
+        "WHERE tp.tenant_id=%s",
+        (soc.tid,),
+    ) == [("av-essencial", "500")]
+    assert env.sql(
+        "SELECT sum(calls) FROM ai_usage WHERE tenant_id=%s", (soc.tid,)
+    ) == [(500,)]
 
     connected = client.put("/v1/connections/instagram_dm", json={"values": CFG["instagram_dm"]})
     assert connected.status_code == 200, connected.text
