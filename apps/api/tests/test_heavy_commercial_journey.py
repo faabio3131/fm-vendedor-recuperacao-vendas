@@ -108,7 +108,7 @@ def test_webhook_to_registered_price_link_to_evolution_ack(
     ]
     assert flush_outbox(db, env.box, sender).sent == 0
 
-    receipt = {
+    receipt: dict[str, Any] = {
         "event": "messages.update",
         "instance": instance,
         "data": {"key": {"id": "ABC123"}, "status": "READ"},
