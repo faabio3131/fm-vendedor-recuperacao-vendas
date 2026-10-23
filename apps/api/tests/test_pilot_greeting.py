@@ -40,7 +40,7 @@ def test_pilot_gate_exact_tenant_number_and_greetings() -> None:
     assert not pilot_contact(settings, uuid.uuid4(), PHONE)
     assert not pilot_contact(settings, tid, "5511989486075")
     assert not pilot_contact(Settings.model_construct(pilot_greeting_enabled=False), tid, PHONE)
-    assert greeting_only("Oi!") is False
+    assert greeting_only("Oi!")
     assert greeting_only("oi")
     assert greeting_only("bom dia")
     assert not greeting_only("qual o preço?")
@@ -136,7 +136,7 @@ def test_outbox_does_not_claim_other_contacts_in_pilot(env: Env, db: Database) -
         SimulatedSender(), pilot, meta_enabled=False, evolution_enabled=True,
         pilot_tenant_id=tid, pilot_phone=PHONE,
     )
-    stats = flush_outbox(db, SecretBox("test:" + "A" * 44), route)
+    stats = flush_outbox(db, SecretBox(SecretBox.generate_key_spec()), route)
     assert stats.claimed == 0
     assert env.sql("SELECT status FROM messages WHERE conversation_id=%s",(cv,)) == [("queued",)]
     assert fake.sent == []
