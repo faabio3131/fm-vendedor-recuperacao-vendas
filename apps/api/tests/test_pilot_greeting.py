@@ -352,8 +352,17 @@ def test_pilot_demo_plan_listing_intent_is_narrow() -> None:
     assert not demo_plan_listing_requested("Quero informações sobre o Essencial")
 
 
+@pytest.mark.parametrize(
+    ("volume", "plan", "price", "quota"),
+    [
+        ("800", "Profissional", "R$ 199,90", "1.000"),
+        ("2.000", "Escala", "R$ 399,90", "3.000"),
+        ("2000", "Escala", "R$ 399,90", "3.000"),
+        ("2 mil", "Escala", "R$ 399,90", "3.000"),
+    ],
+)
 def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
-    env: Env, db: Database
+    env: Env, db: Database, volume: str, plan: str, price: str, quota: str
 ) -> None:
     from fm_seller.ai.model import UnavailableAiModel
     from fm_seller.channels.whatsapp import upsert_conversation
@@ -384,7 +393,7 @@ def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
         "SELECT body FROM messages WHERE conversation_id=%s AND direction='out'",
         (cv,),
     ) == [(DEMO_VOLUME_QUESTION,)]
-    ask("800")
+    ask(volume)
     second = run_ai_replies(db, model, pilot_settings=settings)
     assert second.replied == 1 and second.handoffs == 0
     sent = env.sql(
@@ -393,8 +402,8 @@ def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
         (cv,),
     )
     assert len(sent) == 2
-    assert "Profissional" in sent[1][0] and "R$ 199,90" in sent[1][0]
-    assert "1.000 respostas" in sent[1][0]
+    assert plan in sent[1][0] and price in sent[1][0]
+    assert f"{quota} respostas" in sent[1][0]
     assert env.sql("SELECT status FROM conversations WHERE id=%s", (cv,)) == [("bot",)]
     assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
     allowed = PilotDemoSender(cast(Any, FakeSendClient()), tenant_id=tid, phone=PHONE)
@@ -420,7 +429,17 @@ def test_pilot_advice_qualifies_instead_of_guessing() -> None:
     assert demo_requested_volume("1.500 respostas por mês") == 1500
     assert demo_requested_volume("3 vendedores na empresa") is None
     assert demo_requested_volume("800", direct_answer=True) == 800
+    assert demo_requested_volume("2.000", direct_answer=True) == 2000
+    assert demo_requested_volume("2000", direct_answer=True) == 2000
+    assert demo_requested_volume("2 mil", direct_answer=True) == 2000
+    assert demo_requested_volume("2.000 respostas por mês") == 2000
+    assert demo_requested_volume("2 mil respostas por mês") == 2000
     assert demo_requested_volume("R$ 800", direct_answer=True) is None
+    assert demo_requested_volume("R$ 2.000", direct_answer=True) is None
+    assert demo_requested_volume("2,000", direct_answer=True) is None
+    assert demo_requested_volume("2.5", direct_answer=True) is None
+    assert demo_requested_volume("1.000.000", direct_answer=True) is None
+    assert demo_requested_volume("2 vendedores", direct_answer=True) is None
 
 
 def test_pilot_handoff_notice_is_claimable_only_for_authorized_human_transition(
