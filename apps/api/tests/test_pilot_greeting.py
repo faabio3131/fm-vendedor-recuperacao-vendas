@@ -14,6 +14,7 @@ from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.evolution_runtime import RoutedWhatsAppSender
 from fm_seller.channels.outbox import flush_outbox
 from fm_seller.channels.pilot_greeting import (
+    PilotDemoSender,
     PilotGreetingSender,
     greeting_only,
     pilot_contact,
@@ -202,3 +203,88 @@ def test_pilot_outbox_rejects_old_queue_and_human_conversation(env: Env, db: Dat
     env.sql("UPDATE conversations SET status='human' WHERE id=%s", (cv,))
     assert flush_outbox(db, SecretBox(SecretBox.generate_key_spec()), sender).claimed == 0
     assert fake.sent == []
+
+
+def test_pilot_demo_uses_live_commercial_plans_with_global_ai_off(
+    env: Env, db: Database
+) -> None:
+    from fm_seller.channels.pilot_greeting import DEMO_PAGE
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    tid = uuid.UUID(env.tenant("FM demo de vendas", unique_email("pilot-sales")))
+    env.sql(
+        "INSERT INTO tenant_settings (tenant_id,ai_enabled,ai_persona) "
+        "VALUES (%s,false,'AnaClara')",
+        (str(tid),),
+    )
+    with db.tx(tenant_id=tid) as conn:
+        _, cv = upsert_conversation(conn, tid, PHONE, "Cliente QA")
+    env.sql(
+        "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,status,handled) "
+        "VALUES (%s,%s,'in','customer','Quais planos estão disponíveis?','received',false)",
+        (str(tid), cv),
+    )
+    model = SimulatedAiModel(
+        forced=AiReply(
+            "{oferta} custa {preco} por mês. Veja {link}", offer_id="av-essencial"
+        )
+    )
+    settings = _pilot(tid)
+    settings.pilot_demo_enabled = True
+    stats = run_ai_replies(db, model, pilot_settings=settings)
+    assert stats.replied == 1
+    assert len(model.calls) == 1
+    ctx = model.calls[0]
+    assert ctx.pilot_demo and not ctx.pilot_greeting
+    assert {o.name for o in ctx.offers} == {"Essencial", "Profissional", "Escala"}
+    assert env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out'",
+        (cv,),
+    ) == [("Essencial custa R$ 129,90 por mês. Veja " + DEMO_PAGE,)]
+
+
+def test_pilot_demo_sender_denies_other_contact_arbitrary_prices_and_checkout() -> None:
+    from fm_seller.channels.pilot_greeting import DEMO_PAGE
+
+    tid = uuid.uuid4()
+    fake = FakeSendClient()
+    demo = PilotDemoSender(cast(Any, fake), tenant_id=tid, phone=PHONE)
+    config = {
+        "__provider": "evolution",
+        "instance_name": "fmav-" + hashlib.sha256(tid.bytes).hexdigest()[:32],
+        "__demo_prices": "R$ 129,90|R$ 199,90|R$ 399,90",
+        "__demo_quotas": "500|1.000|3.000|1000|3000",
+    }
+    assert demo.send_text(
+        config, PHONE, "Essencial: R$ 129,90 e 500 respostas. Veja " + DEMO_PAGE
+    ) == "ABC123"
+    for recipient, body in (
+        ("5511977008899", "Olá!"),
+        (PHONE, "O preço é R$ 19,90."),
+        (PHONE, "10.000 respostas."),
+        (PHONE, "Pague em https://fraude.example.test"),
+        (PHONE, "Pagamento confirmado!"),
+    ):
+        with pytest.raises(SendError):
+            demo.send_text(config, recipient, body)
+    with pytest.raises(SendError):
+        demo.send(config, OutboundMessage(tid, PHONE, "marketing", "Promoção"))
+    assert len(fake.sent) == 1
+
+
+def test_pilot_demo_prompt_explains_assisted_sale_only() -> None:
+    from fm_seller.ai.model import OfferView
+
+    ctx = AiContext(
+        persona="AnaClara",
+        customer_name="Cliente",
+        offers=(OfferView("av-essencial", "Essencial", "500 respostas", "R$ 129,90"),),
+        history=(("customer", "quero conhecer o plano"),),
+        pilot_demo=True,
+    )
+    prompt = build_system_prompt(ctx)
+    assert "contratação automática" in prompt
+    assert "não checkout" in prompt
+    assert "av-essencial" in prompt
+    assert "500 respostas" in prompt
