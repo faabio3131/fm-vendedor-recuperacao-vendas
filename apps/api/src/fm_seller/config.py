@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     pilot_greeting_enabled: bool = False
     pilot_greeting_tenant_id: str = ""
     pilot_greeting_phone: str = ""
+    # Extensão de demonstração assistida, mesmo tenant e único número do piloto.
+    pilot_demo_enabled: bool = False
 
     # Captura de eventos reais de checkout para conferir o formato (docs/OPERACAO.md). Desligada por
     # padrão; guarda o corpo cifrado, sem segredos, e apaga sozinha depois do prazo.
@@ -166,6 +168,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _pilot_greeting_gate(self) -> Settings:
+        if self.pilot_demo_enabled and not self.pilot_greeting_enabled:
+            raise ValueError("Piloto de demonstração requer piloto exclusivo habilitado")
         if not self.pilot_greeting_enabled:
             return self
         import uuid

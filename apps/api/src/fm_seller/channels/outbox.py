@@ -214,6 +214,30 @@ def _send_one(
                         reason = "canal_sem_adaptador"
                 except CryptoError:
                     reason = "credencial_ilegivel"
+        demo_sender: Any = getattr(senders.get("whatsapp"), "evolution", None)
+        if reason is None and getattr(demo_sender, "demo_enabled", False):
+            from fm_seller.money import format_brl
+
+            plans = conn.execute(
+                "SELECT key, price_monthly_cents, limits->>'ai_replies_per_month' AS quota "
+                "FROM plans WHERE key IN "
+                "('av-essencial','av-profissional','av-escala') "
+                "AND active AND price_monthly_cents > 0"
+            ).fetchall()
+            if (
+                len(plans) != 3
+                or row["author"] != "bot"
+                or tenant_id != demo_sender.tenant_id
+                or any(not r["quota"] or int(r["quota"]) <= 0 for r in plans)
+            ):
+                reason = "piloto_demo_catalogo_indisponivel"
+            else:
+                config["__demo_prices"] = "|".join(
+                    format_brl(r["price_monthly_cents"]) for r in plans
+                )
+                config["__demo_quotas"] = "|".join(
+                    str(r["quota"]) + "|" + f"{int(r['quota']):,}".replace(",", ".") for r in plans
+                )
     if (
         getattr(senders.get("whatsapp"), "pilot_only", False)
         and ctx is not None
