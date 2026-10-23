@@ -29,6 +29,7 @@ class AiContext:
     customer_name: str
     offers: tuple[OfferView, ...]
     history: tuple[tuple[str, str], ...]  # (customer|assistant, texto), do mais antigo ao mais novo
+    pilot_greeting: bool = False  # saudação governada, sem ofertas
 
 
 @dataclass(frozen=True)

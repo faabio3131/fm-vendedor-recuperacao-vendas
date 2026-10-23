@@ -69,13 +69,17 @@ def flush_outbox(
                 "SELECT m.id FROM messages m JOIN conversations cv ON cv.id=m.conversation_id "
                 "JOIN contacts ct ON ct.id=cv.contact_id AND ct.tenant_id=cv.tenant_id "
                 "WHERE m.direction='out' AND m.status='queued' AND cv.channel='whatsapp' "
-                "AND m.author='bot' AND m.tenant_id=%s AND ct.phone=%s "
+                "AND m.author='bot' AND m.tenant_id=%s AND cv.tenant_id=m.tenant_id "
+                "AND cv.status='bot' AND ct.phone=%s "
+                "AND cv.last_inbound_at IS NOT NULL "
+                "AND m.created_at >= cv.last_inbound_at AND cv.last_inbound_at >= %s "
                 "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
                 "RETURNING id, tenant_id, conversation_id, author, body",
                 (
                     now,
                     getattr(sender, "pilot_tenant_id", None),
                     getattr(sender, "pilot_phone", ""),
+                    now - timedelta(minutes=10),
                     limit,
                 ),
             ).fetchall()

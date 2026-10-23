@@ -8,7 +8,8 @@ from typing import Any, cast
 
 import pytest
 
-from fm_seller.ai.model import AiReply, SimulatedAiModel
+from fm_seller.ai.gemini import build_system_prompt
+from fm_seller.ai.model import AiContext, AiReply, SimulatedAiModel
 from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.evolution_runtime import RoutedWhatsAppSender
 from fm_seller.channels.outbox import flush_outbox
@@ -101,6 +102,8 @@ def test_pilot_can_greet_without_offer_or_global_ai(env: Env, db: Database) -> N
     stats = run_ai_replies(db, model, pilot_settings=_pilot(tid))
     assert stats.replied == 1
     assert model.calls and model.calls[0].offers == ()
+    assert model.calls[0].pilot_greeting
+    assert model.calls[0].history == (("customer", "oi"),)
     assert env.sql(
         "SELECT body,status FROM messages WHERE conversation_id=%s AND direction='out'", (cv,)
     ) == [("Olá, sou a AnaClara!", "queued")]
@@ -154,4 +157,48 @@ def test_outbox_does_not_claim_other_contacts_in_pilot(env: Env, db: Database) -
     stats = flush_outbox(db, SecretBox(SecretBox.generate_key_spec()), route)
     assert stats.claimed == 0
     assert env.sql("SELECT status FROM messages WHERE conversation_id=%s", (cv,)) == [("queued",)]
+    assert fake.sent == []
+
+
+def test_pilot_gemini_prompt_removes_selling_instructions() -> None:
+    ctx = AiContext(
+        persona="Ana Clara, assistente virtual da FM Tecnologia",
+        customer_name="",
+        offers=(),
+        history=(("customer", "oi"),),
+        pilot_greeting=True,
+    )
+    prompt = build_system_prompt(ctx)
+    assert "saudação" in prompt
+    assert "não é venda" in prompt
+    assert "Ana Clara" in prompt
+    assert "ESTILO DA LOJA" not in prompt
+    assert "Só fale dos produtos listados" not in prompt
+
+
+def test_pilot_outbox_rejects_old_queue_and_human_conversation(env: Env, db: Database) -> None:
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    tid = uuid.UUID(env.tenant("Fila antiga", unique_email("pilot-old")))
+    with db.tx(tenant_id=tid) as conn:
+        _, cv = upsert_conversation(conn, tid, PHONE, "Teste")
+    env.sql("UPDATE conversations SET status='bot', last_inbound_at=now() WHERE id=%s", (cv,))
+    env.sql(
+        "INSERT INTO messages (tenant_id,conversation_id,direction,author,body,status,created_at) "
+        "VALUES (%s,%s,'out','bot','Saudação antiga','queued',now()-interval '1 hour')",
+        (str(tid), cv),
+    )
+    fake = FakeSendClient()
+    sender = RoutedWhatsAppSender(
+        SimulatedSender(),
+        PilotGreetingSender(cast(Any, fake), tenant_id=tid, phone=PHONE),
+        meta_enabled=False,
+        evolution_enabled=True,
+        pilot_tenant_id=tid,
+        pilot_phone=PHONE,
+    )
+    assert flush_outbox(db, SecretBox(SecretBox.generate_key_spec()), sender).claimed == 0
+    env.sql("UPDATE messages SET created_at=now() WHERE conversation_id=%s", (cv,))
+    env.sql("UPDATE conversations SET status='human' WHERE id=%s", (cv,))
+    assert flush_outbox(db, SecretBox(SecretBox.generate_key_spec()), sender).claimed == 0
     assert fake.sent == []
