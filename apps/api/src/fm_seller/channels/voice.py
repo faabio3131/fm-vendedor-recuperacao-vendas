@@ -172,7 +172,9 @@ def transcribe_pending(
                         ).fetchone()
                     if contact and contact["phone"]:
                         audio, mime = evolution.fetch_voice(
-                            instance, media[4:], str(contact["phone"]) + "@s.whatsapp.net",
+                            instance,
+                            media[4:],
+                            str(contact["phone"]) + "@s.whatsapp.net",
                             max_bytes=max_bytes,
                         )
                         heard, _tin, _tout = transcriber.transcribe(audio, mime)
