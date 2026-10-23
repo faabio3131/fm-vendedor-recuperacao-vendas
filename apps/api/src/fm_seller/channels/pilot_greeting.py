@@ -70,7 +70,12 @@ class PilotCommercialSender(PilotGreetingSender):
     commercial_enabled = True
 
     def __init__(
-        self, client: object, *, tenant_id: uuid.UUID, phone: str, offer_id: uuid.UUID,
+        self,
+        client: object,
+        *,
+        tenant_id: uuid.UUID,
+        phone: str,
+        offer_id: uuid.UUID,
         checkout_host: str,
     ) -> None:
         super().__init__(client, tenant_id=tenant_id, phone=phone)
