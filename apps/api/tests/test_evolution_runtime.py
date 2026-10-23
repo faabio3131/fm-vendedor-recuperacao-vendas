@@ -304,7 +304,7 @@ def test_evolution_voice_media_source_validation() -> None:
         f"/chat/findMessages/{instance}",
         f"/chat/getBase64FromMediaMessage/{instance}",
     ]
-    record["key"]["remoteJid"] = "5511988881234@s.whatsapp.net"
+    cast(dict[str, Any], record["key"])["remoteJid"] = "5511988881234@s.whatsapp.net"
     with pytest.raises(AppError):
         client.fetch_voice(instance, msg_id, jid, max_bytes=2_000_000)
     assert len(calls) == 3
