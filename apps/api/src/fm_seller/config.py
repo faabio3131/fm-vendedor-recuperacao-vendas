@@ -79,6 +79,12 @@ class Settings(BaseSettings):
     evolution_webhook_key: SecretStr = SecretStr("")
     evolution_send_enabled: bool = False
 
+    # Piloto interno, explicitamente restrito a UM tenant e UM destinatário.
+    # Não ativa FM_EVOLUTION_SEND_ENABLED nem campanhas/recuperação.
+    pilot_greeting_enabled: bool = False
+    pilot_greeting_tenant_id: str = ""
+    pilot_greeting_phone: str = ""
+
     # Captura de eventos reais de checkout para conferir o formato (docs/OPERACAO.md). Desligada por
     # padrão; guarda o corpo cifrado, sem segredos, e apaga sozinha depois do prazo.
     capture_events: bool = False
@@ -156,6 +162,29 @@ class Settings(BaseSettings):
     def _evolution_send_gate(self) -> Settings:
         if self.evolution_send_enabled and not self.evolution_enabled:
             raise ValueError("FM_EVOLUTION_SEND_ENABLED exige FM_EVOLUTION_ENABLED")
+        return self
+
+    @model_validator(mode="after")
+    def _pilot_greeting_gate(self) -> Settings:
+        if not self.pilot_greeting_enabled:
+            return self
+        import uuid
+
+        if (
+            self.env != "prod"
+            or not self.evolution_enabled
+            or self.evolution_send_enabled
+            or self.whatsapp_live
+            or not self.ai_api_key.get_secret_value()
+            or not re.fullmatch(r"55[1-9][0-9]{9,11}", self.pilot_greeting_phone)
+        ):
+            raise ValueError("Piloto exige produção, Evolution conectável, IA real e envio geral desligado")
+        try:
+            parsed = uuid.UUID(self.pilot_greeting_tenant_id)
+        except (ValueError, AttributeError):
+            raise ValueError("FM_PILOT_GREETING_TENANT_ID inválido") from None
+        if parsed.int == 0 or str(parsed) != self.pilot_greeting_tenant_id:
+            raise ValueError("FM_PILOT_GREETING_TENANT_ID precisa ser UUID canônico")
         return self
 
     @model_validator(mode="after")
