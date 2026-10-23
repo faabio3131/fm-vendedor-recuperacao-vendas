@@ -108,6 +108,18 @@ def test_inbox_reply_window_and_status(client: TestClient, env: Env, db: Databas
         "SELECT status FROM messages WHERE conversation_id=%s AND author='human'",
         (cid,),
     ) == [("queued",)]
+    env.sql(
+        "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, status) "
+        "VALUES (%s, %s, 'out', 'bot', 'Nova resposta permitida', 'queued')",
+        (tid, cid),
+    )
+    # Repeating status=bot is idempotent and must not discard a fresh reply.
+    assert client.post(f"/v1/inbox/{cid}/status", json={"status": "bot"}).status_code == 200
+    assert env.sql(
+        "SELECT status FROM messages WHERE conversation_id=%s AND author='bot' "
+        "AND body='Nova resposta permitida'",
+        (cid,),
+    ) == [("queued",)]
     assert client.post(f"/v1/inbox/{cid}/status", json={"status": "x"}).status_code == 400
     assert client.get(f"/v1/inbox/{uuid.uuid4()}").status_code == 404
     assert client.get("/v1/inbox?status=nope").status_code == 400
