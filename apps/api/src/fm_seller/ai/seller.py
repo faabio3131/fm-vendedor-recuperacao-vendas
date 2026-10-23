@@ -250,11 +250,16 @@ def _handle_conversation(
         _handoff(conn, tenant_id, conv_id, "limite_do_plano", notify=True)
         return "handoffs"
 
-    offer_rows = conn.execute(
-        "SELECT id, name, description, price_cents, payment_url FROM offers "
-        "WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 20",
-        (tenant_id,),
-    ).fetchall()
+    # Piloto não expõe ofertas ao modelo, mesmo se cadastradas futuramente.
+    offer_rows = (
+        []
+        if pilot
+        else conn.execute(
+            "SELECT id, name, description, price_cents, payment_url FROM offers "
+            "WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 20",
+            (tenant_id,),
+        ).fetchall()
+    )
     if not offer_rows and not pilot:
         _handoff(conn, tenant_id, conv_id, "sem_ofertas", notify=True)
         return "handoffs"
@@ -274,10 +279,15 @@ def _handle_conversation(
             OfferView(str(o["id"]), o["name"], o["description"], format_brl(o["price_cents"]))
             for o in offer_rows
         ),
-        history=tuple(
-            ("customer" if h["direction"] == "in" else "assistant", h["body"])
-            for h in reversed(history)
+        history=(
+            (("customer", inbound[0]["body"]),)
+            if pilot
+            else tuple(
+                ("customer" if h["direction"] == "in" else "assistant", h["body"])
+                for h in reversed(history)
+            )
         ),
+        pilot_greeting=pilot,
     )
     proposal = propose(model, ctx, registry)
     if proposal.failed:
