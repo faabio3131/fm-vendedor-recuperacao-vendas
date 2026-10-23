@@ -159,6 +159,7 @@ def test_outbox_does_not_claim_other_contacts_in_pilot(env: Env, db: Database) -
     assert env.sql("SELECT status FROM messages WHERE conversation_id=%s", (cv,)) == [("queued",)]
     assert fake.sent == []
 
+
 def test_pilot_gemini_prompt_removes_selling_instructions() -> None:
     ctx = AiContext(
         persona="Ana Clara, assistente virtual da FM Tecnologia",
@@ -181,9 +182,7 @@ def test_pilot_outbox_rejects_old_queue_and_human_conversation(env: Env, db: Dat
     tid = uuid.UUID(env.tenant("Fila antiga", unique_email("pilot-old")))
     with db.tx(tenant_id=tid) as conn:
         _, cv = upsert_conversation(conn, tid, PHONE, "Teste")
-    env.sql(
-        "UPDATE conversations SET status='bot', last_inbound_at=now() WHERE id=%s", (cv,)
-    )
+    env.sql("UPDATE conversations SET status='bot', last_inbound_at=now() WHERE id=%s", (cv,))
     env.sql(
         "INSERT INTO messages (tenant_id,conversation_id,direction,author,body,status,created_at) "
         "VALUES (%s,%s,'out','bot','Saudação antiga','queued',now()-interval '1 hour')",
