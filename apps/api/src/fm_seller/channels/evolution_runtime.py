@@ -199,7 +199,12 @@ class RoutedWhatsAppSender:
         *,
         meta_enabled: bool,
         evolution_enabled: bool,
+        pilot_tenant_id: uuid.UUID | None = None,
+        pilot_phone: str = "",
     ) -> None:
+        self.pilot_only = pilot_tenant_id is not None
+        self.pilot_tenant_id = pilot_tenant_id
+        self.pilot_phone = pilot_phone
         self.meta = meta
         self.evolution = evolution
         self.meta_enabled = meta_enabled
