@@ -191,3 +191,74 @@ def test_40_inbound_events_eight_concurrent_workers_generate_one_reply(
         "SELECT count(*) FROM messages WHERE tenant_id=%s AND direction='out'",
         (tenant,),
     ) == [(1,)]
+
+
+def test_realistic_two_turn_price_then_checkout_then_human_handoff(
+    env: Env, db: Database, client: TestClient
+) -> None:
+    """One conversation persists context, sells using the registry, and stops on human request."""
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    env.sql("UPDATE messages SET status='failed' WHERE direction='out' AND status='queued'")
+    tenant, instance, key = _provision(client, env)
+    _setup_offer(env, tenant)
+    model = SimulatedAiModel()
+    fake = FakeSendClient()
+    sender = RoutedWhatsAppSender(
+        SimulatedSender(), EvolutionSender(cast(Any, fake)),
+        meta_enabled=False, evolution_enabled=True,
+    )
+
+    assert _webhook(client, instance, key, "multi-turn-price", "Qual o preco?")["messages"] == 1
+    assert run_ai_replies(db, model).replied == 1
+    assert flush_outbox(db, env.box, sender).sent == 1
+    assert len(fake.sent) == 1
+    assert "R$ 197,00" in fake.sent[0]["text"]
+    assert PAYMENT_LINK not in fake.sent[0]["text"]
+
+    assert _webhook(client, instance, key, "multi-turn-buy", "Quero comprar")["messages"] == 1
+    assert run_ai_replies(db, model).replied == 1
+    fake.result = {"key": {"id": "MULTITURN456"}}
+    assert flush_outbox(db, env.box, sender).sent == 1
+    assert len(fake.sent) == 2
+    assert fake.sent[1]["text"].count(PAYMENT_LINK) == 1
+    assert len(model.calls) == 2
+    assert any(
+        role == "assistant" and "R$ 197,00" in body for role, body in model.calls[1].history
+    )
+
+    before = len(model.calls)
+    assert _webhook(
+        client, instance, key, "multi-turn-human", "Quero falar com atendente"
+    )["messages"] == 1
+    assert run_ai_replies(db, model).handoffs == 1
+    assert len(model.calls) == before
+    assert env.sql(
+        "SELECT status,handoff_reason FROM conversations WHERE tenant_id=%s", (tenant,)
+    ) == [("human", "pediu_atendente")]
+    _webhook(client, instance, key, "multi-turn-after-human", "Tem desconto?")
+    assert run_ai_replies(db, model).conversations == 0
+    assert len(model.calls) == before
+
+
+def test_optout_mid_sales_blocks_future_model_replies(
+    env: Env, db: Database, client: TestClient
+) -> None:
+    """Opt-out is authoritative even if a customer writes again after closure."""
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    tenant, instance, key = _provision(client, env)
+    _setup_offer(env, tenant)
+    model = SimulatedAiModel()
+    assert _webhook(client, instance, key, "optout-initial", "Quanto custa?")["messages"] == 1
+    assert run_ai_replies(db, model).replied == 1
+    assert _webhook(client, instance, key, "optout-command", "SAIR")["opt_outs"] == 1
+    assert env.sql(
+        "SELECT identity FROM suppressions WHERE tenant_id=%s", (tenant,)
+    ) == [(PHONE,)]
+    calls = len(model.calls)
+    assert _webhook(client, instance, key, "optout-followup", "Quero comprar")["messages"] == 1
+    assert run_ai_replies(db, model).replied == 0
+    assert len(model.calls) == calls
+    assert env.sql(
+        "SELECT count(*) FROM messages WHERE tenant_id=%s "
+        "AND direction='out' AND author='bot'", (tenant,)
+    ) == [(1,)]
