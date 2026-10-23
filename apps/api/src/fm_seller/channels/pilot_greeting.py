@@ -98,13 +98,13 @@ class PilotCommercialSender(PilotGreetingSender):
             or parsed.scheme != "https"
             or parsed.hostname != self.checkout_host
             or not price
-            or re.search(r"\\b(?:pix|chave|transfer[eê]ncia)\\b|www\\.", body, re.I)
+            or re.search(r"\b(?:pix|chave|transfer[eê]ncia)\b|www\.", body, re.I)
         ):
             raise SendError("piloto comercial: destinatário, checkout ou conteúdo não autorizado")
-        urls = re.findall(r"https?://[^\\s<>]+", body, re.I)
+        urls = re.findall(r"https?://[^\s<>]+", body, re.I)
         if any(found.rstrip(".,;!?") != url for found in urls):
             raise SendError("piloto comercial: link fora da oferta canônica")
-        values = re.findall(r"r\\$\\s*[0-9][0-9.,]*", body, re.I)
+        values = re.findall(r"r\$\s*[0-9][0-9.,]*", body, re.I)
         if any(v.replace(" ", "") != price.replace(" ", "") for v in values):
             raise SendError("piloto comercial: preço fora do cadastro")
         return EvolutionSender.send_text(self, config, to_phone, body)
