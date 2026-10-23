@@ -124,6 +124,19 @@ def test_webhook_to_registered_price_link_to_evolution_ack(
         "AND direction='out' AND provider_message_id='ABC123'",
         (tenant,),
     ) == [("read",)]
+    # Provider replay / delayed lower acknowledgment must not downgrade READ.
+    receipt["data"]["status"] = "SERVER_ACK"
+    delayed = client.post(
+        f"/v1/webhooks/evolution/{instance}",
+        content=json.dumps(receipt).encode(),
+        headers={"x-fm-evolution-auth": key},
+    )
+    assert delayed.status_code == 200
+    assert env.sql(
+        "SELECT status FROM messages WHERE tenant_id=%s "
+        "AND direction='out' AND provider_message_id='ABC123'",
+        (tenant,),
+    ) == [("read",)]
     assert env.sql(
         "SELECT count(*) FROM messages WHERE tenant_id=%s AND direction='out'",
         (tenant,),
