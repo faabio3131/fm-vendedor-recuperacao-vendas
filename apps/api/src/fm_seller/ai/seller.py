@@ -207,7 +207,7 @@ def demo_plan_details_reply(
                 and previous_bot
                 in {
                     _demo_detail_text(offer, kind)
-                    for kind in ("overview", "features", "usage", "contract")
+                    for kind in ("overview", "features", "usage", "limits", "contract")
                 }
             )
         ):
@@ -231,7 +231,9 @@ def demo_plan_details_reply(
     if not _demo_recommendation_line(selected):
         return None
     category = "overview"
-    if terms & {"consumo", "franquia", "contabiliza", "contabilizado", "limite", "limites"}:
+    if "nao" in terms and terms & {"faz", "inclui", "oferece", "permite"}:
+        category = "limits"
+    elif terms & {"consumo", "franquia", "contabiliza", "contabilizado", "limite", "limites"}:
         category = "usage"
     elif terms & {"contratar", "contratacao"}:
         category = "contract"
@@ -245,6 +247,14 @@ def _demo_detail_text(offer: Mapping[str, Any], category: str) -> str:
     name = str(offer["name"])
     quota = f"{int(offer['quota']):,}".replace(",", ".")
     price = format_brl(offer["price_cents"])
+    if category == "limits":
+        return (
+            f"O {name} não oferece respostas de IA ilimitadas: a franquia é de "
+            f"{quota} por mês, compartilhada entre canais. Esta demonstração "
+            "não contrata, não cobra e não ativa assinatura automaticamente. "
+            "Integrações dependem da configuração das conexões. "
+            f"Veja detalhes: {DEMO_PAGE}. Quer que eu explique as funcionalidades?"
+        )
     if category == "usage":
         return (
             f"No {name}, a franquia é de {quota} respostas de IA por mês, "
