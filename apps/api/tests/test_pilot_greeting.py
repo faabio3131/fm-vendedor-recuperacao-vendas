@@ -205,9 +205,7 @@ def test_pilot_outbox_rejects_old_queue_and_human_conversation(env: Env, db: Dat
     assert fake.sent == []
 
 
-def test_pilot_demo_uses_live_commercial_plans_with_global_ai_off(
-    env: Env, db: Database
-) -> None:
+def test_pilot_demo_uses_live_commercial_plans_with_global_ai_off(env: Env, db: Database) -> None:
     from fm_seller.channels.pilot_greeting import DEMO_PAGE
     from fm_seller.channels.whatsapp import upsert_conversation
 
@@ -226,9 +224,7 @@ def test_pilot_demo_uses_live_commercial_plans_with_global_ai_off(
         (str(tid), cv),
     )
     model = SimulatedAiModel(
-        forced=AiReply(
-            "{oferta} custa {preco} por mês. Veja {link}", offer_id="av-essencial"
-        )
+        forced=AiReply("{oferta} custa {preco} por mês. Veja {link}", offer_id="av-essencial")
     )
     settings = _pilot(tid)
     settings.pilot_demo_enabled = True
@@ -256,9 +252,10 @@ def test_pilot_demo_sender_denies_other_contact_arbitrary_prices_and_checkout() 
         "__demo_prices": "R$ 129,90|R$ 199,90|R$ 399,90",
         "__demo_quotas": "500|1.000|3.000|1000|3000",
     }
-    assert demo.send_text(
-        config, PHONE, "Essencial: R$ 129,90 e 500 respostas. Veja " + DEMO_PAGE
-    ) == "ABC123"
+    assert (
+        demo.send_text(config, PHONE, "Essencial: R$ 129,90 e 500 respostas. Veja " + DEMO_PAGE)
+        == "ABC123"
+    )
     for recipient, body in (
         ("5511977008899", "Olá!"),
         (PHONE, "O preço é R$ 19,90."),
