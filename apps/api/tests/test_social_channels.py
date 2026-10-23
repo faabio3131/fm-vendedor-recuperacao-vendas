@@ -615,15 +615,11 @@ def test_messenger_and_instagram_share_the_same_tenant_ai_quota(
     assert run_ai_replies(db, first_model).replied == 1
     assert len(first_model.calls) == 1
 
-    connected = client.put(
-        "/v1/connections/instagram_dm", json={"values": CFG["instagram_dm"]}
-    )
+    connected = client.put("/v1/connections/instagram_dm", json={"values": CFG["instagram_dm"]})
     assert connected.status_code == 200, connected.text
     public_id = connected.json()["webhook_url"].rsplit("/", 1)[1]
     raw = payload("instagram_dm", [incoming("instagram_dm", "quota-instagram", "Oi")])
-    received = client.post(
-        f"/v1/webhooks/instagram_dm/{public_id}", content=raw, headers=sign(raw)
-    )
+    received = client.post(f"/v1/webhooks/instagram_dm/{public_id}", content=raw, headers=sign(raw))
     assert received.status_code == 200 and received.json()["messages"] == 1
     second_model = SimulatedAiModel()
     assert run_ai_replies(db, second_model).handoffs == 1
