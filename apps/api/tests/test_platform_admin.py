@@ -396,8 +396,8 @@ def test_commercial_plan_catalog_admin_only_and_audited(
     )
     assert [(r[0], r[1], r[2]) for r in rows] == [
         ("av-essencial", 12990, "500"),
-        ("av-profissional", 19990, "5000"),
-        ("av-escala", 39990, "15000"),
+        ("av-profissional", 19990, "1000"),
+        ("av-escala", 39990, "3000"),
     ]
     assert rows[0][3] == rows[1][3] == rows[2][3]
     assert c.get("/v1/admin/plans").status_code == 200
