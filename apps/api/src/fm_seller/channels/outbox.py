@@ -72,7 +72,12 @@ def flush_outbox(
                 "AND m.author='bot' AND m.tenant_id=%s AND ct.phone=%s "
                 "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
                 "RETURNING id, tenant_id, conversation_id, author, body",
-                (now, getattr(sender, "pilot_tenant_id", None), getattr(sender, "pilot_phone", ""), limit),
+                (
+                    now,
+                    getattr(sender, "pilot_tenant_id", None),
+                    getattr(sender, "pilot_phone", ""),
+                    limit,
+                ),
             ).fetchall()
         else:
             rows = conn.execute(
