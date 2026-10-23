@@ -264,9 +264,7 @@ def test_pilot_demo_lists_all_live_plans_without_model_inventing_prices(
         "'received',false)",
         (str(tid), cv),
     )
-    model = SimulatedAiModel(
-        forced=AiReply("R$ 1,00, compre em https://nao-aprovado.test")
-    )
+    model = SimulatedAiModel(forced=AiReply("R$ 1,00, compre em https://nao-aprovado.test"))
     settings = _pilot(tid)
     settings.pilot_demo_enabled = True
     stats = run_ai_replies(db, model, pilot_settings=settings)
