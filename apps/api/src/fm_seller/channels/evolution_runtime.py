@@ -148,7 +148,7 @@ def ingest_evolution(
                     if audio_enabled
                     else "[áudio recebido; transcrição desativada]"
                     if audio is not None
-                    else text[:4000]
+                    else str(text)[:4000]
                 ),
                 message_id="evo:" + message_id,
                 counts=counts,
