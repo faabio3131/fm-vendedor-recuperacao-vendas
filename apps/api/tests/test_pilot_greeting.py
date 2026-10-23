@@ -306,6 +306,7 @@ def test_pilot_demo_plan_listing_intent_is_narrow() -> None:
     assert demo_plan_listing_requested("Quais são os planos e quais os valores?")
     assert demo_plan_listing_requested("Lista de planos e preços")
     assert not demo_plan_listing_requested("Oi!")
+    assert not demo_plan_listing_requested("Quais planos estão disponíveis?")
     assert not demo_plan_listing_requested("Quero falar com uma pessoa")
     assert not demo_plan_listing_requested("Quero informações sobre o Essencial")
 
