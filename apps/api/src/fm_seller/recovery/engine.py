@@ -373,6 +373,9 @@ def run_due_steps(
 ) -> RunStats:
     now = now or datetime.now(UTC)
     stats = RunStats()
+    if getattr(sender, "pilot_only", False):
+        # Do not claim or discard a recovery step while only a one-contact greeting is live.
+        return stats
     if not sender.available:
         log.warning("envio indisponível nesta instalação: nenhum passo foi pego")
         return stats
