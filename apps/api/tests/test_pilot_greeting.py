@@ -240,8 +240,11 @@ def test_commercial_pilot_sender_rejects_unregistered_prices_links_and_campaigns
     fake = FakeSendClient()
     link = "https://checkout.provider.com.br/offer123"
     sender = PilotCommercialSender(
-        cast(Any, fake), tenant_id=tid, phone=PHONE,
-        offer_id=uuid.uuid4(), checkout_host="checkout.provider.com.br",
+        cast(Any, fake),
+        tenant_id=tid,
+        phone=PHONE,
+        offer_id=uuid.uuid4(),
+        checkout_host="checkout.provider.com.br",
     )
     config = {
         "__provider": "evolution",
@@ -250,9 +253,12 @@ def test_commercial_pilot_sender_rejects_unregistered_prices_links_and_campaigns
         "__pilot_allowed_price": "R$ 197,00",
     }
     route = RoutedWhatsAppSender(
-        SimulatedSender(), sender,
-        meta_enabled=False, evolution_enabled=True,
-        pilot_tenant_id=tid, pilot_phone=PHONE,
+        SimulatedSender(),
+        sender,
+        meta_enabled=False,
+        evolution_enabled=True,
+        pilot_tenant_id=tid,
+        pilot_phone=PHONE,
     )
     text = "Curso autorizado custa R$ 197,00: " + link
     assert route.send_text(config, PHONE, text) == "ABC123"
@@ -326,8 +332,11 @@ def test_commercial_pilot_uses_single_authorized_offer_and_outbox(
     route = RoutedWhatsAppSender(
         SimulatedSender(),
         PilotCommercialSender(
-            cast(Any, fake), tenant_id=tid, phone=PHONE,
-            offer_id=offer, checkout_host="checkout.provider.com.br",
+            cast(Any, fake),
+            tenant_id=tid,
+            phone=PHONE,
+            offer_id=offer,
+            checkout_host="checkout.provider.com.br",
         ),
         meta_enabled=False,
         evolution_enabled=True,
@@ -340,9 +349,9 @@ def test_commercial_pilot_uses_single_authorized_offer_and_outbox(
         "SELECT count(*) FROM messages WHERE conversation_id=%s AND status='queued'",
         (cv,),
     ) == [(1,)]
-    assert env.sql(
-        "SELECT count(*) FROM messages WHERE conversation_id=%s", (outside_cv,)
-    ) == [(0,)]
+    assert env.sql("SELECT count(*) FROM messages WHERE conversation_id=%s", (outside_cv,)) == [
+        (0,)
+    ]
     with pytest.raises(SendError):
         route.send_text({"__provider": "evolution"}, PHONE, "Pague em " + url)
     assert fake.sent == []
