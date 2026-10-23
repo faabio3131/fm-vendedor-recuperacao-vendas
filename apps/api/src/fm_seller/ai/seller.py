@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 from fm_seller.ai import usage
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
 from fm_seller.channels.outbound import enqueue_text
-from fm_seller.channels.pilot_greeting import greeting_only, pilot_contact
+from fm_seller.channels.pilot_greeting import DEMO_PAGE, greeting_only, pilot_contact
 from fm_seller.channels.social import identity_of
 from fm_seller.config import Settings
 from fm_seller.db import Conn, Database
@@ -194,7 +194,8 @@ def _handle_conversation(
     pilot = locked["channel"] == "whatsapp" and pilot_contact(
         pilot_settings, tenant_id, locked["phone"]
     )
-    if pilot and (len(inbound) != 1 or not greeting_only(inbound[0]["body"])):
+    demo = bool(pilot and pilot_settings and pilot_settings.pilot_demo_enabled)
+    if pilot and not demo and (len(inbound) != 1 or not greeting_only(inbound[0]["body"])):
         _handoff(conn, tenant_id, conv_id, "piloto_somente_saudacao", notify=False)
         return "handoffs"
     if conn.execute(
@@ -250,16 +251,29 @@ def _handle_conversation(
         _handoff(conn, tenant_id, conv_id, "limite_do_plano", notify=True)
         return "handoffs"
 
-    # Piloto não expõe ofertas ao modelo, mesmo se cadastradas futuramente.
-    offer_rows = (
-        []
-        if pilot
-        else conn.execute(
+    # O piloto FM não usa ofertas fictícias nem cria checkout: somente os planos
+    # vigentes do catálogo comercial canônico e a landing informativa pública.
+    if demo:
+        offer_rows = conn.execute(
+            "SELECT key AS id, display_name AS name, "
+            "('Franquia mensal de ' || (limits->>'ai_replies_per_month') || "
+            "' respostas de IA, compartilhada nos canais. Contratação assistida.') AS description, "
+            "price_monthly_cents AS price_cents FROM plans "
+            "WHERE key IN ('av-essencial', 'av-profissional', 'av-escala') "
+            "AND active AND price_monthly_cents > 0 ORDER BY phase"
+        ).fetchall()
+        if len(offer_rows) != 3:
+            _handoff(conn, tenant_id, conv_id, "catalogo_fm_incompleto", notify=False)
+            return "handoffs"
+        offer_rows = [{**dict(o), "payment_url": DEMO_PAGE} for o in offer_rows]
+    elif pilot:
+        offer_rows = []
+    else:
+        offer_rows = conn.execute(
             "SELECT id, name, description, price_cents, payment_url FROM offers "
             "WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 20",
             (tenant_id,),
         ).fetchall()
-    )
     if not offer_rows and not pilot:
         _handoff(conn, tenant_id, conv_id, "sem_ofertas", notify=True)
         return "handoffs"
@@ -281,13 +295,14 @@ def _handle_conversation(
         ),
         history=(
             (("customer", inbound[0]["body"]),)
-            if pilot
+            if pilot and not demo
             else tuple(
                 ("customer" if h["direction"] == "in" else "assistant", h["body"])
                 for h in reversed(history)
             )
         ),
-        pilot_greeting=pilot,
+        pilot_greeting=pilot and not demo,
+        pilot_demo=demo,
     )
     proposal = propose(model, ctx, registry)
     if proposal.failed:
