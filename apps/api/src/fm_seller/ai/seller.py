@@ -175,11 +175,10 @@ def demo_plan_details_reply(
         quota = str(offer.get("quota") or "")
         if recommended and previous_bot in (recommended, earlier_price):
             matching_previous.append(offer)
-        elif (
-            recommended
-            and quota.isdigit()
-            and previous_bot == _demo_detail_text(offer, "overview")
-        ):
+        elif recommended and quota.isdigit() and previous_bot in {
+            _demo_detail_text(offer, kind)
+            for kind in ("overview", "features", "usage", "contract")
+        }:
             matching_previous.append(offer)
     named = [
         offer for offer in offer_rows
