@@ -20,7 +20,9 @@ from datetime import UTC, datetime, timedelta
 from fm_seller.ai import usage
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
 from fm_seller.channels.outbound import enqueue_text
+from fm_seller.channels.pilot_greeting import greeting_only, pilot_contact
 from fm_seller.channels.social import identity_of
+from fm_seller.config import Settings
 from fm_seller.db import Conn, Database
 from fm_seller.money import format_brl
 from fm_seller.provisioning import trial
@@ -122,7 +124,12 @@ def _handoff(
 
 
 def run_ai_replies(
-    db: Database, model: AiModel, *, now: datetime | None = None, limit: int = 50
+    db: Database,
+    model: AiModel,
+    *,
+    now: datetime | None = None,
+    limit: int = 50,
+    pilot_settings: Settings | None = None,
 ) -> SellerStats:
     now = now or datetime.now(UTC)
     stats = SellerStats()
@@ -137,7 +144,12 @@ def run_ai_replies(
         try:
             with db.tx(tenant_id=row["tenant_id"]) as conn:
                 outcome = _handle_conversation(
-                    conn, model, row["tenant_id"], row["conversation_id"], now
+                    conn,
+                    model,
+                    row["tenant_id"],
+                    row["conversation_id"],
+                    now,
+                    pilot_settings=pilot_settings,
                 )
         except Exception:
             log.exception(
@@ -150,7 +162,13 @@ def run_ai_replies(
 
 
 def _handle_conversation(
-    conn: Conn, model: AiModel, tenant_id: uuid.UUID, conv_id: uuid.UUID, now: datetime
+    conn: Conn,
+    model: AiModel,
+    tenant_id: uuid.UUID,
+    conv_id: uuid.UUID,
+    now: datetime,
+    *,
+    pilot_settings: Settings | None = None,
 ) -> str:
     locked = conn.execute(
         "SELECT cv.status, cv.contact_id, cv.channel, ct.name, ct.phone, cc.external_id "
@@ -173,6 +191,12 @@ def _handle_conversation(
     ).fetchall()
     if not inbound:
         return "ignored"
+    pilot = locked["channel"] == "whatsapp" and pilot_contact(
+        pilot_settings, tenant_id, locked["phone"]
+    )
+    if pilot and (len(inbound) != 1 or not greeting_only(inbound[0]["body"])):
+        _handoff(conn, tenant_id, conv_id, "piloto_somente_saudacao", notify=False)
+        return "handoffs"
     if conn.execute(
         "SELECT 1 FROM suppressions WHERE tenant_id = %s AND identity = %s",
         (tenant_id, identity),
@@ -200,7 +224,7 @@ def _handle_conversation(
         "SELECT ai_enabled, ai_persona, timezone FROM tenant_settings WHERE tenant_id = %s",
         (tenant_id,),
     ).fetchone()
-    if settings is None or not settings["ai_enabled"]:
+    if settings is None or (not settings["ai_enabled"] and not pilot):
         _handoff(conn, tenant_id, conv_id, "ia_desligada", notify=False)
         return "handoffs"
     if not model.available:
@@ -231,7 +255,7 @@ def _handle_conversation(
         "WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 20",
         (tenant_id,),
     ).fetchall()
-    if not offer_rows:
+    if not offer_rows and not pilot:
         _handoff(conn, tenant_id, conv_id, "sem_ofertas", notify=True)
         return "handoffs"
     registry = {

@@ -88,22 +88,35 @@ def build_sender(settings: Settings) -> MessageSender:
                 timeout=settings.meta_timeout_seconds,
             )
         )
-    if settings.evolution_enabled and settings.evolution_send_enabled:
+    if settings.evolution_enabled and (
+        settings.evolution_send_enabled or settings.pilot_greeting_enabled
+    ):
         from fm_seller.channels.evolution import EvolutionClient
         from fm_seller.channels.evolution_runtime import EvolutionSender, RoutedWhatsAppSender
+        from fm_seller.channels.pilot_greeting import PilotGreetingSender
 
-        evolution = EvolutionSender(
-            EvolutionClient(
-                base_url=settings.evolution_api_base_url,
-                api_key=settings.evolution_api_key.get_secret_value(),
-                timeout=settings.evolution_timeout_seconds,
-            )
+        client = EvolutionClient(
+            base_url=settings.evolution_api_base_url,
+            api_key=settings.evolution_api_key.get_secret_value(),
+            timeout=settings.evolution_timeout_seconds,
+        )
+        pilot_id = (
+            uuid.UUID(settings.pilot_greeting_tenant_id)
+            if settings.pilot_greeting_enabled
+            else None
+        )
+        evolution: MessageSender = (
+            PilotGreetingSender(client, tenant_id=pilot_id, phone=settings.pilot_greeting_phone)
+            if pilot_id is not None
+            else EvolutionSender(client)
         )
         return RoutedWhatsAppSender(
             meta,
             evolution,
             meta_enabled=settings.whatsapp_live,
             evolution_enabled=True,
+            pilot_tenant_id=pilot_id,
+            pilot_phone=settings.pilot_greeting_phone if pilot_id is not None else "",
         )
     if settings.whatsapp_live:
         return meta

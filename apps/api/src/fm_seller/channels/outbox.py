@@ -60,14 +60,34 @@ def flush_outbox(
             "WHERE direction = 'out' AND status = 'sending' AND claimed_at < %s",
             (now - STUCK_AFTER,),
         ).rowcount
-        rows = conn.execute(
-            "UPDATE messages SET status = 'sending', claimed_at = %s WHERE id IN ("
-            "SELECT m.id FROM messages m JOIN conversations cv ON cv.id = m.conversation_id "
-            "WHERE m.direction = 'out' AND m.status = 'queued' AND cv.channel = ANY(%s) "
-            "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
-            "RETURNING id, tenant_id, conversation_id, author, body",
-            (now, channels, limit),
-        ).fetchall()
+        pilot_only = getattr(sender, "pilot_only", False)
+        # A pilot may only claim a bot reply to its own exact contact. Other
+        # queued rows remain queued; a globally available adapter is NOT granted.
+        if pilot_only:
+            rows = conn.execute(
+                "UPDATE messages SET status = 'sending', claimed_at = %s WHERE id IN ("
+                "SELECT m.id FROM messages m JOIN conversations cv ON cv.id=m.conversation_id "
+                "JOIN contacts ct ON ct.id=cv.contact_id AND ct.tenant_id=cv.tenant_id "
+                "WHERE m.direction='out' AND m.status='queued' AND cv.channel='whatsapp' "
+                "AND m.author='bot' AND m.tenant_id=%s AND ct.phone=%s "
+                "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
+                "RETURNING id, tenant_id, conversation_id, author, body",
+                (
+                    now,
+                    getattr(sender, "pilot_tenant_id", None),
+                    getattr(sender, "pilot_phone", ""),
+                    limit,
+                ),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "UPDATE messages SET status = 'sending', claimed_at = %s WHERE id IN ("
+                "SELECT m.id FROM messages m JOIN conversations cv ON cv.id = m.conversation_id "
+                "WHERE m.direction = 'out' AND m.status = 'queued' AND cv.channel = ANY(%s) "
+                "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
+                "RETURNING id, tenant_id, conversation_id, author, body",
+                (now, channels, limit),
+            ).fetchall()
     for row in rows:
         stats.claimed += 1
         try:
@@ -106,6 +126,11 @@ def _send_one(
     now: datetime,
 ) -> bool:
     tenant_id, message_id = row["tenant_id"], row["id"]
+    if getattr(senders.get("whatsapp"), "pilot_only", False):
+        pilot_sender = senders["whatsapp"]
+        if row["author"] != "bot" or tenant_id != getattr(pilot_sender, "pilot_tenant_id", None):
+            _finish(db, tenant_id, message_id, "failed", "piloto_nao_autorizado", None)
+            return False
     with db.tx(tenant_id=tenant_id) as conn:
         ctx = conn.execute(
             "SELECT cv.channel, cv.last_inbound_at, ct.phone, cc.external_id, "
@@ -185,6 +210,12 @@ def _send_one(
                         reason = "canal_sem_adaptador"
                 except CryptoError:
                     reason = "credencial_ilegivel"
+    if (
+        getattr(senders.get("whatsapp"), "pilot_only", False)
+        and ctx is not None
+        and recipient != getattr(senders["whatsapp"], "pilot_phone", "")
+    ):
+        reason = "piloto_nao_autorizado"
     if reason is not None or ctx is None:
         _finish(db, tenant_id, message_id, "failed", reason, None)
         return False
