@@ -195,7 +195,9 @@ def _handle_conversation(
         pilot_settings, tenant_id, locked["phone"]
     )
     commercial_pilot = bool(pilot and pilot_settings and pilot_settings.pilot_commercial_enabled)
-    if pilot and not commercial_pilot and (len(inbound) != 1 or not greeting_only(inbound[0]["body"])):
+    if pilot and not commercial_pilot and (
+        len(inbound) != 1 or not greeting_only(inbound[0]["body"])
+    ):
         _handoff(conn, tenant_id, conv_id, "piloto_somente_saudacao", notify=False)
         return "handoffs"
     if conn.execute(
