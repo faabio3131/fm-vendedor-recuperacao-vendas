@@ -37,7 +37,6 @@ from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.optout import normalize
 
 log = logging.getLogger("fm_seller.seller")
-HANDOFF_MESSAGE = "Certo! Vou chamar uma pessoa da equipe para continuar com você."
 MAX_BOT_REPLIES_PER_HOUR = 10
 HISTORY = 10
 _HUMAN = ("atendente", "humano", "pessoa", "falar com alguem", "gerente", "responsavel")
