@@ -83,8 +83,8 @@ def demo_requested_volume(text: str, *, direct_answer: bool = False) -> int | No
         if not direct_answer:
             return None
     match = re.search(
-        r"(?<![0-9])([1-9][0-9]{0,2}(?:\\.[0-9]{3})+|[1-9][0-9]{0,5})"
-        r"\\s+(?:respostas|mensagens|atendimentos)\\b",
+        r"(?<![0-9])([1-9][0-9]{0,2}(?:\.[0-9]{3})+|[1-9][0-9]{0,5})"
+        r"\s+(?:respostas|mensagens|atendimentos)\b",
         text.lower(),
     )
     if not match:
