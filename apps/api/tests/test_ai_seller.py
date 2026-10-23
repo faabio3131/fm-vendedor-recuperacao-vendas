@@ -71,6 +71,60 @@ def test_price_and_link_come_from_registry_not_from_the_model(s: Setup, db: Data
     assert LINK in s.outbound()[-1][1]
 
 
+def test_canonical_price_and_link_need_no_model_or_ai_quota(s: Setup, db: Database) -> None:
+    # This plan's model allowance is intentionally exhausted; a registered
+    # commercial fact still goes through the usual tenant/outbox controls.
+    s.env.sql(
+        "INSERT INTO ai_usage (tenant_id,day,calls,failures,tokens_in,tokens_out) "
+        "VALUES (%s,(now() AT TIME ZONE 'America/Sao_Paulo')::date,100000,0,0,0) "
+        "ON CONFLICT (tenant_id,day) DO UPDATE SET calls=100000",
+        (s.tid,),
+    )
+    s.say("Quanto custa o Curso X?")
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 1
+    assert s.outbound()[0] == (
+        "bot",
+        "Curso X custa R$ 197,00. Quer que eu envie o link?",
+        "queued",
+    )
+    s.say("Pode mandar o link do Curso X?")
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 1
+    assert s.outbound()[1] == (
+        "bot",
+        "Aqui está o link cadastrado para Curso X: " + LINK,
+        "queued",
+    )
+    assert s.conv_state() == ("bot", None)
+    assert s.env.sql("SELECT calls,tokens_in,tokens_out FROM ai_usage WHERE tenant_id=%s", (s.tid,)) == [
+        (100000, 0, 0)
+    ]
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 0
+    assert len(s.outbound()) == 2
+
+
+def test_ambiguous_offer_name_uses_model_and_meters_call(s: Setup, db: Database) -> None:
+    s.env.sql(
+        "INSERT INTO offers (tenant_id,name,description,price_cents,payment_url) "
+        "VALUES (%s,'Curso X Avançado','Mais conteúdos',27900,'https://pay.example.test/x-2')",
+        (s.tid,),
+    )
+    s.say("Qual o preço do Curso X Avançado?")
+    model = SimulatedAiModel()
+    assert run_ai_replies(db, model).replied == 1
+    assert len(model.calls) == 1
+    assert s.env.sql(
+        "SELECT calls FROM ai_usage WHERE tenant_id=%s", (s.tid,)
+    ) == [(1,)]
+
+
+def test_no_catalogue_bypass_when_automation_disabled(s: Setup, db: Database) -> None:
+    s.env.sql("UPDATE tenant_settings SET ai_enabled=false WHERE tenant_id=%s", (s.tid,))
+    s.say("Quanto custa o Curso X?")
+    assert run_ai_replies(db, UnavailableAiModel()).handoffs == 1
+    assert s.conv_state() == ("human", "ia_desligada")
+    assert not s.outbound()
+
+
 def test_context_has_no_credentials_and_includes_history(s: Setup, db: Database) -> None:
     s.say("oi")
     model = SimulatedAiModel()
