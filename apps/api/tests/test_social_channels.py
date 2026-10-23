@@ -600,9 +600,15 @@ def test_messenger_and_instagram_share_the_same_tenant_ai_quota(
         "VALUES (%s,'Produto QA','Somente teste',19700,'https://pay.example.test/qa')",
         (soc.tid,),
     )
+    plan_key = "qa-channel-limit-" + uuid.uuid4().hex[:8]
     env.sql(
-        "UPDATE tenant_plans SET plan_key='av-essencial' WHERE tenant_id=%s",
-        (soc.tid,),
+        "INSERT INTO plans(key,display_name,phase,features,limits) "
+        "SELECT %s,'Limite QA',1,features,%s::jsonb FROM plans WHERE key='fase-1'",
+        (plan_key, '{"ai_replies_per_month": 500}'),
+    )
+    env.sql(
+        "UPDATE tenant_plans SET plan_key=%s WHERE tenant_id=%s",
+        (plan_key, soc.tid),
     )
     env.sql(
         "INSERT INTO ai_usage(tenant_id,day,calls) VALUES(%s,current_date,499)",
@@ -619,7 +625,7 @@ def test_messenger_and_instagram_share_the_same_tenant_ai_quota(
         "FROM tenant_plans tp JOIN plans p ON p.key=tp.plan_key "
         "WHERE tp.tenant_id=%s",
         (soc.tid,),
-    ) == [("av-essencial", "500")]
+    ) == [(plan_key, "500")]
     assert env.sql("SELECT sum(calls) FROM ai_usage WHERE tenant_id=%s", (soc.tid,)) == [(500,)]
 
     connected = client.put("/v1/connections/instagram_dm", json={"values": CFG["instagram_dm"]})
