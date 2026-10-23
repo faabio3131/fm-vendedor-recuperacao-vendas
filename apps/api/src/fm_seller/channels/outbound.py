@@ -6,6 +6,9 @@ import uuid
 
 from fm_seller.db import Conn
 
+# One canonical transfer notice shared by the seller and the pilot outbox gate.
+HANDOFF_MESSAGE = "Certo! Vou chamar uma pessoa da equipe para continuar com você."
+
 
 def enqueue_text(
     conn: Conn, tenant_id: uuid.UUID, conversation_id: uuid.UUID, author: str, body: str
