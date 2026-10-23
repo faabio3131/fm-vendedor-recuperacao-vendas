@@ -121,8 +121,7 @@ def build_system_prompt(ctx: AiContext) -> str:
         return "\n\n".join(parts)
     if ctx.pilot_demo:
         offers = "\n".join(
-            f"- offer_id={o.id} | nome: {o.name} | detalhes: {o.description}"
-            for o in ctx.offers
+            f"- offer_id={o.id} | nome: {o.name} | detalhes: {o.description}" for o in ctx.offers
         )
         return PILOT_DEMO_RULES + "\nOFERTAS APROVADAS:\n" + offers
     offers = "\n".join(
