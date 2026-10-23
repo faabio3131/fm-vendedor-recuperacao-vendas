@@ -48,8 +48,7 @@ def demo_plan_listing_requested(text: str) -> bool:
 # A single qualified turn is deterministic: it does not ask the model to
 # invent a recommendation or burn tokens just to request an essential fact.
 DEMO_VOLUME_QUESTION = (
-    "Para indicar o plano mais adequado, quantas respostas de IA sua empresa "
-    "espera usar por mês?"
+    "Para indicar o plano mais adequado, quantas respostas de IA sua empresa espera usar por mês?"
 )
 
 
@@ -57,8 +56,7 @@ def demo_recommendation_requested(text: str) -> bool:
     """Only an explicit request for plan advice, not arbitrary 'melhor' questions."""
     words = set(__import_normalize(text).split())
     return bool(words & {"plano", "planos"}) and any(
-        word.startswith(("recomend", "indic", "suger"))
-        or word in {"melhor", "ideal"}
+        word.startswith(("recomend", "indic", "suger")) or word in {"melhor", "ideal"}
         for word in words
     )
 
