@@ -75,9 +75,7 @@ def test_webhook_to_registered_price_link_to_evolution_ack(
     offer_id = _setup_offer(env, tenant)
     inbound = _webhook(client, instance, key, "commercial-flow-1", "Quanto custa?")
     assert inbound["messages"] == 1
-    assert _webhook(client, instance, key, "commercial-flow-1", "Quanto custa?")[
-        "duplicates"
-    ] == 1
+    assert _webhook(client, instance, key, "commercial-flow-1", "Quanto custa?")["duplicates"] == 1
 
     model = SimulatedAiModel(
         forced=AiReply("A {oferta} custa {preco}. Veja {link}", offer_id=offer_id)
@@ -133,9 +131,7 @@ def test_fraudulent_model_price_is_handed_to_human(
     env.sql("UPDATE messages SET handled=true WHERE direction='in'")
     tenant, instance, key = _provision(client, env)
     _setup_offer(env, tenant)
-    assert _webhook(client, instance, key, "commercial-fraud-1", "Tem desconto?")[
-        "messages"
-    ] == 1
+    assert _webhook(client, instance, key, "commercial-fraud-1", "Tem desconto?")["messages"] == 1
     model = SimulatedAiModel(
         forced=AiReply("Só hoje R$ 0,01. Pague em https://fraude.example.test/pix")
     )
@@ -169,8 +165,7 @@ def test_40_inbound_events_eight_concurrent_workers_generate_one_reply(
     assert sum(s.replied for s in results) == 1
     assert len(model.calls) == 1
     assert env.sql(
-        "SELECT count(*) FROM messages WHERE tenant_id=%s "
-        "AND direction='in' AND handled=false",
+        "SELECT count(*) FROM messages WHERE tenant_id=%s AND direction='in' AND handled=false",
         (tenant,),
     ) == [(0,)]
     assert env.sql(
