@@ -9,14 +9,18 @@ A conferência de pedido de parar (opt-out) acontece depois da transcrição.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from dataclasses import dataclass
 from typing import Protocol
 
+from fm_seller.channels.evolution import EvolutionClient
 from fm_seller.channels.inbound import apply_opt_out
 from fm_seller.channels.meta_api import MetaClient, MetaError
+from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_text
 from fm_seller.db import Database
+from fm_seller.errors import AppError
 from fm_seller.recovery.optout import is_opt_out
 from fm_seller.security.crypto import CryptoError, SecretBox
 
@@ -58,17 +62,56 @@ def _token(db: Database, box: SecretBox, tenant_id: uuid.UUID) -> str | None:
     return str(config.get("access_token", "")) or None
 
 
+def _evolution_instance(db: Database, box: SecretBox, tenant_id: uuid.UUID) -> str | None:
+    with db.tx(system=True) as conn:
+        row = conn.execute(
+            "SELECT config_encrypted FROM connections WHERE tenant_id = %s "
+            "AND provider = 'evolution' AND status = 'connected' LIMIT 1",
+            (tenant_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    try:
+        config = box.decrypt(
+            row["config_encrypted"], tenant_id=str(tenant_id), provider="evolution"
+        )
+    except CryptoError:
+        return None
+    name = "fmav-" + hashlib.sha256(tenant_id.bytes).hexdigest()[:32]
+    return name if config.get("instance_name") == name else None
+
+
 def _finish(
-    db: Database, tenant_id: uuid.UUID, msg_id: uuid.UUID, conv_id: uuid.UUID, text: str | None
+    db: Database,
+    tenant_id: uuid.UUID,
+    msg_id: uuid.UUID,
+    conv_id: uuid.UUID,
+    text: str | None,
+    *,
+    evolution_audio: bool = False,
 ) -> str:
     """Grava o resultado. `text` None = falha. Devolve 'done', 'opt_out' ou 'failed'."""
     with db.tx(tenant_id=tenant_id) as conn:
         if text is None:
-            conn.execute(
-                "UPDATE messages SET body = %s, handled = false, media_status = 'failed', "
-                "media_id = NULL WHERE id = %s",
-                (FALLBACK_BODY, msg_id),
-            )
+            if evolution_audio:
+                conn.execute(
+                    "UPDATE messages SET body = %s, handled = true, media_status = 'failed', "
+                    "media_id = NULL WHERE id = %s",
+                    ("[áudio não transcrito; equipe necessária]", msg_id),
+                )
+                conn.execute(
+                    "UPDATE conversations SET status = 'human', "
+                    "handoff_reason = 'audio_nao_transcrito' "
+                    "WHERE id = %s AND status = 'bot'",
+                    (conv_id,),
+                )
+                enqueue_text(conn, tenant_id, conv_id, "bot", HANDOFF_MESSAGE)
+            else:
+                conn.execute(
+                    "UPDATE messages SET body = %s, handled = false, media_status = 'failed', "
+                    "media_id = NULL WHERE id = %s",
+                    (FALLBACK_BODY, msg_id),
+                )
             return "failed"
         if is_opt_out(text):
             conn.execute(
@@ -99,6 +142,7 @@ def transcribe_pending(
     meta: MetaClient,
     *,
     max_bytes: int,
+    evolution: EvolutionClient | None = None,
     limit: int = 10,
 ) -> VoiceStats:
     stats = VoiceStats()
@@ -115,28 +159,56 @@ def transcribe_pending(
     for row in rows:
         text: str | None = None
         try:
-            token = _token(db, box, row["tenant_id"])
-            if token and row["media_id"]:
-                info = meta.request("GET", str(row["media_id"]), token)
-                mime = str(info.get("mime_type", "")).split(";")[0].strip().lower()
-                url = str(info.get("url", ""))
-                size = info.get("file_size")
-                if (
-                    mime in ALLOWED_MIME
-                    and url
-                    and not (isinstance(size, int) and size > max_bytes)
-                ):
-                    audio = meta.download(url, token, max_bytes=max_bytes)
-                    heard, _tin, _tout = transcriber.transcribe(audio, mime)
-                    text = heard.strip()[:4000] or None
-        except (MetaError, RuntimeError, ValueError) as exc:
+            media = str(row["media_id"] or "")
+            if media.startswith("evo:") and evolution is not None:
+                instance = _evolution_instance(db, box, row["tenant_id"])
+                if instance:
+                    with db.tx(tenant_id=row["tenant_id"]) as conn:
+                        contact = conn.execute(
+                            "SELECT ct.phone FROM conversations cv "
+                            "JOIN contacts ct ON ct.id = cv.contact_id "
+                            "WHERE cv.tenant_id = %s AND cv.id = %s",
+                            (row["tenant_id"], row["conversation_id"]),
+                        ).fetchone()
+                    if contact and contact["phone"]:
+                        audio, mime = evolution.fetch_voice(
+                            instance,
+                            media[4:],
+                            str(contact["phone"]) + "@s.whatsapp.net",
+                            max_bytes=max_bytes,
+                        )
+                        heard, _tin, _tout = transcriber.transcribe(audio, mime)
+                        text = heard.strip()[:4000] or None
+            elif media and not media.startswith("evo:"):
+                token = _token(db, box, row["tenant_id"])
+                if token:
+                    info = meta.request("GET", media, token)
+                    mime = str(info.get("mime_type", "")).split(";")[0].strip().lower()
+                    url = str(info.get("url", ""))
+                    size = info.get("file_size")
+                    if (
+                        mime in ALLOWED_MIME
+                        and url
+                        and not (isinstance(size, int) and size > max_bytes)
+                    ):
+                        audio = meta.download(url, token, max_bytes=max_bytes)
+                        heard, _tin, _tout = transcriber.transcribe(audio, mime)
+                        text = heard.strip()[:4000] or None
+        except (MetaError, AppError, RuntimeError, ValueError) as exc:
             log.warning("áudio não transcrito", extra={"ctx": {"erro": type(exc).__name__}})
         except Exception:
             log.exception("erro inesperado ao transcrever áudio")
         if text is None and row["media_attempts"] < MAX_ATTEMPTS:
             stats.retry += 1  # tenta de novo no próximo ciclo (depois da janela de reserva)
             continue
-        outcome = _finish(db, row["tenant_id"], row["id"], row["conversation_id"], text)
+        outcome = _finish(
+            db,
+            row["tenant_id"],
+            row["id"],
+            row["conversation_id"],
+            text,
+            evolution_audio=str(row["media_id"] or "").startswith("evo:"),
+        )
         if outcome == "done":
             stats.transcribed += 1
         elif outcome == "opt_out":
