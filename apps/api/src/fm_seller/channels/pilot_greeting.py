@@ -102,6 +102,7 @@ def demo_requested_volume(text: str, *, direct_answer: bool = False) -> int | No
     )
     return parse(match.group(1)) if match else None
 
+
 class PilotGreetingSender(EvolutionSender):
     """Restrict the existing Evolution transport to the sole approved contact/instance."""
 
