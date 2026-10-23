@@ -13,10 +13,10 @@ from fm_seller.ai.gemini import build_system_prompt
 from fm_seller.ai.model import AiContext, AiReply, SimulatedAiModel
 from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.evolution_runtime import RoutedWhatsAppSender
-from fm_seller.channels.outbox import flush_outbox
 from fm_seller.channels.outbound import HANDOFF_MESSAGE
-from fm_seller.channels.pilot_greeting import DEMO_VOLUME_QUESTION
+from fm_seller.channels.outbox import flush_outbox
 from fm_seller.channels.pilot_greeting import (
+    DEMO_VOLUME_QUESTION,
     PilotDemoSender,
     PilotGreetingSender,
     demo_plan_listing_requested,
