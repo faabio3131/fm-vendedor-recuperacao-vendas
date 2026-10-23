@@ -171,12 +171,8 @@ def test_webhook_token_isolation_and_fail_closed(client: TestClient) -> None:
     with pytest.raises(AppError):
         webhook_token(
             cfg.model_copy(update={"evolution_webhook_key": SecretStr("")}), uuid.uuid4(), instance
-        )
-
-def _audio_event(instance: str, mid: str = "voice1", *, wrapped: bool = False) -> bytes:
-    message: dict[str, Any] = {
-        "audioMessage": {"mimetype": "audio/ogg; codecs=opus", "ptt": True}
-    }
+        )def _audio_event(instance: str, mid: str = "voice1", *, wrapped: bool = False) -> bytes:
+    message: dict[str, Any] = {"audioMessage": {"mimetype": "audio/ogg; codecs=opus", "ptt": True}}
     if wrapped:
         message = {"ephemeralMessage": {"message": message}}
     payload = json.loads(_event(instance, message_id=mid))
@@ -191,9 +187,10 @@ def test_evolution_audio_visible_with_voice_disabled_and_no_hallucination(
     tenant, instance, token = _provision(client, env)
     path = f"/v1/webhooks/evolution/{instance}"
     raw = _audio_event(instance)
-    assert client.post(path, content=raw, headers={"x-fm-evolution-auth": token}).json()[
-        "messages"
-    ] == 1
+    assert (
+        client.post(path, content=raw, headers={"x-fm-evolution-auth": token}).json()["messages"]
+        == 1
+    )
     rows = env.sql(
         "SELECT body,handled,media_status,media_id FROM messages "
         "WHERE tenant_id=%s AND direction='in'",
@@ -234,8 +231,11 @@ def test_evolution_audio_uses_existing_transcription_worker_and_opt_out(
 
     evolution = FakeVoiceEvolution()
     processed = voice.transcribe_pending(
-        db, env.box, FakeTranscriber("Sim, quero conhecer o plano"),
-        FakeMeta().client(), max_bytes=2_000_000,
+        db,
+        env.box,
+        FakeTranscriber("Sim, quero conhecer o plano"),
+        FakeMeta().client(),
+        max_bytes=2_000_000,
         evolution=cast(Any, evolution),
     )
     assert processed.transcribed >= 1
@@ -254,9 +254,10 @@ def test_evolution_audio_unauthenticated_or_group_is_not_stored(
     payload = _audio_event(instance)
     assert client.post(path, content=payload).status_code == 401
     group = payload.replace(b"@s.whatsapp.net", b"@g.us")
-    assert client.post(
-        path, content=group, headers={"x-fm-evolution-auth": token}
-    ).json()["messages"] == 0
+    assert (
+        client.post(path, content=group, headers={"x-fm-evolution-auth": token}).json()["messages"]
+        == 0
+    )
     assert env.sql("SELECT count(*) FROM messages WHERE tenant_id=%s", (tenant,)) == [(0,)]
 
 
@@ -276,8 +277,12 @@ def test_evolution_voice_media_source_validation() -> None:
             self.calls: list[str] = []
 
         def _call(
-            self, method: str, route: str, *,
-            body: dict[str, Any] | None = None, max_response: int = 256_000
+            self,
+            method: str,
+            route: str,
+            *,
+            body: dict[str, Any] | None = None,
+            max_response: int = 256_000,
         ) -> dict[str, Any]:
             self.calls.append(route)
             if "findMessages" in route:
@@ -287,7 +292,8 @@ def test_evolution_voice_media_source_validation() -> None:
     client = FakeMediaClient()
     calls = client.calls
     assert client.fetch_voice(instance, msg_id, jid, max_bytes=2_000_000) == (
-        b"OggS-audio-sintetico", "audio/ogg"
+        b"OggS-audio-sintetico",
+        "audio/ogg",
     )
     assert calls == [
         f"/chat/findMessages/{instance}",
@@ -297,4 +303,3 @@ def test_evolution_voice_media_source_validation() -> None:
     with pytest.raises(AppError):
         client.fetch_voice(instance, msg_id, jid, max_bytes=2_000_000)
     assert len(calls) == 3
-
