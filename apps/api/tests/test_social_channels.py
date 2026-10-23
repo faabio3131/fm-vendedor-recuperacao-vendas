@@ -17,7 +17,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from fm_seller.ai.model import SimulatedAiModel
+from fm_seller.ai.model import AiReply, SimulatedAiModel
 from fm_seller.ai.seller import run_ai_replies
 from fm_seller.channels.meta_api import MetaClient
 from fm_seller.channels.outbox import flush_outbox
@@ -581,3 +581,58 @@ def test_connection_tester_failure_is_honest_and_hides_the_token() -> None:
 def test_meta_client_type_is_reused() -> None:
     assert isinstance(Fake(body={}).client(), MetaClient)
     assert isinstance(httpx.MockTransport(Fake()), httpx.MockTransport)
+
+
+def test_messenger_and_instagram_share_the_same_tenant_ai_quota(
+    client: TestClient, env: Env, db: Database
+) -> None:
+    """The 500 replies are across channels, not 500 per social account."""
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    soc = Social(client, env, "messenger")
+    env.sql(
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) "
+        "VALUES (%s,true,'Atendimento') ON CONFLICT(tenant_id) "
+        "DO UPDATE SET ai_enabled=true",
+        (soc.tid,),
+    )
+    env.sql(
+        "INSERT INTO offers(tenant_id,name,description,price_cents,payment_url) "
+        "VALUES (%s,'Produto QA','Somente teste',19700,'https://pay.example.test/qa')",
+        (soc.tid,),
+    )
+    env.sql(
+        "UPDATE tenant_plans SET plan_key='av-essencial' WHERE tenant_id=%s",
+        (soc.tid,),
+    )
+    env.sql(
+        "INSERT INTO ai_usage(tenant_id,day,calls) VALUES(%s,current_date,499)",
+        (soc.tid,),
+    )
+    assert soc.send_in("quota-messenger", "Quanto custa?").json()["messages"] == 1
+    first_model = SimulatedAiModel(
+        forced=AiReply("Olá, posso ajudar?", tokens_in=120, tokens_out=15)
+    )
+    assert run_ai_replies(db, first_model).replied == 1
+    assert len(first_model.calls) == 1
+
+    connected = client.put(
+        "/v1/connections/instagram_dm", json={"values": CFG["instagram_dm"]}
+    )
+    assert connected.status_code == 200, connected.text
+    public_id = connected.json()["webhook_url"].rsplit("/", 1)[1]
+    raw = payload("instagram_dm", [incoming("instagram_dm", "quota-instagram", "Oi")])
+    received = client.post(
+        f"/v1/webhooks/instagram_dm/{public_id}", content=raw, headers=sign(raw)
+    )
+    assert received.status_code == 200 and received.json()["messages"] == 1
+    second_model = SimulatedAiModel()
+    assert run_ai_replies(db, second_model).handoffs == 1
+    assert second_model.calls == []
+    assert env.sql(
+        "SELECT coalesce(sum(calls),0) FROM ai_usage WHERE tenant_id=%s", (soc.tid,)
+    ) == [(500,)]
+    assert env.sql(
+        "SELECT status,handoff_reason FROM conversations "
+        "WHERE tenant_id=%s AND channel='instagram'",
+        (soc.tid,),
+    ) == [("human", "limite_do_plano")]
