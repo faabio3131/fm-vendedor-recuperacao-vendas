@@ -302,6 +302,46 @@ def test_pilot_demo_lists_all_live_plans_without_model_inventing_prices(
     assert len(fake.sent) == 1
 
 
+def test_pilot_demo_prices_ignore_exhausted_model_quota_but_keep_pilot_scope(
+    env: Env, db: Database
+) -> None:
+    from fm_seller.ai.model import UnavailableAiModel
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    tid = uuid.UUID(env.tenant("FM demo sem tokens", unique_email("pilot-zero-tokens")))
+    env.sql(
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) "
+        "VALUES (%s,false,'AnaClara')",
+        (str(tid),),
+    )
+    env.sql(
+        "INSERT INTO ai_usage(tenant_id,day,calls,failures,tokens_in,tokens_out) "
+        "VALUES (%s,(now() AT TIME ZONE 'America/Sao_Paulo')::date,100000,0,0,0)",
+        (str(tid),),
+    )
+    with db.tx(tenant_id=tid) as conn:
+        _, cv = upsert_conversation(conn, tid, PHONE, "Contato autorizado")
+    env.sql(
+        "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,status,handled) "
+        "VALUES (%s,%s,'in','customer','Quais são os planos e valores?',"
+        "'received',false)",
+        (str(tid), cv),
+    )
+    settings = _pilot(tid)
+    settings.pilot_demo_enabled = True
+    assert run_ai_replies(db, UnavailableAiModel(), pilot_settings=settings).replied == 1
+    assert env.sql(
+        "SELECT calls,tokens_in,tokens_out FROM ai_usage WHERE tenant_id=%s", (str(tid),)
+    ) == [(100000, 0, 0)]
+    outgoing = env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out'", (cv,)
+    )
+    assert len(outgoing) == 1
+    assert all(n in outgoing[0][0] for n in ("Essencial", "Profissional", "Escala"))
+    assert env.sql("SELECT status FROM conversations WHERE id=%s", (cv,)) == [("bot",)]
+
+
 def test_pilot_demo_plan_listing_intent_is_narrow() -> None:
     assert demo_plan_listing_requested("Quais são os planos e quais os valores?")
     assert demo_plan_listing_requested("Lista de planos e preços")
