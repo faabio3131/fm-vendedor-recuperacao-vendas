@@ -214,7 +214,7 @@ def _send_one(
                         reason = "canal_sem_adaptador"
                 except CryptoError:
                     reason = "credencial_ilegivel"
-        demo_sender = getattr(senders.get("whatsapp"), "evolution", None)
+        demo_sender: Any = getattr(senders.get("whatsapp"), "evolution", None)
         if reason is None and getattr(demo_sender, "demo_enabled", False):
             from fm_seller.money import format_brl
 
