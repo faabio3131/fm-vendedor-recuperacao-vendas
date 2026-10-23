@@ -120,6 +120,132 @@ def catalog_offer_reply(
     return answer if len(answer) <= (850 if demo else 1000) else None
 
 
+def _demo_recommendation_line(offer: Mapping[str, Any]) -> str | None:
+    """Reconstruct the exact recommendation using only the approved plan row."""
+    quota = str(offer.get("quota") or "")
+    name, cents = offer.get("name"), offer.get("price_cents")
+    if (
+        not quota.isdigit()
+        or int(quota) <= 0
+        or not isinstance(name, str)
+        or not name.strip()
+        or not isinstance(cents, int)
+        or isinstance(cents, bool)
+        or cents <= 0
+    ):
+        return None
+    formatted_quota = f"{int(quota):,}".replace(",", ".")
+    return (
+        f"Pelo volume informado, recomendo {name}: {format_brl(cents)}/mês, "
+        f"com até {formatted_quota} respostas de IA mensais. Quer conhecer mais detalhes?"
+    )
+
+
+def demo_plan_details_reply(
+    question: str, previous_bot: str, offer_rows: Sequence[Mapping[str, Any]]
+) -> str | None:
+    """Continue the *same* approved commercial conversation without model speculation.
+
+    A short "Quero" is not a new purchase instruction; it is contextual only
+    after our exact plan recommendation or catalogue price explanation.
+    """
+    phrase = normalize(question).strip("?!., ")
+    affirmative = phrase in {
+        "quero", "sim", "sim quero", "quero sim", "quero conhecer", "sim quero conhecer",
+        "quero saber mais", "sim quero saber mais", "pode explicar", "me explica",
+        "me explique", "pode", "claro", "gostaria",
+    }
+    terms = set(phrase.split())
+    informational = bool(terms & {
+        "funciona", "funcionalidades", "recursos", "beneficios", "detalhes", "explicar",
+        "faz", "inclui", "franquia", "consumo", "limite", "limites", "contratar",
+        "contratacao", "contabiliza", "contabilizado",
+    })
+    if not affirmative and not informational:
+        return None
+    matching_previous: list[Mapping[str, Any]] = []
+    for offer in offer_rows:
+        recommended = _demo_recommendation_line(offer)
+        cents, name = offer.get("price_cents"), offer.get("name")
+        earlier_price = (
+            f"{name} custa {format_brl(cents)} por mês. Posso explicar os detalhes."
+            if isinstance(name, str) and isinstance(cents, int) and not isinstance(cents, bool)
+            else None
+        )
+        quota = str(offer.get("quota") or "")
+        if recommended and previous_bot in (recommended, earlier_price):
+            matching_previous.append(offer)
+        elif (
+            recommended
+            and quota.isdigit()
+            and previous_bot == _demo_detail_text(offer, "overview")
+        ):
+            matching_previous.append(offer)
+    named = [
+        offer for offer in offer_rows
+        if isinstance(offer.get("name"), str)
+        and re.search(
+            rf"(?<![a-z0-9]){re.escape(normalize(offer['name']))}(?![a-z0-9])", phrase
+        )
+    ]
+    if affirmative:
+        if len(matching_previous) != 1:
+            return None
+        selected = matching_previous[0]
+    elif len(named) == 1:
+        selected = named[0]
+    elif len(matching_previous) == 1:
+        selected = matching_previous[0]
+    else:
+        return None
+    if not _demo_recommendation_line(selected):
+        return None
+    category = "overview"
+    if terms & {"consumo", "franquia", "contabiliza", "contabilizado", "limite", "limites"}:
+        category = "usage"
+    elif terms & {"contratar", "contratacao"}:
+        category = "contract"
+    elif terms & {"faz", "inclui", "funcionalidades", "recursos", "funciona", "beneficios"}:
+        category = "features"
+    return _demo_detail_text(selected, category)
+
+
+def _demo_detail_text(offer: Mapping[str, Any], category: str) -> str:
+    """Only claims supported by the existing product modules and catalogue."""
+    name = str(offer["name"])
+    quota = f"{int(offer['quota']):,}".replace(",", ".")
+    price = format_brl(offer["price_cents"])
+    if category == "usage":
+        return (
+            f"No {name}, a franquia é de {quota} respostas de IA por mês, "
+            "compartilhada entre canais. Não é ilimitada e os três planos "
+            f"oferecem as mesmas funcionalidades. O valor é {price}/mês. "
+            "Quer saber como funciona o atendimento?"
+        )
+    if category == "contract":
+        return (
+            f"O {name} custa {price}/mês para {quota} respostas de IA mensais. "
+            "A contratação é assistida: esta conversa não ativa assinatura "
+            f"nem efetua cobrança. Detalhes e demonstração: {DEMO_PAGE}"
+        )
+    if category == "features":
+        return (
+            "O AtendeVendeIA reúne Vendedor IA para responder clientes, "
+            "painel de Conversas e recursos de Recuperação e Relatórios, "
+            "conforme as conexões configuradas. Os três planos têm as mesmas "
+            f"funcionalidades; no {name}, são {quota} respostas de IA/mês, "
+            f"por {price}/mês. Quer entender a franquia ou a contratação?"
+        )
+    return (
+        f"Claro! O {name} oferece Vendedor IA para atendimento, painel de "
+        "Conversas e recursos de Recuperação e Relatórios, conforme as conexões "
+        f"configuradas. Inclui {quota} respostas de IA por mês, compartilhadas "
+        f"entre canais, por {price}/mês. Não são respostas ilimitadas; "
+        "a contratação é assistida, sem ativação automática nesta demonstração. "
+        f"Detalhes: {DEMO_PAGE}. O que gostaria de saber primeiro?"
+    )
+
+
 @dataclass(frozen=True)
 class Proposal:
     """O que o vendedor faria com a conversa, sem efeito colateral (nada é gravado nem enviado).
@@ -380,18 +506,30 @@ def _handle_conversation(
                         "Posso encaminhar sua necessidade à equipe da FM Tecnologia."
                     )
                 else:
-                    cap = int(suitable["quota"])
-                    pretty_cap = f"{cap:,}".replace(",", ".")
-                    text = (
-                        f"Pelo volume informado, recomendo {suitable['name']}: "
-                        f"{format_brl(suitable['price_cents'])}/mês, com até "
-                        f"{pretty_cap} respostas de IA mensais. "
-                        "Quer conhecer mais detalhes?"
-                    )
+                    text = _demo_recommendation_line(suitable)
+                    if text is None:
+                        _handoff(conn, tenant_id, conv_id, "catalogo_fm_incompleto", notify=False)
+                        return "handoffs"
             enqueue_text(conn, tenant_id, conv_id, "bot", text)
             conn.execute(
                 "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
             )
+            return "replied"
+
+    # A simple affirmative after a plan recommendation must continue commercial
+    # qualification, not force the Gemini model to recite guarded prices or URLs.
+    if demo and len(inbound) == 1:
+        last_bot = conn.execute(
+            "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
+            "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
+            (conv_id,),
+        ).fetchone()
+        details = demo_plan_details_reply(
+            inbound[0]["body"], last_bot["body"] if last_bot else "", offer_rows
+        )
+        if details is not None and len(details) <= 850:
+            enqueue_text(conn, tenant_id, conv_id, "bot", details)
+            conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
             return "replied"
 
     # A definite price/link intent and a unique name can be served from registered
