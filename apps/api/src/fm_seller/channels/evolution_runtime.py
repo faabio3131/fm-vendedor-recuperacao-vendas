@@ -135,7 +135,7 @@ def ingest_evolution(
                 "provider_message_id = %s AND direction = 'out' "
                 "AND status = ANY(%s) AND "
                 "array_position(%s::text[], status) < array_position(%s::text[], %s)",
-                (status, tenant_id, identifier, list(_ORDER), list(_ORDER), status),
+                (status, tenant_id, identifier, list(_ORDER), list(_ORDER), list(_ORDER), status),
             )
             conn.execute(
                 "UPDATE recovery_steps SET delivery_status = %s WHERE tenant_id = %s "
