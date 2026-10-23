@@ -173,12 +173,16 @@ def demo_plan_details_reply(
             else None
         )
         quota = str(offer.get("quota") or "")
-        if recommended and previous_bot in (recommended, earlier_price):
-            matching_previous.append(offer)
-        elif recommended and quota.isdigit() and previous_bot in {
-            _demo_detail_text(offer, kind)
-            for kind in ("overview", "features", "usage", "contract")
-        }:
+        if recommended and (
+            previous_bot in (recommended, earlier_price)
+            or (
+                quota.isdigit()
+                and previous_bot in {
+                    _demo_detail_text(offer, kind)
+                    for kind in ("overview", "features", "usage", "contract")
+                }
+            )
+        ):
             matching_previous.append(offer)
     named = [
         offer for offer in offer_rows
@@ -528,7 +532,9 @@ def _handle_conversation(
         )
         if details is not None and len(details) <= 850:
             enqueue_text(conn, tenant_id, conv_id, "bot", details)
-            conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
             return "replied"
 
     # A definite price/link intent and a unique name can be served from registered
