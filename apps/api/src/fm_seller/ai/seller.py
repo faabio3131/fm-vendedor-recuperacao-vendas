@@ -14,8 +14,10 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fm_seller.ai import usage
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
@@ -70,6 +72,50 @@ def render_reply(reply: AiReply, offers: dict[str, tuple[str, str, str]]) -> str
         values = {"oferta": name, "preco": price, "link": link}
         raw = _PLACEHOLDER.sub(lambda m: values[m.group(1)], raw)
     return raw
+
+
+def catalog_offer_reply(
+    question: str, offer_rows: Sequence[Mapping[str, Any]], *, demo: bool
+) -> str | None:
+    """Zero-model answer only for one unambiguous named, registered offer.
+
+    The customer's text selects intent, never a price or URL. Ambiguous, unsupported
+    or invalid catalogue data falls through to the governed model.
+    """
+    phrase = normalize(question)
+    terms = set(phrase.split())
+    price = bool(terms & {"preco", "precos", "valor", "valores", "custa", "custam"})
+    details = bool(terms & {"link", "pagina", "site"})
+    if not (price or details):
+        return None
+    matched = [
+        offer
+        for offer in offer_rows
+        if isinstance(offer["name"], str)
+        and (name := normalize(offer["name"]))
+        and re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", phrase)
+    ]
+    if len(matched) != 1:
+        return None
+    offer = matched[0]
+    name, cents, url = offer["name"], offer["price_cents"], offer["payment_url"]
+    if not isinstance(cents, int) or isinstance(cents, bool) or cents < 0:
+        return None
+    if price:
+        answer = (
+            f"{name} custa {format_brl(cents)} por mês. Posso explicar os detalhes."
+            if demo
+            else f"{name} custa {format_brl(cents)}. Quer que eu envie o link?"
+        )
+    else:
+        if not isinstance(url, str) or not url.startswith("https://"):
+            return None
+        answer = (
+            f"Detalhes e demonstração de {name}: {url}"
+            if demo
+            else f"Aqui está o link cadastrado para {name}: {url}"
+        )
+    return answer if len(answer) <= (850 if demo else 1000) else None
 
 
 @dataclass(frozen=True)
@@ -233,9 +279,6 @@ def _handle_conversation(
     if settings is None or (not settings["ai_enabled"] and not pilot):
         _handoff(conn, tenant_id, conv_id, "ia_desligada", notify=False)
         return "handoffs"
-    if not model.available:
-        _handoff(conn, tenant_id, conv_id, "ia_indisponivel", notify=False)
-        return "handoffs"
     if any(asks_for_human(r["body"]) for r in inbound):
         _handoff(conn, tenant_id, conv_id, "pediu_atendente", notify=True)
         return "handoffs"
@@ -247,13 +290,6 @@ def _handle_conversation(
     assert recent is not None
     if recent["c"] >= MAX_BOT_REPLIES_PER_HOUR:
         _handoff(conn, tenant_id, conv_id, "limite_de_respostas", notify=False)
-        return "handoffs"
-
-    tz = settings["timezone"]
-    limit = usage.monthly_limit(conn, tenant_id)
-    if limit is None or usage.month_usage(conn, tenant_id, tz)["calls"] >= limit:
-        # Missing/invalid quota is a configuration error, never a free unlimited tier.
-        _handoff(conn, tenant_id, conv_id, "limite_do_plano", notify=True)
         return "handoffs"
 
     # O piloto FM não usa ofertas fictícias nem cria checkout: somente os planos
@@ -308,6 +344,27 @@ def _handle_conversation(
         enqueue_text(conn, tenant_id, conv_id, "bot", text)
         conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
         return "replied"
+    # A definite price/link intent and a unique name can be served from registered
+    # commercial data at zero model tokens. Preserve the regular plan/tenant guards,
+    # opt-out, human handoff and hourly rate limit above this branch.
+    if len(inbound) == 1:
+        cached = catalog_offer_reply(inbound[0]["body"], offer_rows, demo=demo)
+        if cached is not None:
+            enqueue_text(conn, tenant_id, conv_id, "bot", cached)
+            conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
+            return "replied"
+
+    # Only real model calls consume ai_replies_per_month; deterministic replies
+    # remain governed by outbound/trial metering in the canonical outbox.
+    if not model.available:
+        _handoff(conn, tenant_id, conv_id, "ia_indisponivel", notify=False)
+        return "handoffs"
+    tz = settings["timezone"]
+    limit = usage.monthly_limit(conn, tenant_id)
+    if limit is None or usage.month_usage(conn, tenant_id, tz)["calls"] >= limit:
+        _handoff(conn, tenant_id, conv_id, "limite_do_plano", notify=True)
+        return "handoffs"
+
     registry = {
         str(o["id"]): (o["name"], format_brl(o["price_cents"]), o["payment_url"])
         for o in offer_rows
