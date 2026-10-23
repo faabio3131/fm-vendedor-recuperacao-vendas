@@ -75,26 +75,26 @@ class PilotDemoSender(PilotGreetingSender):
             or to_phone != self.phone
             or not body
             or len(body) > 850
-            or re.search(r"\\b(?:pix|chave|pagamento confirmado|assinatura ativada)\\b", body, re.I)
+            or re.search(r"\b(?:pix|chave|pagamento confirmado|assinatura ativada)\b", body, re.I)
         ):
             raise SendError("piloto demo: destino ou conteúdo não autorizado")
         prices = set(config.get("__demo_prices", "").split("|")) - {""}
         quotas = set(config.get("__demo_quotas", "").split("|")) - {""}
         if not prices or not quotas:
             raise SendError("piloto demo: catálogo comercial indisponível")
-        urls = [url.rstrip(".,;!?") for url in re.findall(r"https?://[^\\s<>]+", body, re.I)]
+        urls = [url.rstrip(".,;!?") for url in re.findall(r"https?://[^\s<>]+", body, re.I)]
         if any(url != DEMO_PAGE for url in urls):
             raise SendError("piloto demo: URL fora da landing oficial")
         without_urls = body
         for url in urls:
             without_urls = without_urls.replace(url, "")
-        found_prices = re.findall(r"R\\$\\s*[0-9][0-9.]*,[0-9]{2}", without_urls, re.I)
+        found_prices = re.findall(r"R\$\s*[0-9][0-9.]*,[0-9]{2}", without_urls, re.I)
         approved_prices = {price.replace(" ", "") for price in prices}
         if any(value.replace(" ", "") not in approved_prices for value in found_prices):
             raise SendError("piloto demo: preço divergente do catálogo")
         for price in found_prices:
             without_urls = without_urls.replace(price, "")
-        numbers = re.findall(r"(?<!\\w)[0-9][0-9.]*", without_urls)
+        numbers = re.findall(r"(?<!\w)[0-9][0-9.]*", without_urls)
         if any(number not in quotas for number in numbers):
             raise SendError("piloto demo: número não autorizado")
         return EvolutionSender.send_text(self, config, to_phone, body)
