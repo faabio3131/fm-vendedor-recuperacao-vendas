@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Shell, useMe } from "@/components/Shell";
-import { api, brl, type Connection, type Onboarding, type RecoverySummary } from "@/lib/api";
+import { api, brl, type Connection, type MyPlan, type Onboarding, type RecoverySummary } from "@/lib/api";
 
 const STATUS: Record<Connection["status"], string> = {
   pending: "Aguardando teste",
@@ -17,14 +17,18 @@ function Overview() {
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [recovery, setRecovery] = useState<RecoverySummary | null>(null);
   const [onboarding, setOnboarding] = useState<Onboarding | null>(null);
+  const [assignedPlan, setAssignedPlan] = useState<MyPlan | null>(null);
 
   useEffect(() => {
     api<RecoverySummary>("/v1/recovery/summary").then(setRecovery).catch(() => setRecovery(null));
     api<Onboarding>("/v1/onboarding").then(setOnboarding).catch(() => setOnboarding(null));
     api<Connection[]>("/v1/connections").then(setConnections).catch(() => setConnections([]));
+    api<MyPlan>("/v1/plan").then(setAssignedPlan).catch(() => setAssignedPlan(null));
   }, []);
 
-  const planName = me.plan.key ? me.plan.key.replace("fase-", "Plano ") : "Sem plano";
+  const planName = assignedPlan?.plan?.name ?? (me.plan.key ? `Plano ${me.plan.key}` : "Sem plano");
+  const connected = connections?.filter((c) => c.status === "connected") ?? [];
+  const inactive = connections?.filter((c) => c.status !== "connected") ?? [];
 
   return (
     <>
@@ -70,19 +74,19 @@ function Overview() {
         )}
         <div className="card">
           <div className="muted">Conexões</div>
-          <strong>{connections === null ? "…" : connections.length}</strong>
-          <div className="muted">configuradas</div>
+          <strong>{connections === null ? "…" : connected.length}</strong>
+          <div className="muted">conectadas</div>
         </div>
       </div>
 
       <h2>Conexões</h2>
-      {connections && connections.length === 0 && (
+      {connections && connected.length === 0 && (
         <div className="alert">
           Nenhuma conexão ainda. Comece conectando o WhatsApp em <Link href="/connections">Conexões</Link>.
         </div>
       )}
       <div className="grid">
-        {(connections ?? []).map((c) => (
+        {connected.map((c) => (
           <div className="card" key={c.provider}>
             <strong>{c.provider}</strong>
             <div>
@@ -92,6 +96,20 @@ function Overview() {
           </div>
         ))}
       </div>
+      {inactive.length > 0 && (
+        <details className="card" style={{ marginTop: 12 }}>
+          <summary>Conexões não ativas ({inactive.length}) — histórico e configurações pendentes</summary>
+          <div className="grid" style={{ marginTop: 12 }}>
+            {inactive.map((c) => (
+              <div key={c.provider}>
+                <strong>{c.provider}</strong>{" "}
+                <span className={`badge ${c.status}`}>{STATUS[c.status]}</span>
+                {c.last_error && <p className="muted">{c.last_error}</p>}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </>
   );
 }
