@@ -72,7 +72,7 @@ def flush_outbox(
                 "AND m.author='bot' AND m.tenant_id=%s AND ct.phone=%s "
                 "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
                 "RETURNING id, tenant_id, conversation_id, author, body",
-                (now, sender.pilot_tenant_id, sender.pilot_phone, limit),
+                (now, getattr(sender, "pilot_tenant_id", None), getattr(sender, "pilot_phone", ""), limit),
             ).fetchall()
         else:
             rows = conn.execute(
@@ -123,7 +123,7 @@ def _send_one(
     tenant_id, message_id = row["tenant_id"], row["id"]
     if getattr(senders.get("whatsapp"), "pilot_only", False):
         pilot_sender = senders["whatsapp"]
-        if row["author"] != "bot" or tenant_id != pilot_sender.pilot_tenant_id:
+        if row["author"] != "bot" or tenant_id != getattr(pilot_sender, "pilot_tenant_id", None):
             _finish(db, tenant_id, message_id, "failed", "piloto_nao_autorizado", None)
             return False
     with db.tx(tenant_id=tenant_id) as conn:
@@ -208,7 +208,7 @@ def _send_one(
     if (
         getattr(senders.get("whatsapp"), "pilot_only", False)
         and ctx is not None
-        and recipient != senders["whatsapp"].pilot_phone
+        and recipient != getattr(senders["whatsapp"], "pilot_phone", "")
     ):
         reason = "piloto_nao_autorizado"
     if reason is not None or ctx is None:
