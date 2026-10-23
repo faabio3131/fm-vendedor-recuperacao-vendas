@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -285,3 +286,13 @@ def test_pilot_demo_prompt_explains_assisted_sale_only() -> None:
     assert "não checkout" in prompt
     assert "av-essencial" in prompt
     assert "500 respostas" in prompt
+
+
+def test_contabo_compose_forwards_opt_in_demo_to_api_and_worker() -> None:
+    """The shared compose environment must forward the gated demo flag."""
+    compose = (
+        Path(__file__).resolve().parents[3] / "deploy" / "contabo" / "compose.yml"
+    ).read_text(encoding="utf-8")
+    assert "FM_PILOT_DEMO_ENABLED: ${FM_PILOT_DEMO_ENABLED:-false}" in compose
+    assert "FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}" in compose
+    assert "environment: *app-env" in compose
