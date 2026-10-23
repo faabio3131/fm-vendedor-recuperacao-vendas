@@ -272,7 +272,7 @@ def _cycle(
     cold = detect_cold_conversations(db)
     stats = run_due_steps(db, box, sender)
     audios_first = _voice_step(db, box, settings, model, log)
-    seller = run_ai_replies(db, model)
+    seller = run_ai_replies(db, model, pilot_settings=settings)
     outbox = flush_outbox(db, box, sender, social=social)
     templates = sync_all(db, box, gateway)
     licencas = _license_step(db, box, settings, log)
