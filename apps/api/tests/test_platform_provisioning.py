@@ -128,6 +128,42 @@ def test_unmapped_product_is_kept_and_applied_after_mapping(
     assert plan_of(env, email) == ("fase-1", "active")
 
 
+def test_undecipherable_event_is_quarantined_without_blocking_next_purchase(
+    pclient: TestClient, env: Env, db: Database
+) -> None:
+    bad_email = unique_email("crypto-bad")
+    good_email = unique_email("crypto-good")
+
+    assert pclient.post(
+        "/v1/platform/webhooks/cakto",
+        json=purchase(bad_email, product="missing-crypto-product"),
+    ).json() == {"status": "unmapped_product"}
+    assert pclient.post(
+        "/v1/platform/webhooks/cakto",
+        json=purchase(good_email, product="later-mapped-product"),
+    ).json() == {"status": "unmapped_product"}
+
+    # Simulate an authenticated but now unreadable legacy event: preserve ciphertext
+    # and prevent the broken record from terminating the worker's whole cycle.
+    env.sql(
+        "UPDATE platform_events SET payload_encrypted = %s WHERE buyer_email = %s",
+        (b"\x00", bad_email),
+    )
+    map_product(env.admin_url, "cakto", "later-mapped-product", "fase-1")
+
+    assert reprocess_platform(db, env.box) >= 1
+    assert plan_of(env, good_email) == ("fase-1", "active")
+
+    rows = env.sql(
+        "SELECT outcome, error FROM platform_events WHERE buyer_email = %s",
+        (bad_email,),
+    )
+    assert rows == [("crypto_quarantined", "cryptographic_authentication_failed")]
+    # The failed event must never be promoted to a subscription on repeated cycles.
+    reprocess_platform(db, env.box)
+    assert plan_of(env, bad_email) is None
+
+
 def test_security(pclient: TestClient, env: Env) -> None:
     bad = purchase(unique_email("s"))
     bad["secret"] = "errado"
