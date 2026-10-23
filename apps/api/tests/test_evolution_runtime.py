@@ -262,7 +262,6 @@ def test_evolution_audio_unauthenticated_or_group_is_not_stored(
 
 def test_evolution_voice_media_source_validation() -> None:
     import base64
-    from types import MethodType
 
     instance = "fmav-" + "a" * 32
     msg_id = "voice1"
@@ -271,19 +270,22 @@ def test_evolution_voice_media_source_validation() -> None:
         "key": {"id": msg_id, "remoteJid": jid, "fromMe": False},
         "message": {"audioMessage": {"mimetype": "audio/ogg; codecs=opus"}},
     }
-    client = EvolutionClient(base_url="https://evolution.test", api_key="fake")
-    calls: list[str] = []
+    class FakeMediaClient(EvolutionClient):
+        def __init__(self) -> None:
+            super().__init__(base_url="https://evolution.test", api_key="fake")
+            self.calls: list[str] = []
 
-    def fake_call(
-        self: EvolutionClient, method: str, route: str, *,
-        body: dict[str, Any] | None = None, max_response: int = 256_000
-    ) -> dict[str, Any]:
-        calls.append(route)
-        if "findMessages" in route:
-            return {"messages": {"records": [record]}}
-        return {"base64": base64.b64encode(b"OggS-audio-sintetico").decode()}
+        def _call(
+            self, method: str, route: str, *,
+            body: dict[str, Any] | None = None, max_response: int = 256_000
+        ) -> dict[str, Any]:
+            self.calls.append(route)
+            if "findMessages" in route:
+                return {"messages": {"records": [record]}}
+            return {"base64": base64.b64encode(b"OggS-audio-sintetico").decode()}
 
-    client._call = MethodType(fake_call, client)
+    client = FakeMediaClient()
+    calls = client.calls
     assert client.fetch_voice(instance, msg_id, jid, max_bytes=2_000_000) == (
         b"OggS-audio-sintetico", "audio/ogg"
     )
