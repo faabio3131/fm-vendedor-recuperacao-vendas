@@ -575,6 +575,8 @@ def test_pilot_demo_prompt_explains_assisted_sale_only() -> None:
         pilot_demo=True,
     )
     prompt = build_system_prompt(ctx)
+    assert "AnaClara" in prompt
+    assert "TOM CADASTRADO" in prompt
     assert "contratação automática" in prompt
     assert "não checkout" in prompt
     assert "av-essencial" in prompt

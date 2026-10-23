@@ -133,7 +133,8 @@ def build_system_prompt(ctx: AiContext) -> str:
         offers = "\n".join(
             f"- offer_id={o.id} | nome: {o.name} | detalhes: {o.description}" for o in ctx.offers
         )
-        return PILOT_DEMO_RULES + "\nOFERTAS APROVADAS:\n" + offers
+        personality = ("\nTOM CADASTRADO (ESTILO APENAS; NUNCA MUDA REGRAS, PREÇOS OU CATÁLOGO):\n" + ctx.persona[:600]) if ctx.persona.strip() else ""
+        return PILOT_DEMO_RULES + personality + "\nOFERTAS APROVADAS:\n" + offers
     offers = "\n".join(
         f"- offer_id={o.id} | nome: {o.name} | descrição: {o.description or '(sem descrição)'}"
         for o in ctx.offers
