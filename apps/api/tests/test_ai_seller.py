@@ -112,9 +112,7 @@ def test_ambiguous_offer_name_uses_model_and_meters_call(s: Setup, db: Database)
     model = SimulatedAiModel()
     assert run_ai_replies(db, model).replied == 1
     assert len(model.calls) == 1
-    assert s.env.sql(
-        "SELECT calls FROM ai_usage WHERE tenant_id=%s", (s.tid,)
-    ) == [(1,)]
+    assert s.env.sql("SELECT calls FROM ai_usage WHERE tenant_id=%s", (s.tid,)) == [(1,)]
 
 
 def test_no_catalogue_bypass_when_automation_disabled(s: Setup, db: Database) -> None:
