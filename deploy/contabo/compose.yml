@@ -29,6 +29,8 @@ x-app-env: &app-env
   FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}
   # Single-tenant/single-recipient FM pilot: does not enable production send globally.
   FM_PILOT_GREETING_ENABLED: ${FM_PILOT_GREETING_ENABLED:-false}
+  # Optional single-contact pre-sales demo: never enables global sending.
+  FM_PILOT_DEMO_ENABLED: ${FM_PILOT_DEMO_ENABLED:-false}
   FM_PILOT_GREETING_TENANT_ID: ${FM_PILOT_GREETING_TENANT_ID:-}
   FM_PILOT_GREETING_PHONE: ${FM_PILOT_GREETING_PHONE:-}
   FM_EVOLUTION_API_BASE_URL: ${FM_EVOLUTION_API_BASE_URL:-}
