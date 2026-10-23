@@ -20,7 +20,12 @@ from datetime import UTC, datetime, timedelta
 from fm_seller.ai import usage
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
 from fm_seller.channels.outbound import enqueue_text
-from fm_seller.channels.pilot_greeting import DEMO_PAGE, greeting_only, pilot_contact
+from fm_seller.channels.pilot_greeting import (
+    DEMO_PAGE,
+    demo_plan_listing_requested,
+    greeting_only,
+    pilot_contact,
+)
 from fm_seller.channels.social import identity_of
 from fm_seller.config import Settings
 from fm_seller.db import Conn, Database
@@ -258,7 +263,8 @@ def _handle_conversation(
             "SELECT key AS id, display_name AS name, "
             "('Franquia mensal de ' || (limits->>'ai_replies_per_month') || "
             "' respostas de IA, compartilhada nos canais. Contratação assistida.') AS description, "
-            "price_monthly_cents AS price_cents FROM plans "
+            "price_monthly_cents AS price_cents, "
+            "limits->>'ai_replies_per_month' AS quota FROM plans "
             "WHERE key IN ('av-essencial', 'av-profissional', 'av-escala') "
             "AND active AND price_monthly_cents > 0 ORDER BY phase"
         ).fetchall()
@@ -277,6 +283,31 @@ def _handle_conversation(
     if not offer_rows and not pilot:
         _handoff(conn, tenant_id, conv_id, "sem_ofertas", notify=True)
         return "handoffs"
+    # A model reply has only one offer_id; never ask it to invent a three-plan price table.
+    # This narrow FM pilot answer comes exclusively from the live canonical plan catalogue.
+    if demo and any(demo_plan_listing_requested(r["body"]) for r in inbound):
+        lines = [
+            "Os planos do AtendeVendeIA têm as mesmas funcionalidades. "
+            "O que muda é a franquia mensal:"
+        ]
+        for offer in offer_rows:
+            quota = str(offer["quota"] or "")
+            if not quota.isdigit() or int(quota) <= 0 or not offer["name"]:
+                _handoff(conn, tenant_id, conv_id, "catalogo_fm_incompleto", notify=False)
+                return "handoffs"
+            pretty_quota = f"{int(quota):,}".replace(",", ".")
+            lines.append(
+                f"{offer['name']}: {format_brl(offer['price_cents'])}/mês, "
+                f"{pretty_quota} respostas de IA por mês."
+            )
+        lines.append("Detalhes e demonstração: " + DEMO_PAGE)
+        text = "\n".join(lines)
+        if len(text) > 850:
+            _handoff(conn, tenant_id, conv_id, "catalogo_fm_incompleto", notify=False)
+            return "handoffs"
+        enqueue_text(conn, tenant_id, conv_id, "bot", text)
+        conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
+        return "replied"
     registry = {
         str(o["id"]): (o["name"], format_brl(o["price_cents"]), o["payment_url"])
         for o in offer_rows

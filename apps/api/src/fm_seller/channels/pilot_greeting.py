@@ -35,6 +35,16 @@ def greeting_only(text: str) -> bool:
     return normalize(text.strip()) in GREETINGS
 
 
+def demo_plan_listing_requested(text: str) -> bool:
+    """Recognize explicit requests to list plans; the catalogue supplies every commercial fact."""
+    from fm_seller.recovery.optout import normalize
+
+    words = set(normalize(text).split())
+    return "planos" in words and bool(
+        words & {"valores", "valor", "precos", "preco", "custam", "quanto"}
+    )
+
+
 class PilotGreetingSender(EvolutionSender):
     """Restrict the existing Evolution transport to the sole approved contact/instance."""
 
