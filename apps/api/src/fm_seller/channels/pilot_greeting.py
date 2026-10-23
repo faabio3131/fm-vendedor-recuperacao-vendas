@@ -89,7 +89,8 @@ class PilotDemoSender(PilotGreetingSender):
         for url in urls:
             without_urls = without_urls.replace(url, "")
         found_prices = re.findall(r"R\\$\\s*[0-9][0-9.]*,[0-9]{2}", without_urls, re.I)
-        if any(price.replace(" ", "") not in {p.replace(" ", "") for p in prices} for price in found_prices):
+        approved_prices = {price.replace(" ", "") for price in prices}
+        if any(value.replace(" ", "") not in approved_prices for value in found_prices):
             raise SendError("piloto demo: preço divergente do catálogo")
         for price in found_prices:
             without_urls = without_urls.replace(price, "")
