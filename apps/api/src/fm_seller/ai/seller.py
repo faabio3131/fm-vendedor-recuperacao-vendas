@@ -351,7 +351,9 @@ def _handle_conversation(
         cached = catalog_offer_reply(inbound[0]["body"], offer_rows, demo=demo)
         if cached is not None:
             enqueue_text(conn, tenant_id, conv_id, "bot", cached)
-            conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
             return "replied"
 
     # Only real model calls consume ai_replies_per_month; deterministic replies
