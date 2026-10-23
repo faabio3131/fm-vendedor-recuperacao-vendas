@@ -45,19 +45,23 @@ class EvolutionClient:
                 503, "evolution_not_configured", "Pareamento temporariamente indisponível."
             )
         try:
-            with httpx.Client(
-                timeout=self._timeout, follow_redirects=False, trust_env=False
-            ) as client:
-                with client.stream(
+            with (
+                httpx.Client(
+                    timeout=self._timeout, follow_redirects=False, trust_env=False
+                ) as client,
+                client.stream(
                     method, f"{self._base}{route}", headers={"apikey": self._key}, json=body
-                ) as response:
-                    result = bytearray()
-                    for chunk in response.iter_bytes():
-                        if len(result) + len(chunk) > max_response:
-                            raise AppError(
-                                502, "evolution_response_too_large", "Resposta da Evolution fora do limite."
-                            )
-                        result.extend(chunk)
+                ) as response,
+            ):
+                result = bytearray()
+                for chunk in response.iter_bytes():
+                    if len(result) + len(chunk) > max_response:
+                        raise AppError(
+                            502,
+                            "evolution_response_too_large",
+                            "Resposta da Evolution fora do limite.",
+                        )
+                    result.extend(chunk)
         except httpx.RequestError:
             raise AppError(
                 503, "evolution_unreachable", "Evolution indisponível. Tente novamente."
