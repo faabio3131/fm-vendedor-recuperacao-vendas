@@ -124,8 +124,12 @@ def _handoff(
 
 
 def run_ai_replies(
-    db: Database, model: AiModel, *, now: datetime | None = None, limit: int = 50,
-    pilot_settings: Settings | None = None
+    db: Database,
+    model: AiModel,
+    *,
+    now: datetime | None = None,
+    limit: int = 50,
+    pilot_settings: Settings | None = None,
 ) -> SellerStats:
     now = now or datetime.now(UTC)
     stats = SellerStats()
@@ -140,8 +144,12 @@ def run_ai_replies(
         try:
             with db.tx(tenant_id=row["tenant_id"]) as conn:
                 outcome = _handle_conversation(
-                    conn, model, row["tenant_id"], row["conversation_id"], now,
-                    pilot_settings=pilot_settings
+                    conn,
+                    model,
+                    row["tenant_id"],
+                    row["conversation_id"],
+                    now,
+                    pilot_settings=pilot_settings,
                 )
         except Exception:
             log.exception(
@@ -154,8 +162,13 @@ def run_ai_replies(
 
 
 def _handle_conversation(
-    conn: Conn, model: AiModel, tenant_id: uuid.UUID, conv_id: uuid.UUID, now: datetime,
-    *, pilot_settings: Settings | None = None,
+    conn: Conn,
+    model: AiModel,
+    tenant_id: uuid.UUID,
+    conv_id: uuid.UUID,
+    now: datetime,
+    *,
+    pilot_settings: Settings | None = None,
 ) -> str:
     locked = conn.execute(
         "SELECT cv.status, cv.contact_id, cv.channel, ct.name, ct.phone, cc.external_id "

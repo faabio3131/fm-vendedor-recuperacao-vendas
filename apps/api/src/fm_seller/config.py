@@ -178,7 +178,9 @@ class Settings(BaseSettings):
             or not self.ai_api_key.get_secret_value()
             or not re.fullmatch(r"55[1-9][0-9]{9,11}", self.pilot_greeting_phone)
         ):
-            raise ValueError("Piloto exige produção, Evolution conectável, IA real e envio geral desligado")
+            raise ValueError(
+                "Piloto exige produção, Evolution conectável, IA real e envio geral desligado"
+            )
         try:
             parsed = uuid.UUID(self.pilot_greeting_tenant_id)
         except (ValueError, AttributeError):

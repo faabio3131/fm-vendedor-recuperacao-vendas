@@ -123,10 +123,7 @@ def _send_one(
     tenant_id, message_id = row["tenant_id"], row["id"]
     if getattr(senders.get("whatsapp"), "pilot_only", False):
         pilot_sender = senders["whatsapp"]
-        if (
-            row["author"] != "bot"
-            or tenant_id != pilot_sender.pilot_tenant_id
-        ):
+        if row["author"] != "bot" or tenant_id != pilot_sender.pilot_tenant_id:
             _finish(db, tenant_id, message_id, "failed", "piloto_nao_autorizado", None)
             return False
     with db.tx(tenant_id=tenant_id) as conn:

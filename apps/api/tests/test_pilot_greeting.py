@@ -52,10 +52,17 @@ def test_pilot_sender_restricts_recipient_instance_and_content() -> None:
     tid = uuid.uuid4()
     fake = FakeSendClient()
     sender = PilotGreetingSender(cast(Any, fake), tenant_id=tid, phone=PHONE)
-    cfg = {"__provider": "evolution", "instance_name": "fmav-" + hashlib.sha256(tid.bytes).hexdigest()[:32]}
+    cfg = {
+        "__provider": "evolution",
+        "instance_name": "fmav-" + hashlib.sha256(tid.bytes).hexdigest()[:32],
+    }
     route = RoutedWhatsAppSender(
-        SimulatedSender(), sender, meta_enabled=False, evolution_enabled=True,
-        pilot_tenant_id=tid, pilot_phone=PHONE,
+        SimulatedSender(),
+        sender,
+        meta_enabled=False,
+        evolution_enabled=True,
+        pilot_tenant_id=tid,
+        pilot_phone=PHONE,
     )
     assert route.pilot_only
     assert route.send_text(cfg, PHONE, "Olá, sou a AnaClara!") == "ABC123"
@@ -78,7 +85,8 @@ def test_pilot_can_greet_without_offer_or_global_ai(env: Env, db: Database) -> N
     tid = uuid.UUID(env.tenant("Piloto FM", unique_email("pilot-greet")))
     env.sql(
         "INSERT INTO tenant_settings (tenant_id, ai_enabled, ai_persona) "
-        "VALUES (%s,false,'AnaClara')", (str(tid),),
+        "VALUES (%s,false,'AnaClara')",
+        (str(tid),),
     )
     from fm_seller.channels.whatsapp import upsert_conversation
 
@@ -86,36 +94,38 @@ def test_pilot_can_greet_without_offer_or_global_ai(env: Env, db: Database) -> N
         _, cv = upsert_conversation(conn, tid, PHONE, "Teste")
     env.sql(
         "INSERT INTO messages (tenant_id,conversation_id,direction,author,body,status,handled) "
-        "VALUES (%s,%s,'in','customer','oi','received',false)", (str(tid),cv),
+        "VALUES (%s,%s,'in','customer','oi','received',false)",
+        (str(tid), cv),
     )
     model = SimulatedAiModel(forced=AiReply("Olá, sou a AnaClara!"))
     stats = run_ai_replies(db, model, pilot_settings=_pilot(tid))
     assert stats.replied == 1
     assert model.calls and model.calls[0].offers == ()
-    assert env.sql("SELECT body,status FROM messages WHERE conversation_id=%s AND direction='out'",(cv,)) == [
-        ("Olá, sou a AnaClara!", "queued")
-    ]
-    assert env.sql("SELECT status FROM conversations WHERE id=%s",(cv,)) == [("bot",)]
+    assert env.sql(
+        "SELECT body,status FROM messages WHERE conversation_id=%s AND direction='out'", (cv,)
+    ) == [("Olá, sou a AnaClara!", "queued")]
+    assert env.sql("SELECT status FROM conversations WHERE id=%s", (cv,)) == [("bot",)]
 
 
 def test_nonpilot_stays_disabled_even_when_pilot_enabled(env: Env, db: Database) -> None:
     env.sql("UPDATE messages SET handled=true WHERE direction='in'")
     tid = uuid.UUID(env.tenant("Outro contato", unique_email("pilot-deny")))
-    env.sql("INSERT INTO tenant_settings(tenant_id,ai_enabled) VALUES (%s,false)",(str(tid),))
+    env.sql("INSERT INTO tenant_settings(tenant_id,ai_enabled) VALUES (%s,false)", (str(tid),))
     from fm_seller.channels.whatsapp import upsert_conversation
 
     with db.tx(tenant_id=tid) as conn:
         _, cv = upsert_conversation(conn, tid, PHONE, "Cliente")
     env.sql(
         "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,status,handled) "
-        "VALUES (%s,%s,'in','customer','oi','received',false)",(str(tid),cv),
+        "VALUES (%s,%s,'in','customer','oi','received',false)",
+        (str(tid), cv),
     )
     model = SimulatedAiModel(forced=AiReply("Oi"))
     stats = run_ai_replies(db, model, pilot_settings=_pilot(uuid.uuid4()))
     assert stats.handoffs == 1
     assert model.calls == []
-    assert env.sql("SELECT status,handoff_reason FROM conversations WHERE id=%s",(cv,)) == [
-        ("human","ia_desligada")
+    assert env.sql("SELECT status,handoff_reason FROM conversations WHERE id=%s", (cv,)) == [
+        ("human", "ia_desligada")
     ]
 
 
@@ -128,15 +138,20 @@ def test_outbox_does_not_claim_other_contacts_in_pilot(env: Env, db: Database) -
         _, cv = upsert_conversation(conn, tid, "5511977001100", "Outro")
     env.sql(
         "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,status) "
-        "VALUES (%s,%s,'out','bot','Nao deve sair','queued')",(str(tid),cv),
+        "VALUES (%s,%s,'out','bot','Nao deve sair','queued')",
+        (str(tid), cv),
     )
     fake = FakeSendClient()
     pilot = PilotGreetingSender(cast(Any, fake), tenant_id=tid, phone=PHONE)
     route = RoutedWhatsAppSender(
-        SimulatedSender(), pilot, meta_enabled=False, evolution_enabled=True,
-        pilot_tenant_id=tid, pilot_phone=PHONE,
+        SimulatedSender(),
+        pilot,
+        meta_enabled=False,
+        evolution_enabled=True,
+        pilot_tenant_id=tid,
+        pilot_phone=PHONE,
     )
     stats = flush_outbox(db, SecretBox(SecretBox.generate_key_spec()), route)
     assert stats.claimed == 0
-    assert env.sql("SELECT status FROM messages WHERE conversation_id=%s",(cv,)) == [("queued",)]
+    assert env.sql("SELECT status FROM messages WHERE conversation_id=%s", (cv,)) == [("queued",)]
     assert fake.sent == []
