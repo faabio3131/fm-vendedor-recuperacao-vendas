@@ -58,3 +58,48 @@ class PilotGreetingSender(EvolutionSender):
         ):
             raise SendError("piloto: destinatário, instância ou conteúdo não autorizado")
         return super().send_text(config, to_phone, body)
+
+
+class PilotCommercialSender(PilotGreetingSender):
+    """Authorized *single-offer* sales texts only, never recovery or campaign templates.
+
+    Offer price and checkout URL must be attested by the canonical DB read in
+    the outbox for each individual send. No free-form URL/price is authorized.
+    """
+
+    commercial_enabled = True
+
+    def __init__(
+        self, client: object, *, tenant_id: uuid.UUID, phone: str, offer_id: uuid.UUID,
+        checkout_host: str,
+    ) -> None:
+        super().__init__(client, tenant_id=tenant_id, phone=phone)
+        self.offer_id = offer_id
+        self.checkout_host = checkout_host
+
+    def send_text(self, config: dict[str, str], to_phone: str, body: str) -> str:
+        from urllib.parse import urlsplit
+
+        url = config.get("__pilot_allowed_url", "")
+        price = config.get("__pilot_allowed_price", "")
+        parsed = urlsplit(url)
+        if (
+            config.get("__provider") != "evolution"
+            or config.get("instance_name") != self.instance
+            or to_phone != self.phone
+            or not body
+            or len(body) > 1000
+            or not url
+            or parsed.scheme != "https"
+            or parsed.hostname != self.checkout_host
+            or not price
+            or re.search(r"\\b(?:pix|chave|transfer[eê]ncia)\\b|www\\.", body, re.I)
+        ):
+            raise SendError("piloto comercial: destinatário, checkout ou conteúdo não autorizado")
+        urls = re.findall(r"https?://[^\\s<>]+", body, re.I)
+        if any(found.rstrip(".,;!?") != url for found in urls):
+            raise SendError("piloto comercial: link fora da oferta canônica")
+        values = re.findall(r"r\\$\\s*[0-9][0-9.,]*", body, re.I)
+        if any(v.replace(" ", "") != price.replace(" ", "") for v in values):
+            raise SendError("piloto comercial: preço fora do cadastro")
+        return EvolutionSender.send_text(self, config, to_phone, body)
