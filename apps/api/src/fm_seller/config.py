@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     pilot_greeting_enabled: bool = False
     pilot_greeting_tenant_id: str = ""
     pilot_greeting_phone: str = ""
+    # Segunda etapa do MESMO piloto: uma oferta aprovada, um contato, sem campanhas.
+    pilot_commercial_enabled: bool = False
+    pilot_commercial_offer_id: str = ""
+    pilot_commercial_checkout_host: str = ""
 
     # Captura de eventos reais de checkout para conferir o formato (docs/OPERACAO.md). Desligada por
     # padrão; guarda o corpo cifrado, sem segredos, e apaga sozinha depois do prazo.
@@ -187,6 +191,32 @@ class Settings(BaseSettings):
             raise ValueError("FM_PILOT_GREETING_TENANT_ID inválido") from None
         if parsed.int == 0 or str(parsed) != self.pilot_greeting_tenant_id:
             raise ValueError("FM_PILOT_GREETING_TENANT_ID precisa ser UUID canônico")
+        return self
+
+    @model_validator(mode="after")
+    def _pilot_commercial_gate(self) -> Settings:
+        if not self.pilot_commercial_enabled:
+            return self
+        import uuid
+
+        host = self.pilot_commercial_checkout_host
+        try:
+            offer_id = uuid.UUID(self.pilot_commercial_offer_id)
+        except (ValueError, AttributeError):
+            raise ValueError("FM_PILOT_COMMERCIAL_OFFER_ID inválido") from None
+        if (
+            not self.pilot_greeting_enabled
+            or self.evolution_send_enabled
+            or self.whatsapp_live
+            or offer_id.int == 0
+            or str(offer_id) != self.pilot_commercial_offer_id
+            or not re.fullmatch(r"[a-z0-9][a-z0-9.-]{3,199}", host)
+            or "." not in host
+            or host.startswith(("www.", "-"))
+            or host.endswith((".test", ".example", ".invalid", ".local", ".localhost"))
+            or host in ("localhost", "example.com")
+        ):
+            raise ValueError("Piloto comercial exige oferta UUID, checkout HTTPS autorizado e piloto exclusivo")
         return self
 
     @model_validator(mode="after")
