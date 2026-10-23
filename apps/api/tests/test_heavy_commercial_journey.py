@@ -235,7 +235,10 @@ def test_commercial_pilot_real_db_webhook_to_simulated_provider_and_revocation(
         pilot_phone=PHONE,
     )
     first = flush_outbox(db, env.box, sender)
-    assert (first.sent, first.failed) == (1, 0)
+    assert (first.sent, first.failed) == (1, 0), env.sql(
+        "SELECT status, error FROM messages WHERE tenant_id=%s AND direction='out'",
+        (tenant,),
+    )
     assert fake.sent == [
         {"number": PHONE, "text": "Produto QA custa R$ 197,00. Acesse " + PAYMENT_LINK}
     ]
