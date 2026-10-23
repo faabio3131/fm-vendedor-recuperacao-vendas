@@ -421,14 +421,17 @@ class SellerService:
         if status not in STATUSES:
             raise bad_request("invalid_status", "Status inválido.")
         with self._tx(p) as conn:
-            row = conn.execute(
-                "UPDATE conversations SET status = %s, handoff_reason = CASE WHEN %s = 'bot' "
-                "THEN NULL ELSE handoff_reason END WHERE id = %s RETURNING id",
-                (status, status, conv_id),
+            before = conn.execute(
+                "SELECT status FROM conversations WHERE id = %s FOR UPDATE", (conv_id,)
             ).fetchone()
-            if row is None:
+            if before is None:
                 raise not_found("Conversa não encontrada.")
-            if status == "bot":
+            conn.execute(
+                "UPDATE conversations SET status = %s, handoff_reason = CASE WHEN %s = 'bot' "
+                "THEN NULL ELSE handoff_reason END WHERE id = %s",
+                (status, status, conv_id),
+            )
+            if status == "bot" and before["status"] != "bot":
                 # Handoff may have queued a bot notice while status was human.
                 # Never release stale bot messages when the operator resumes automation.
                 conn.execute(
