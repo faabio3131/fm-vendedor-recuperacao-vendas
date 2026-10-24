@@ -480,8 +480,7 @@ def test_pilot_voice_transcript_with_inbound_messages_volume_qualifies_before_pr
     env.sql("UPDATE messages SET handled=true WHERE direction='in'")
     tid = uuid.UUID(env.tenant("FM voz consultiva", unique_email("pilot-voice-volume")))
     env.sql(
-        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) "
-        "VALUES (%s,false,'AnaClara')",
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) VALUES (%s,false,'AnaClara')",
         (str(tid),),
     )
     with db.tx(tenant_id=tid) as conn:
@@ -506,9 +505,9 @@ def test_pilot_voice_transcript_with_inbound_messages_volume_qualifies_before_pr
     assert "franquia dos planos conta respostas de IA" in sent
     assert "quantas dessas mensagens" in sent
     assert "R$" not in sent
-    assert env.sql(
-        "SELECT status,handoff_reason FROM conversations WHERE id=%s", (conv,)
-    ) == [("bot", None)]
+    assert env.sql("SELECT status,handoff_reason FROM conversations WHERE id=%s", (conv,)) == [
+        ("bot", None)
+    ]
 
     say("Gostaria de 2000 respostas de IA por mês")
     second = run_ai_replies(db, model, pilot_settings=settings)
@@ -520,9 +519,7 @@ def test_pilot_voice_transcript_with_inbound_messages_volume_qualifies_before_pr
     )[0][0]
     assert "Escala" in sent and "R$ 399,90" in sent
     assert env.sql("SELECT status FROM conversations WHERE id=%s", (conv,)) == [("bot",)]
-    assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [
-        (0,)
-    ]
+    assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
 
 
 def test_pilot_advice_qualifies_instead_of_guessing() -> None:
