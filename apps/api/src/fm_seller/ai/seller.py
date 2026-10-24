@@ -330,6 +330,22 @@ def demo_verified_commercial_reply(question: str) -> str | None:
             "por esta conversa. Confira as informações oficiais e o caminho de "
             f"contato comercial em {DEMO_PAGE}. Posso esclarecer mais alguma dúvida?"
         )
+    # O piloto bloqueia mensagens de saída que mencionam certos identificadores
+    # financeiros, inclusive quando o modelo os usa em frases negativas. Responda
+    # perguntas sobre essa modalidade com texto comercial aprovado e compatível
+    # com o mesmo filtro, sem permitir que o LLM improvise dados de cobrança.
+    if "pix" in words or (
+        bool(words & {"pagamento", "pagamentos", "cobranca", "cobrancas", "checkout"})
+        and bool(words & {"como", "funciona", "funcionar", "via", "aceita", "receber"})
+    ):
+        return (
+            "Para pagamentos por transferência instantânea, o AtendeVendeIA "
+            "pode compartilhar o link externo que sua empresa cadastrou na "
+            "oferta, caso o provedor de cobrança ofereça essa modalidade. "
+            "O sistema não cria cobranças, não recebe valores nem confirma "
+            "recebimentos: essas etapas acontecem no provedor externo. "
+            "Quer saber como cadastrar o link na oferta?"
+        )
     payment_question = bool(words & checkout_terms) and bool(
         words & (sales_terms | {"gera", "gerar", "cria", "criar", "receber", "pagar"})
     )
