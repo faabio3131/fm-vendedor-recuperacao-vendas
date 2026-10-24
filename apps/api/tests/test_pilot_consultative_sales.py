@@ -51,6 +51,8 @@ PHONE = "5511944443333"
             "contratação é assistida",
         ),
         ("Vou pagar no PIX", "não geramos cobrança"),
+        ("Como funciona o pagamento via pix?", "transferência instantânea"),
+        ("O pagamento por pix funciona aqui?", "transferência instantânea"),
     ],
 )
 def test_pilot_verified_sales_intents_without_generating_checkout(
@@ -106,6 +108,8 @@ def test_pilot_continues_after_ten_messages_with_real_postgres_and_no_model(
         "Esse software oferece venda pelo WhatsApp, Facebook e Instagram?",
         "Tá bom, vou fechar esse plano, manda o link para mim.",
         "Vou pagar no Pix.",
+        "Como funciona o pagamento via pix?",
+        "Como funciona o pagamento via pix?",
     ]
     for message in questions:
         env.sql(
@@ -132,6 +136,12 @@ def test_pilot_continues_after_ten_messages_with_real_postgres_and_no_model(
     assert "Messenger" in outgoing[2][0]
     assert DEMO_PAGE in outgoing[3][0]
     assert "cobrança" in outgoing[4][0]
+    # Regression from production 19:37 and 19:40: each repeated payment-method
+    # question must enqueue a distinct message that passes the guarded sender.
+    assert "transferência instantânea" in outgoing[5][0]
+    assert "transferência instantânea" in outgoing[6][0]
+    assert outgoing[5][0] == outgoing[6][0]
+    assert all("Pix" not in row[0] and "chave" not in row[0].lower() for row in outgoing[5:])
 
     # Same governed transport: only authorized instance, tenant and contact.
     fake = FakeSendClient()
