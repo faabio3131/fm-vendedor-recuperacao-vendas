@@ -2,8 +2,8 @@
 
 Só roda com `FM_VOICE_TRANSCRIPTION=true`. A mensagem entra já "tratada" (o vendedor IA espera);
 aqui o texto é trocado pela transcrição e a mensagem volta a "não tratada". O áudio nunca é
-guardado nem vai para o log, e a transcrição também não. Se algo falhar (3 tentativas), a mensagem
-volta como "[mensagem do tipo audio]", igual ao comportamento de antes, e o vendedor IA decide.
+guardado nem vai para o log, e a transcrição também não. Após três falhas, o piloto
+restrito orienta o contato a escrever; fora do piloto, preserva o fluxo legado.
 A conferência de pedido de parar (opt-out) acontece depois da transcrição.
 """
 
@@ -29,6 +29,10 @@ log = logging.getLogger("fm_seller.voice")
 MAX_ATTEMPTS = 3
 CLAIM_MINUTES = 2
 FALLBACK_BODY = "[mensagem do tipo audio]"
+AUDIO_UNAVAILABLE_MESSAGE = (
+    "Desculpe, não consegui entender seu áudio agora. "
+    "Por favor, escreva sua mensagem para eu poder ajudar."
+)
 ALLOWED_MIME = ("audio/ogg", "audio/mpeg", "audio/mp4", "audio/aac", "audio/amr", "audio/webm")
 
 
@@ -89,6 +93,7 @@ def _finish(
     text: str | None,
     *,
     evolution_audio: bool = False,
+    pilot_audio: bool = False,
 ) -> str:
     """Grava o resultado. `text` None = falha. Devolve 'done', 'opt_out' ou 'failed'."""
     with db.tx(tenant_id=tenant_id) as conn:
@@ -99,13 +104,22 @@ def _finish(
                     "media_id = NULL WHERE id = %s",
                     ("[áudio não transcrito; equipe necessária]", msg_id),
                 )
-                conn.execute(
-                    "UPDATE conversations SET status = 'human', "
-                    "handoff_reason = 'audio_nao_transcrito' "
-                    "WHERE id = %s AND status = 'bot'",
-                    (conv_id,),
-                )
-                enqueue_text(conn, tenant_id, conv_id, "bot", HANDOFF_MESSAGE)
+                if pilot_audio:
+                    # Pilot stays in text conversation after a failed audio. Never send a
+                    # generic handoff that suggests someone is handling the request.
+                    status = conn.execute(
+                        "SELECT status FROM conversations WHERE id = %s", (conv_id,)
+                    ).fetchone()
+                    if status is not None and status["status"] == "bot":
+                        enqueue_text(conn, tenant_id, conv_id, "bot", AUDIO_UNAVAILABLE_MESSAGE)
+                else:
+                    conn.execute(
+                        "UPDATE conversations SET status = 'human', "
+                        "handoff_reason = 'audio_nao_transcrito' "
+                        "WHERE id = %s AND status = 'bot'",
+                        (conv_id,),
+                    )
+                    enqueue_text(conn, tenant_id, conv_id, "bot", HANDOFF_MESSAGE)
             else:
                 conn.execute(
                     "UPDATE messages SET body = %s, handled = false, media_status = 'failed', "
@@ -224,6 +238,11 @@ def transcribe_pending(
             row["conversation_id"],
             text,
             evolution_audio=str(row["media_id"] or "").startswith("evo:"),
+            pilot_audio=(
+                pilot_tenant_id is not None
+                and row["tenant_id"] == pilot_tenant_id
+                and str(row["media_id"] or "").startswith("evo:")
+            ),
         )
         if outcome == "done":
             stats.transcribed += 1
