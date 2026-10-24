@@ -117,6 +117,9 @@ def ingest_whatsapp(
                     str(c.get("wa_id", "")): str((c.get("profile") or {}).get("name", ""))
                     for c in value.get("contacts", []) or []
                 }
+                pilot_voice = voice and (
+                    not voice_pilot_tenant_id or str(tenant_id) == voice_pilot_tenant_id
+                )
                 for msg in value.get("messages", []) or []:
                     _inbound(
                         conn,
@@ -124,11 +127,7 @@ def ingest_whatsapp(
                         msg,
                         names,
                         counts,
-                        voice
-                        and (
-                            not voice_pilot_tenant_id
-                            or str(tenant_id) == voice_pilot_tenant_id
-                        ),
+                        pilot_voice,
                         voice_pilot_phone=voice_pilot_phone,
                     )
                 for st in value.get("statuses", []) or []:
