@@ -300,8 +300,17 @@ def demo_verified_commercial_reply(question: str) -> str | None:
     words = set(phrase.split())
     checkout_terms = {"link", "links", "pagamento", "pagamentos", "checkout", "pix", "cobranca"}
     sales_terms = {
-        "vende", "vender", "venda", "vendas", "produto", "produtos",
-        "oferta", "ofertas", "atende", "atender", "atendimento",
+        "vende",
+        "vender",
+        "venda",
+        "vendas",
+        "produto",
+        "produtos",
+        "oferta",
+        "ofertas",
+        "atende",
+        "atender",
+        "atendimento",
     }
     channel_terms = {"whatsapp", "facebook", "instagram", "messenger", "canais"}
     buying = (
@@ -328,11 +337,34 @@ def demo_verified_commercial_reply(question: str) -> str | None:
     feature_question = bool(words & (sales_terms | channel_terms)) and bool(
         words
         & {
-            "faz", "fazer", "funciona", "funcionalidade", "funcionalidades",
-            "oferece", "permite", "consegue", "pode", "vai", "gera", "gerar",
-            "vender", "vende", "venda", "vendas", "atende", "atender", "alem",
-            "cadastrados", "cadastrar", "cadastro", "produto", "produtos",
-            "facebook", "instagram", "messenger", "canais",
+            "faz",
+            "fazer",
+            "funciona",
+            "funcionalidade",
+            "funcionalidades",
+            "oferece",
+            "permite",
+            "consegue",
+            "pode",
+            "vai",
+            "gera",
+            "gerar",
+            "vender",
+            "vende",
+            "venda",
+            "vendas",
+            "atende",
+            "atender",
+            "alem",
+            "cadastrados",
+            "cadastrar",
+            "cadastro",
+            "produto",
+            "produtos",
+            "facebook",
+            "instagram",
+            "messenger",
+            "canais",
         }
     )
     if payment_question:
@@ -530,12 +562,14 @@ def _handle_conversation(
     ).fetchone()
     assert recent is not None
     hourly_ceiling = (
-        MAX_PILOT_DEMO_REPLIES_PER_HOUR if (
+        MAX_PILOT_DEMO_REPLIES_PER_HOUR
+        if (
             locked["channel"] == "whatsapp"
             and pilot_contact(pilot_settings, tenant_id, locked["phone"])
             and pilot_settings
             and pilot_settings.pilot_demo_enabled
-        ) else MAX_BOT_REPLIES_PER_HOUR
+        )
+        else MAX_BOT_REPLIES_PER_HOUR
     )
     if recent["c"] >= hourly_ceiling:
         _handoff(conn, tenant_id, conv_id, "limite_de_respostas", notify=False)
