@@ -204,6 +204,91 @@ def test_evolution_audio_visible_with_voice_disabled_and_no_hallucination(
     assert again.json()["duplicates"] == 1
 
 
+
+def test_pilot_unavailable_audio_requests_text_once_without_replying_to_other_contacts(
+    client: TestClient, env: Env
+) -> None:
+    tenant, instance, token = _provision(client, env)
+    cast(Any, client.app).state.settings = cast(Any, client.app).state.settings.model_copy(
+        update={
+            "voice_transcription": False,
+            "pilot_greeting_enabled": True,
+            "pilot_demo_enabled": True,
+            "pilot_greeting_tenant_id": tenant,
+            "pilot_greeting_phone": "5511999991234",
+        }
+    )
+    url = f"/v1/webhooks/evolution/{instance}"
+    raw = _audio_event(instance, "audio-pilot-unavailable")
+    first = client.post(url, content=raw, headers={"x-fm-evolution-auth": token})
+    second = client.post(url, content=raw, headers={"x-fm-evolution-auth": token})
+    assert first.status_code == 200 and first.json()["messages"] == 1
+    assert second.status_code == 200 and second.json()["duplicates"] == 1
+    assert env.sql(
+        "SELECT body,status,author FROM messages WHERE tenant_id=%s AND direction='out'",
+        (tenant,),
+    ) == [(voice.AUDIO_UNAVAILABLE_MESSAGE, "queued", "bot")]
+    other = _audio_event(instance, "audio-other")
+    other = other.replace(b"5511999991234@s.whatsapp.net", b"5511988887777@s.whatsapp.net")
+    assert (
+        client.post(url, content=other, headers={"x-fm-evolution-auth": token}).status_code
+        == 200
+    )
+    assert env.sql(
+        "SELECT count(*) FROM messages WHERE tenant_id=%s AND direction='out'", (tenant,)
+    ) == [(1,)]
+
+
+def test_pilot_failed_audio_after_retries_asks_for_text_without_handoff(
+    client: TestClient, env: Env, db: Any
+) -> None:
+    tenant, instance, token = _provision(client, env)
+    cast(Any, client.app).state.settings = cast(Any, client.app).state.settings.model_copy(
+        update={
+            "voice_transcription": True,
+            "pilot_greeting_enabled": True,
+            "pilot_demo_enabled": True,
+            "pilot_greeting_tenant_id": tenant,
+            "pilot_greeting_phone": "5511999991234",
+        }
+    )
+    url = f"/v1/webhooks/evolution/{instance}"
+    raw = _audio_event(instance, "audio-pilot-failed")
+    assert client.post(url, content=raw, headers={"x-fm-evolution-auth": token}).status_code == 200
+
+    class UnavailableAudio:
+        def fetch_voice(
+            self, name: str, mid: str, jid: str, *, max_bytes: int
+        ) -> tuple[bytes, str]:
+            raise AppError(503, "audio_unavailable", "Áudio não encontrado.")
+
+    for expected in (1, 2, 3):
+        stats = voice.transcribe_pending(
+            db,
+            env.box,
+            FakeTranscriber(),
+            FakeMeta().client(),
+            max_bytes=2_000_000,
+            evolution=cast(Any, UnavailableAudio()),
+            pilot_tenant_id=uuid.UUID(tenant),
+            pilot_phone="5511999991234",
+        )
+        assert stats.retry == (1 if expected < 3 else 0)
+        assert stats.failed == (1 if expected == 3 else 0)
+        env.sql("UPDATE messages SET claimed_at=NULL WHERE tenant_id=%s", (tenant,))
+    assert env.sql(
+        "SELECT body,handled,media_status,media_attempts FROM messages "
+        "WHERE tenant_id=%s AND direction='in'",
+        (tenant,),
+    ) == [("[áudio não transcrito; equipe necessária]", True, "failed", 3)]
+    assert env.sql(
+        "SELECT body,author,status FROM messages WHERE tenant_id=%s AND direction='out'",
+        (tenant,),
+    ) == [(voice.AUDIO_UNAVAILABLE_MESSAGE, "bot", "queued")]
+    assert env.sql(
+        "SELECT status,handoff_reason FROM conversations WHERE tenant_id=%s", (tenant,)
+    ) == [("bot", None)]
+
 def test_evolution_audio_uses_existing_transcription_worker_and_opt_out(
     client: TestClient, env: Env, db: Any
 ) -> None:
