@@ -289,7 +289,6 @@ def _demo_detail_text(offer: Mapping[str, Any], category: str) -> str:
     )
 
 
-
 def demo_verified_commercial_reply(question: str) -> str | None:
     """Answer narrow product/purchase intents from proven capabilities, never from model guesses.
 
