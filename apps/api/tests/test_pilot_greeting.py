@@ -522,6 +522,112 @@ def test_pilot_voice_transcript_with_inbound_messages_volume_qualifies_before_pr
     assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
 
 
+def test_pilot_hello_is_safe_and_does_not_handoff_even_after_an_earlier_turn(
+    env: Env, db: Database
+) -> None:
+    from fm_seller.ai.model import UnavailableAiModel
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    tid = uuid.UUID(env.tenant("FM saudacao real", unique_email("pilot-hello-resume")))
+    env.sql(
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) VALUES (%s,false,'AnaClara')",
+        (str(tid),),
+    )
+    with db.tx(tenant_id=tid) as conn:
+        _, cv = upsert_conversation(conn, tid, PHONE, "Contato autorizado")
+    pilot = _pilot(tid)
+    pilot.pilot_demo_enabled = True
+
+    for hello in ("Olá", "Oi"):
+        env.sql(
+            "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,"
+            "status,handled) VALUES (%s,%s,'in','customer',%s,'received',false)",
+            (str(tid), cv, hello),
+        )
+        stats = run_ai_replies(db, UnavailableAiModel(), pilot_settings=pilot)
+        assert stats.replied == 1 and stats.handoffs == 0
+        assert env.sql("SELECT status,handoff_reason FROM conversations WHERE id=%s", (cv,)) == [
+            ("bot", None)
+        ]
+    assert (
+        env.sql(
+            "SELECT body FROM messages WHERE conversation_id=%s AND direction='out' "
+            "ORDER BY created_at",
+            (cv,),
+        )
+        == [
+            (
+                "Olá! Sou a AnaClara, assistente virtual da FM Tecnologia. "
+                "Como posso ajudar você com o AtendeVendeIA?",
+            )
+        ]
+        * 2
+    )
+    assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
+
+
+def test_pilot_resumes_batched_audio_and_text_after_manual_handoff(env: Env, db: Database) -> None:
+    """Preserve human handoff until manual resume, then answer last qualified request."""
+    from fm_seller.ai.model import UnavailableAiModel
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    tid = uuid.UUID(env.tenant("FM teste em lote", unique_email("pilot-batched-resume")))
+    env.sql(
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) VALUES (%s,false,'AnaClara')",
+        (str(tid),),
+    )
+    with db.tx(tenant_id=tid) as conn:
+        _, cv = upsert_conversation(conn, tid, PHONE, "Contato autorizado")
+    pilot = _pilot(tid)
+    pilot.pilot_demo_enabled = True
+    env.sql(
+        "UPDATE conversations SET status='human',handoff_reason='resposta_invalida' WHERE id=%s",
+        (cv,),
+    )
+
+    incoming = (
+        ("Olá", None),
+        ("Mas ele vai pagar assim, ó?", "done"),
+        ("Recebo 2.000 mensagens por mês. Qual plano você recomenda?", "done"),
+    )
+    for body, media_status in incoming:
+        env.sql(
+            "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,"
+            "status,handled,media_status) "
+            "VALUES (%s,%s,'in','customer',%s,'received',false,%s)",
+            (str(tid), cv, body, media_status),
+        )
+    inactive = run_ai_replies(db, UnavailableAiModel(), pilot_settings=pilot)
+    assert inactive.conversations == 0
+    assert env.sql(
+        "SELECT count(*) FROM messages WHERE conversation_id=%s AND direction='in' AND NOT handled",
+        (cv,),
+    ) == [(3,)]
+    assert env.sql("SELECT status FROM conversations WHERE id=%s", (cv,)) == [("human",)]
+
+    # Equivalent to the existing owner/admin "Devolver ao vendedor IA" action.
+    env.sql("UPDATE conversations SET status='bot',handoff_reason=NULL WHERE id=%s", (cv,))
+    active = run_ai_replies(db, UnavailableAiModel(), pilot_settings=pilot)
+    assert active.replied == 1 and active.handoffs == 0
+    assert env.sql("SELECT status,handoff_reason FROM conversations WHERE id=%s", (cv,)) == [
+        ("bot", None)
+    ]
+    assert env.sql(
+        "SELECT count(*) FROM messages WHERE conversation_id=%s AND direction='in' AND NOT handled",
+        (cv,),
+    ) == [(0,)]
+    outbound = env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out'", (cv,)
+    )
+    assert len(outbound) == 1
+    assert "franquia dos planos conta respostas de IA" in outbound[0][0]
+    assert "quantas dessas mensagens" in outbound[0][0]
+    assert "R$" not in outbound[0][0]
+    assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
+
+
 def test_pilot_advice_qualifies_instead_of_guessing() -> None:
     from fm_seller.channels.pilot_greeting import (
         demo_recommendation_requested,
