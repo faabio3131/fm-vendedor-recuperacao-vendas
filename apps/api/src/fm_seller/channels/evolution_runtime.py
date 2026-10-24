@@ -16,6 +16,8 @@ from typing import Any
 
 from fm_seller.channels.evolution import EvolutionClient
 from fm_seller.channels.inbound import record_inbound
+from fm_seller.channels.outbound import enqueue_text
+from fm_seller.channels.voice import AUDIO_UNAVAILABLE_MESSAGE
 from fm_seller.channels.whatsapp import AUDIO_PLACEHOLDER, load_connection, upsert_conversation
 from fm_seller.config import Settings
 from fm_seller.db import Database
@@ -147,6 +149,7 @@ def ingest_evolution(
                     )
                 )
             )
+            previous_messages = counts["messages"]
             record_inbound(
                 conn,
                 tenant_id,
@@ -172,6 +175,23 @@ def ingest_evolution(
                     "WHERE tenant_id = %s AND provider_message_id = %s AND direction = 'in'",
                     (tenant_id, "evo:" + message_id),
                 )
+                # Only the exact authorized pilot contact gets a text-only notice.
+                # Replay of the same webhook must never enqueue a second notice.
+                if (
+                    counts["messages"] > previous_messages
+                    and settings.pilot_greeting_enabled
+                    and str(tenant_id) == settings.pilot_greeting_tenant_id
+                    and phone == settings.pilot_greeting_phone
+                ):
+                    status = conn.execute(
+                        "SELECT status FROM conversations WHERE id = %s", (conv_id,)
+                    ).fetchone()
+                    suppressed = conn.execute(
+                        "SELECT 1 FROM suppressions WHERE tenant_id = %s AND identity = %s",
+                        (tenant_id, phone),
+                    ).fetchone()
+                    if status is not None and status["status"] == "bot" and not suppressed:
+                        enqueue_text(conn, tenant_id, conv_id, "bot", AUDIO_UNAVAILABLE_MESSAGE)
         else:
             key = data.get("key")
             identifier = (key or {}).get("id") if isinstance(key, dict) else None
