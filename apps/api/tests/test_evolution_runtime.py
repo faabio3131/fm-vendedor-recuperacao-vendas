@@ -391,4 +391,78 @@ def test_evolution_voice_media_source_validation() -> None:
     cast(dict[str, Any], record["key"])["remoteJid"] = "5511988881234@s.whatsapp.net"
     with pytest.raises(AppError):
         client.fetch_voice(instance, msg_id, jid, max_bytes=2_000_000)
-    assert len(calls) == 3
+    assert len(calls) == 4
+
+
+@pytest.mark.parametrize(
+    ("stored_jid", "alternate_jid", "from_me", "duplicates", "accepted"),
+    [
+        ("12345678901234@lid", None, False, False, True),
+        ("12345678901234@lid", "5511999991234@s.whatsapp.net", False, False, True),
+        ("12345678901234@lid", "5511988887777@s.whatsapp.net", False, False, False),
+        ("12345678901234@lid", None, True, False, False),
+        ("12345678901234@lid", None, False, True, False),
+        ("5511988887777@s.whatsapp.net", None, False, False, False),
+        ("garbage@lid", None, False, False, False),
+    ],
+)
+def test_evolution_voice_lid_lookup_is_unique_inbound_and_phone_bound(
+    stored_jid: str,
+    alternate_jid: str | None,
+    from_me: bool,
+    duplicates: bool,
+    accepted: bool,
+) -> None:
+    import base64
+
+    instance = "fmav-" + "a" * 32
+    msg_id = "real-whatsapp-audio-id"
+    jid = "5511999991234@s.whatsapp.net"
+    key: dict[str, Any] = {"id": msg_id, "remoteJid": stored_jid, "fromMe": from_me}
+    if alternate_jid is not None:
+        key["remoteJidAlt"] = alternate_jid
+    record = {
+        "key": key,
+        "message": {"audioMessage": {"mimetype": "audio/ogg; codecs=opus"}},
+    }
+
+    class LidClient(EvolutionClient):
+        def __init__(self) -> None:
+            super().__init__(base_url="https://evolution.test", api_key="fake")
+            self.searches: list[dict[str, Any]] = []
+            self.downloads = 0
+
+        def _call(
+            self,
+            method: str,
+            route: str,
+            *,
+            body: dict[str, Any] | None = None,
+            max_response: int = 256_000,
+        ) -> dict[str, Any]:
+            if "findMessages" in route:
+                assert body is not None
+                self.searches.append(body)
+                # Strict canonical JID is absent from the Evolution LID index.
+                if "remoteJid" in body["where"]["key"]:
+                    return {"messages": []}
+                return {"messages": [record, record] if duplicates else [record]}
+            self.downloads += 1
+            return {"base64": base64.b64encode(b"OggS-audio-sintetico").decode()}
+
+    client = LidClient()
+    if accepted:
+        assert client.fetch_voice(instance, msg_id, jid, max_bytes=2_000_000) == (
+            b"OggS-audio-sintetico",
+            "audio/ogg",
+        )
+        assert client.downloads == 1
+    else:
+        with pytest.raises(AppError) as err:
+            client.fetch_voice(instance, msg_id, jid, max_bytes=2_000_000)
+        assert err.value.code == "audio_lookup_mismatch"
+        assert client.downloads == 0
+    assert client.searches == [
+        {"where": {"key": {"id": msg_id, "remoteJid": jid}}, "page": 1, "offset": 10},
+        {"where": {"key": {"id": msg_id}}, "page": 1, "offset": 10},
+    ]

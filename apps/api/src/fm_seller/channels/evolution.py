@@ -119,7 +119,44 @@ class EvolutionClient:
             and item["key"].get("fromMe") is False
         ]
         if len(matches) != 1:
-            raise AppError(502, "audio_lookup_mismatch", "Áudio não encontrado no contato.")
+            # Baileys/Evolution v2.3.7 may store the same incoming WhatsApp
+            # message under a privacy LID instead of its phone-number JID.
+            # A strict phone-JID query consequently returns zero records.
+            # The caller has already bound this message ID to the authorized
+            # tenant + phone via the authenticated inbound webhook.
+            # Look up the ID only inside that tenant's verified instance, then
+            # fail closed unless there is exactly one incoming record. A
+            # present alternate phone JID must also match the approved phone.
+            by_id = self._call(
+                "POST",
+                f"/chat/findMessages/{name}",
+                body={"where": {"key": {"id": message_id}}, "page": 1, "offset": 10},
+            )
+            candidates = by_id.get("messages", by_id.get("records"))
+            if isinstance(candidates, dict):
+                candidates = candidates.get("records")
+            if not isinstance(candidates, list):
+                raise AppError(502, "audio_lookup_invalid", "Consulta de áudio inválida.")
+            matching_ids = [
+                item
+                for item in candidates
+                if isinstance(item, dict)
+                and isinstance(item.get("key"), dict)
+                and item["key"].get("id") == message_id
+            ]
+            if len(matching_ids) != 1:
+                raise AppError(502, "audio_lookup_mismatch", "Áudio não encontrado no contato.")
+            key = matching_ids[0]["key"]
+            stored_jid = key.get("remoteJid")
+            alternate_jid = key.get("remoteJidAlt")
+            if (
+                key.get("fromMe") is not False
+                or not isinstance(stored_jid, str)
+                or not re.fullmatch(r"[0-9]{1,20}@lid", stored_jid)
+                or (alternate_jid is not None and alternate_jid != remote_jid)
+            ):
+                raise AppError(502, "audio_lookup_mismatch", "Áudio não encontrado no contato.")
+            matches = matching_ids
         message = matches[0]
         payload = message.get("message")
         if not isinstance(payload, dict):
