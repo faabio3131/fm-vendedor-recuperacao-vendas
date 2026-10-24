@@ -119,8 +119,16 @@ def ingest_whatsapp(
                 }
                 for msg in value.get("messages", []) or []:
                     _inbound(
-                        conn, tenant_id, msg, names, counts,
-                        voice and (not voice_pilot_tenant_id or str(tenant_id) == voice_pilot_tenant_id),
+                        conn,
+                        tenant_id,
+                        msg,
+                        names,
+                        counts,
+                        voice
+                        and (
+                            not voice_pilot_tenant_id
+                            or str(tenant_id) == voice_pilot_tenant_id
+                        ),
                         voice_pilot_phone=voice_pilot_phone,
                     )
                 for st in value.get("statuses", []) or []:
@@ -202,7 +210,8 @@ def _inbound(
     contact_id, conv_id = upsert_conversation(
         conn, tenant_id, phone, names.get(str(msg.get("from")), "")
     )
-    media_id = _audio_id(msg) if voice and (not voice_pilot_phone or phone == voice_pilot_phone) else None
+    allowed_voice = voice and (not voice_pilot_phone or phone == voice_pilot_phone)
+    media_id = _audio_id(msg) if allowed_voice else None
     record_inbound(
         conn,
         tenant_id,
