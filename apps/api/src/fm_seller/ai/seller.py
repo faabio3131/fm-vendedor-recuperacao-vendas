@@ -670,6 +670,17 @@ def _handle_conversation(
             )
             return "replied"
 
+    # Verified FM product questions and purchase intent must not be sent to a
+    # generic store-sales prompt. There is no live checkout in this demo.
+    if demo and pilot_question is not None:
+        verified = demo_verified_commercial_reply(pilot_question)
+        if verified is not None and len(verified) <= 850:
+            enqueue_text(conn, tenant_id, conv_id, "bot", verified)
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
+            return "replied"
+
     # A simple affirmative after a plan recommendation must continue commercial
     # qualification, not force the Gemini model to recite guarded prices or URLs.
     if demo and pilot_question is not None:
@@ -683,17 +694,6 @@ def _handle_conversation(
         )
         if details is not None and len(details) <= 850:
             enqueue_text(conn, tenant_id, conv_id, "bot", details)
-            conn.execute(
-                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
-            )
-            return "replied"
-
-    # Verified FM product questions and purchase intent must not be sent to a
-    # generic store-sales prompt. There is no live checkout in this demo.
-    if demo and pilot_question is not None:
-        verified = demo_verified_commercial_reply(pilot_question)
-        if verified is not None and len(verified) <= 850:
-            enqueue_text(conn, tenant_id, conv_id, "bot", verified)
             conn.execute(
                 "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
             )
