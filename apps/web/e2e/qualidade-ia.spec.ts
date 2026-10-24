@@ -27,3 +27,75 @@ test("Vendedor IA: testar conversa sem enviar nada e relatório de transferênci
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflow).toBe(false);
 });
+
+
+test("Conversas: mostra a data e o horário local de cada mensagem", async ({ page }) => {
+  const timestamp = "2026-10-24T17:38:00Z";
+  await page.goto("/login");
+  await page.getByLabel("Login de desenvolvimento (e-mail)").fill(EMAIL);
+  await page.getByRole("button", { name: "Entrar (simulado)" }).click();
+
+  // UI contract fixture only. Delivery and audio are certified separately
+  // using actual WhatsApp/Evolution on the controlled pilot.
+  // Match the complete endpoint family, including same-origin Next rewrites
+  // and optional query strings. No real messages are sent by this UI test.
+  await page.route(/\/v1\/inbox(?:\/|\?|$)/, (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/v1/inbox")) {
+      return route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "conv-time-test",
+            name: "Cliente de teste",
+            phone: "+55 •••• 1234",
+            channel: "whatsapp",
+            status: "bot",
+            handoff_reason: null,
+            preview: "Mensagem de teste",
+            last_message_at: timestamp,
+            window_open: true,
+          },
+        ]),
+      });
+    }
+    if (pathname.endsWith("/v1/inbox/conv-time-test")) {
+      return route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          name: "Cliente de teste",
+          phone: "+55 •••• 1234",
+          channel: "whatsapp",
+          status: "bot",
+          window_open: true,
+          messages: [
+            {
+              id: "message-time-test",
+              direction: "in",
+              author: "customer",
+              body: "Mensagem de teste",
+              status: "received",
+              error: null,
+              created_at: timestamp,
+            },
+          ],
+        }),
+      });
+    }
+    return route.continue();
+  });
+  await page.goto("/inbox");
+  await expect(page.getByRole("heading", { name: "Conversas" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Cliente de teste/ })).toBeVisible();
+  await page.getByRole("button", { name: /Cliente de teste/ }).click();
+  const expected = await page.evaluate(
+    (value) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" })
+      .format(new Date(value)),
+    timestamp,
+  );
+  const times = page.locator("time[datetime]");
+  await expect(times).toHaveCount(2);
+  await expect(times.nth(0)).toHaveText(expected);
+  await expect(times.nth(1)).toHaveText(expected);
+  await expect(times.nth(1)).toHaveAttribute("datetime", timestamp);
+});
