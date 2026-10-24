@@ -517,15 +517,30 @@ def _handle_conversation(
     if demo and len(inbound) == 1:
         question = inbound[0]["body"]
         recommends = demo_recommendation_requested(question)
+        stated_volume = demo_requested_volume(question)
         previous = conn.execute(
             "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
             "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
             (conv_id,),
         ).fetchone()
         answering_volume = bool(previous and previous["body"] == DEMO_VOLUME_QUESTION)
-        if recommends or answering_volume:
+        if recommends or answering_volume or stated_volume is not None:
             volume = demo_requested_volume(question, direct_answer=answering_volume)
-            if volume is None:
+            words = set(normalize(question).split())
+            # Incoming WhatsApp messages are not the same as monthly AI replies.
+            # A prospect volunteering their inbox volume needs one clarification,
+            # not an invented usage estimate or an unsafe LLM price.
+            if (
+                volume is not None
+                and words & {"mensagens", "atendimentos"}
+                and "respostas" not in words
+            ):
+                text = (
+                    "Entendi. A franquia dos planos conta respostas de IA, não "
+                    "mensagens recebidas. Aproximadamente quantas dessas mensagens "
+                    "você gostaria que a IA respondesse por mês?"
+                )
+            elif volume is None:
                 text = DEMO_VOLUME_QUESTION
             else:
                 tiers = sorted(
