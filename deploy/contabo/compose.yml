@@ -21,6 +21,7 @@ x-app-env: &app-env
   FM_PLATFORM_HOTMART_HOTTOK: ${FM_PLATFORM_HOTMART_HOTTOK:-}
   FM_AI_API_KEY: ${FM_AI_API_KEY:-}
   FM_AI_MODEL: ${FM_AI_MODEL:-gemini-3.1-flash-lite}
+  FM_AI_THINKING_LEVEL: ${FM_AI_THINKING_LEVEL:-low}
   # Inbound voice: OFF until explicit pilot activation and real provider validation.
   FM_VOICE_TRANSCRIPTION: ${FM_VOICE_TRANSCRIPTION:-false}
   FM_VOICE_MAX_BYTES: ${FM_VOICE_MAX_BYTES:-2000000}
