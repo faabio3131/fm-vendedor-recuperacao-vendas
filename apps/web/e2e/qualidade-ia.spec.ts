@@ -37,50 +37,56 @@ test("Conversas: mostra a data e o horário local de cada mensagem", async ({ pa
 
   // UI contract fixture only. Delivery and audio are certified separately
   // using actual WhatsApp/Evolution on the controlled pilot.
-  await page.route("**/v1/inbox", (route) =>
-    route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify([
-        {
-          id: "conv-time-test",
+  // Match the complete endpoint family, including same-origin Next rewrites
+  // and optional query strings. No real messages are sent by this UI test.
+  await page.route(/\\/v1\\/inbox(?:\\/|\\?|$)/, (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/v1/inbox")) {
+      return route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "conv-time-test",
+            name: "Cliente de teste",
+            phone: "+55 •••• 1234",
+            channel: "whatsapp",
+            status: "bot",
+            handoff_reason: null,
+            preview: "Mensagem de teste",
+            last_message_at: timestamp,
+            window_open: true,
+          },
+        ]),
+      });
+    }
+    if (pathname.endsWith("/v1/inbox/conv-time-test")) {
+      return route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
           name: "Cliente de teste",
           phone: "+55 •••• 1234",
           channel: "whatsapp",
           status: "bot",
-          handoff_reason: null,
-          preview: "Mensagem de teste",
-          last_message_at: timestamp,
           window_open: true,
-        },
-      ]),
-    }),
-  );
-  await page.route("**/v1/inbox/conv-time-test", (route) =>
-    route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        name: "Cliente de teste",
-        phone: "+55 •••• 1234",
-        channel: "whatsapp",
-        status: "bot",
-        window_open: true,
-        messages: [
-          {
-            id: "message-time-test",
-            direction: "in",
-            author: "customer",
-            body: "Mensagem de teste",
-            status: "received",
-            error: null,
-            created_at: timestamp,
-          },
-        ],
-      }),
-    }),
-  );
-
-  await page.getByRole("navigation", { name: "Principal" })
-    .getByRole("link", { name: "Conversas" }).click();
+          messages: [
+            {
+              id: "message-time-test",
+              direction: "in",
+              author: "customer",
+              body: "Mensagem de teste",
+              status: "received",
+              error: null,
+              created_at: timestamp,
+            },
+          ],
+        }),
+      });
+    }
+    return route.continue();
+  });
+  await page.goto("/inbox");
+  await expect(page.getByRole("heading", { name: "Conversas" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Cliente de teste/ })).toBeVisible();
   await page.getByRole("button", { name: /Cliente de teste/ }).click();
   const expected = await page.evaluate(
     (value) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" })
