@@ -204,7 +204,6 @@ def test_evolution_audio_visible_with_voice_disabled_and_no_hallucination(
     assert again.json()["duplicates"] == 1
 
 
-
 def test_pilot_unavailable_audio_requests_text_once_without_replying_to_other_contacts(
     client: TestClient, env: Env
 ) -> None:
@@ -231,8 +230,7 @@ def test_pilot_unavailable_audio_requests_text_once_without_replying_to_other_co
     other = _audio_event(instance, "audio-other")
     other = other.replace(b"5511999991234@s.whatsapp.net", b"5511988887777@s.whatsapp.net")
     assert (
-        client.post(url, content=other, headers={"x-fm-evolution-auth": token}).status_code
-        == 200
+        client.post(url, content=other, headers={"x-fm-evolution-auth": token}).status_code == 200
     )
     assert env.sql(
         "SELECT count(*) FROM messages WHERE tenant_id=%s AND direction='out'", (tenant,)
@@ -288,6 +286,7 @@ def test_pilot_failed_audio_after_retries_asks_for_text_without_handoff(
     assert env.sql(
         "SELECT status,handoff_reason FROM conversations WHERE tenant_id=%s", (tenant,)
     ) == [("bot", None)]
+
 
 def test_evolution_audio_uses_existing_transcription_worker_and_opt_out(
     client: TestClient, env: Env, db: Any
