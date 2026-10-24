@@ -62,7 +62,7 @@ def test_pilot_verified_sales_intents_without_generating_checkout(
     assert "Pix" not in answer  # explicit pilot sender rejects payment requests
     assert "pagamento confirmado" not in answer
     assert "assinatura ativada" not in answer
-    assert all(url == DEMO_PAGE for url in __import__("re").findall(r"https?://[^\s]+", answer))
+    assert all(url.rstrip(".,;!?") == DEMO_PAGE for url in __import__("re").findall(r"https?://[^\s]+", answer))
 
 
 def test_pilot_sales_guard_is_narrow() -> None:
