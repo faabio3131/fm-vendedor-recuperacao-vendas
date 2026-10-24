@@ -39,7 +39,7 @@ test("Conversas: mostra a data e o horário local de cada mensagem", async ({ pa
   // using actual WhatsApp/Evolution on the controlled pilot.
   // Match the complete endpoint family, including same-origin Next rewrites
   // and optional query strings. No real messages are sent by this UI test.
-  await page.route(/\\/v1\\/inbox(?:\\/|\\?|$)/, (route) => {
+  await page.route(/\/v1\/inbox(?:\/|\?|$)/, (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname.endsWith("/v1/inbox")) {
       return route.fulfill({
