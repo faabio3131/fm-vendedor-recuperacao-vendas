@@ -331,6 +331,12 @@ def _voice_step(
                 if settings.evolution_enabled
                 else None
             ),
+            pilot_tenant_id=(
+                uuid.UUID(settings.pilot_greeting_tenant_id)
+                if settings.pilot_greeting_enabled
+                else None
+            ),
+            pilot_phone=settings.pilot_greeting_phone if settings.pilot_greeting_enabled else "",
         )
         return dict(stats.__dict__)
     except Exception:

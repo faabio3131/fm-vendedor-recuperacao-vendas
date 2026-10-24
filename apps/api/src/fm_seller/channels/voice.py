@@ -144,17 +144,33 @@ def transcribe_pending(
     max_bytes: int,
     evolution: EvolutionClient | None = None,
     limit: int = 10,
+    pilot_tenant_id: uuid.UUID | None = None,
+    pilot_phone: str = "",
 ) -> VoiceStats:
     stats = VoiceStats()
+    # A single static parameterized query enforces pilot scope when configured.
+    # No preexisting or alternate-provider queued audio may bypass this gate.
     with db.tx(system=True) as conn:
         rows = conn.execute(
             "UPDATE messages SET media_attempts = media_attempts + 1, claimed_at = now() "
             "WHERE id IN (SELECT id FROM messages WHERE media_status = 'pending' "
             "AND media_attempts < %s AND (claimed_at IS NULL OR claimed_at < "
-            "now() - make_interval(mins => %s)) ORDER BY created_at LIMIT %s "
-            "FOR UPDATE SKIP LOCKED) "
+            "now() - make_interval(mins => %s)) "
+            "AND (%s::uuid IS NULL OR (tenant_id = %s::uuid AND EXISTS ("
+            "SELECT 1 FROM conversations cv JOIN contacts ct ON ct.id = cv.contact_id "
+            "WHERE cv.id = messages.conversation_id "
+            "AND cv.tenant_id = messages.tenant_id "
+            "AND ct.tenant_id = messages.tenant_id AND ct.phone = %s))) "
+            "ORDER BY created_at LIMIT %s FOR UPDATE SKIP LOCKED) "
             "RETURNING id, tenant_id, conversation_id, media_id, media_attempts",
-            (MAX_ATTEMPTS, CLAIM_MINUTES, limit),
+            (
+                MAX_ATTEMPTS,
+                CLAIM_MINUTES,
+                pilot_tenant_id,
+                pilot_tenant_id,
+                pilot_phone,
+                limit,
+            ),
         ).fetchall()
     for row in rows:
         text: str | None = None
