@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import base64
 import json
+import uuid
 from collections.abc import Iterator
 from typing import Any, cast
-import uuid
 
 import httpx
 import pytest
