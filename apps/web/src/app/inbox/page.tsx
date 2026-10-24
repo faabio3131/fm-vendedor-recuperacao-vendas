@@ -63,7 +63,13 @@ function Detail({ id, onChange }: { id: string; onChange: () => void }) {
   const load = useCallback(() => {
     api<ConversationDetail>(`/v1/inbox/${id}`).then(setD).catch((e: unknown) => setError(e instanceof Error ? e.message : "Erro."));
   }, [id]);
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [load]);
 
   const act = async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -150,9 +156,15 @@ function Inbox() {
   const [rows, setRows] = useState<ConversationRow[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const load = useCallback(() => {
-    api<ConversationRow[]>("/v1/inbox").then(setRows).catch(() => setRows([]));
+    api<ConversationRow[]>("/v1/inbox").then(setRows).catch(() => setRows((current) => current ?? []));
   }, []);
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [load]);
   return (
     <>
       <h1>Conversas</h1>
