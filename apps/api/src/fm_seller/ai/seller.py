@@ -41,6 +41,9 @@ from fm_seller.recovery.optout import normalize
 
 log = logging.getLogger("fm_seller.seller")
 MAX_BOT_REPLIES_PER_HOUR = 10
+# Only the single tenant/contact authorized for the FM pilot gets a longer consultative
+# exchange. General SaaS tenants retain the original strict anti-abuse ceiling.
+MAX_PILOT_DEMO_REPLIES_PER_HOUR = 40
 HISTORY = 10
 _HUMAN = ("atendente", "humano", "pessoa", "falar com alguem", "gerente", "responsavel")
 _FORBIDDEN = re.compile(r"https?://|www\.|r\$|\breais\b|\bpix\b.*\bchave\b", re.IGNORECASE)
@@ -286,6 +289,73 @@ def _demo_detail_text(offer: Mapping[str, Any], category: str) -> str:
     )
 
 
+
+def demo_verified_commercial_reply(question: str) -> str | None:
+    """Answer narrow product/purchase intents from proven capabilities, never from model guesses.
+
+    This is available only inside the authenticated single-contact FM demo path,
+    after tenant, opt-out, subscription, trial, and reply-rate checks.
+    """
+    phrase = normalize(question)
+    words = set(phrase.split())
+    checkout_terms = {"link", "links", "pagamento", "pagamentos", "checkout", "pix", "cobranca"}
+    sales_terms = {
+        "vende", "vender", "venda", "vendas", "produto", "produtos",
+        "oferta", "ofertas", "atende", "atender", "atendimento",
+    }
+    channel_terms = {"whatsapp", "facebook", "instagram", "messenger", "canais"}
+    buying = (
+        "vou fechar" in phrase
+        or "quero fechar" in phrase
+        or "quero contratar" in phrase
+        or "quero assinar" in phrase
+        or "vou pagar" in phrase
+        or (
+            bool(words & {"manda", "mande", "envia", "enviar", "passe", "passa"})
+            and bool(words & {"link", "checkout"})
+        )
+    )
+    if buying:
+        return (
+            "Entendi que você quer contratar o AtendeVendeIA! Nesta demonstração, "
+            "a contratação é assistida: não geramos cobrança nem ativamos assinatura "
+            "por esta conversa. Confira as informações oficiais e o caminho de "
+            f"contato comercial em {DEMO_PAGE}. Posso esclarecer mais alguma dúvida?"
+        )
+    payment_question = bool(words & checkout_terms) and bool(
+        words & (sales_terms | {"gera", "gerar", "cria", "criar", "receber", "pagar"})
+    )
+    feature_question = bool(words & (sales_terms | channel_terms)) and bool(
+        words
+        & {
+            "faz", "fazer", "funciona", "funcionalidade", "funcionalidades",
+            "oferece", "permite", "consegue", "pode", "vai", "gera", "gerar",
+            "vender", "vende", "venda", "vendas", "atende", "atender", "alem",
+            "cadastrados", "cadastrar", "cadastro", "produto", "produtos",
+            "facebook", "instagram", "messenger", "canais",
+        }
+    )
+    if payment_question:
+        return (
+            "Sim. O AtendeVendeIA pode atender clientes, apresentar ofertas "
+            "cadastradas e compartilhar links de pagamento que a empresa "
+            "configurou previamente. Não cria links de cobrança, não processa "
+            "pagamentos e não confirma vendas sozinho. O atendimento por "
+            "WhatsApp, Messenger e Instagram depende das conexões habilitadas. "
+            "Quer saber como cadastrar suas ofertas?"
+        )
+    if feature_question:
+        return (
+            "O AtendeVendeIA atende dúvidas e ajuda a vender apresentando "
+            "produtos e ofertas cadastrados, inclusive compartilhando um link "
+            "externo previamente configurado. Também oferece Conversas, "
+            "Recuperação e Relatórios. WhatsApp, Messenger do Facebook e "
+            "Instagram dependem de conexão e configuração; ele não gera "
+            "checkout nem realiza cobrança. Quer conhecer o fluxo de venda?"
+        )
+    return None
+
+
 @dataclass(frozen=True)
 class Proposal:
     """O que o vendedor faria com a conversa, sem efeito colateral (nada é gravado nem enviado).
@@ -455,11 +525,19 @@ def _handle_conversation(
         return "handoffs"
     recent = conn.execute(
         "SELECT count(*) AS c FROM messages WHERE conversation_id = %s AND direction = 'out' "
-        "AND author = 'bot' AND created_at > %s",
+        "AND author = 'bot' AND status <> 'failed' AND created_at > %s",
         (conv_id, now - timedelta(hours=1)),
     ).fetchone()
     assert recent is not None
-    if recent["c"] >= MAX_BOT_REPLIES_PER_HOUR:
+    hourly_ceiling = (
+        MAX_PILOT_DEMO_REPLIES_PER_HOUR if (
+            locked["channel"] == "whatsapp"
+            and pilot_contact(pilot_settings, tenant_id, locked["phone"])
+            and pilot_settings
+            and pilot_settings.pilot_demo_enabled
+        ) else MAX_BOT_REPLIES_PER_HOUR
+    )
+    if recent["c"] >= hourly_ceiling:
         _handoff(conn, tenant_id, conv_id, "limite_de_respostas", notify=False)
         return "handoffs"
 
@@ -605,6 +683,17 @@ def _handle_conversation(
         )
         if details is not None and len(details) <= 850:
             enqueue_text(conn, tenant_id, conv_id, "bot", details)
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
+            return "replied"
+
+    # Verified FM product questions and purchase intent must not be sent to a
+    # generic store-sales prompt. There is no live checkout in this demo.
+    if demo and pilot_question is not None:
+        verified = demo_verified_commercial_reply(pilot_question)
+        if verified is not None and len(verified) <= 850:
+            enqueue_text(conn, tenant_id, conv_id, "bot", verified)
             conn.execute(
                 "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
             )
