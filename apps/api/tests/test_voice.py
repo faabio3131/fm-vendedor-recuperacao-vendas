@@ -327,7 +327,9 @@ def test_worker_step_is_off_by_default(env: Env, db: Database) -> None:
     # modelo sem `transcribe` (IA indisponível): nada a fazer
     assert cli._voice_step(db, env.box, on, object(), logging.getLogger("t")) == {}  # type: ignore[arg-type]
 
+
 # ------------------------------------------------------------------ isolamento de piloto
+
 
 def test_pilot_meta_voice_ingress_requires_exact_tenant_and_phone(
     wa_on: tuple[TestClient, str, str], env: Env
@@ -377,15 +379,25 @@ def test_pilot_worker_does_not_claim_unapproved_queued_audio(
     with db.tx(tenant_id=unrelated_id) as conn:
         contact, conversation = upsert_conversation(conn, unrelated_id, PHONE, "Outro")
         record_inbound(
-            conn, unrelated_id, contact_id=contact, conv_id=conversation,
-            identity=PHONE, text=voice.FALLBACK_BODY,
-            message_id="wamid.queue.other-tenant", counts={"messages": 0, "duplicates": 0},
+            conn,
+            unrelated_id,
+            contact_id=contact,
+            conv_id=conversation,
+            identity=PHONE,
+            text=voice.FALLBACK_BODY,
+            message_id="wamid.queue.other-tenant",
+            counts={"messages": 0, "duplicates": 0},
             media_id="media-1",
         )
     transcriber = FakeTranscriber()
     result = voice.transcribe_pending(
-        db, env.box, transcriber, FakeMeta().client(),
-        max_bytes=2_000_000, pilot_tenant_id=uuid.UUID(tid), pilot_phone=PHONE,
+        db,
+        env.box,
+        transcriber,
+        FakeMeta().client(),
+        max_bytes=2_000_000,
+        pilot_tenant_id=uuid.UUID(tid),
+        pilot_phone=PHONE,
     )
     assert result.transcribed == 1
     assert transcriber.calls == 1
