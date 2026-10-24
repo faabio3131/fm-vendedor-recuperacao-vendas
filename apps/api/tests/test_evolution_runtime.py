@@ -444,8 +444,9 @@ def test_evolution_voice_lid_lookup_is_unique_inbound_and_phone_bound(
                 assert body is not None
                 self.searches.append(body)
                 # Strict canonical JID is absent from the Evolution LID index.
-                return {"messages": [] if "remoteJid" in body["where"]["key"] else
-                        [record, record] if duplicates else [record]}
+                if "remoteJid" in body["where"]["key"]:
+                    return {"messages": []}
+                return {"messages": [record, record] if duplicates else [record]}
             self.downloads += 1
             return {"base64": base64.b64encode(b"OggS-audio-sintetico").decode()}
 
