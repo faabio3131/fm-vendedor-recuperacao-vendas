@@ -405,9 +405,12 @@ def _handle_conversation(
     )
     inbound = conn.execute(
         "UPDATE messages SET handled = true WHERE conversation_id = %s AND direction = 'in' "
-        "AND NOT handled RETURNING body",
+        "AND NOT handled RETURNING id, body, created_at",
         (conv_id,),
     ).fetchall()
+    # SQL UPDATE ... RETURNING has no row-order guarantee. The latest customer
+    # request determines the reply when several incoming messages accumulated.
+    inbound.sort(key=lambda row: (row["created_at"], str(row["id"])))
     if not inbound:
         return "ignored"
     pilot = locked["channel"] == "whatsapp" and pilot_contact(
@@ -487,9 +490,26 @@ def _handle_conversation(
     if not offer_rows and not pilot:
         _handoff(conn, tenant_id, conv_id, "sem_ofertas", notify=True)
         return "handoffs"
+    # Authorized pilot only: a greeting must never depend on a free-form model
+    # response, and recent inbound messages can be batched after manual resume.
+    # Use the latest question without discarding the preceding messages from
+    # the model history or relaxing opt-out/human/tenant checks above.
+    pilot_question = inbound[-1]["body"] if demo else None
+    if demo and pilot_question is not None and greeting_only(pilot_question):
+        enqueue_text(
+            conn,
+            tenant_id,
+            conv_id,
+            "bot",
+            "Olá! Sou a AnaClara, assistente virtual da FM Tecnologia. "
+            "Como posso ajudar você com o AtendeVendeIA?",
+        )
+        conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
+        return "replied"
+
     # A model reply has only one offer_id; never ask it to invent a three-plan price table.
     # This narrow FM pilot answer comes exclusively from the live canonical plan catalogue.
-    if demo and any(demo_plan_listing_requested(r["body"]) for r in inbound):
+    if demo and pilot_question is not None and demo_plan_listing_requested(pilot_question):
         lines = [
             "Os planos do AtendeVendeIA têm as mesmas funcionalidades. "
             "O que muda é a franquia mensal:"
@@ -514,8 +534,8 @@ def _handle_conversation(
         return "replied"
     # Small, deterministic qualification: don't hand off when the contact asks for
     # advice without first supplying the monthly usage needed to choose a tier.
-    if demo and len(inbound) == 1:
-        question = inbound[0]["body"]
+    if demo and pilot_question is not None:
+        question = pilot_question
         recommends = demo_recommendation_requested(question)
         stated_volume = demo_requested_volume(question)
         previous = conn.execute(
@@ -574,14 +594,14 @@ def _handle_conversation(
 
     # A simple affirmative after a plan recommendation must continue commercial
     # qualification, not force the Gemini model to recite guarded prices or URLs.
-    if demo and len(inbound) == 1:
+    if demo and pilot_question is not None:
         last_bot = conn.execute(
             "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
             "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
             (conv_id,),
         ).fetchone()
         details = demo_plan_details_reply(
-            inbound[0]["body"], last_bot["body"] if last_bot else "", offer_rows
+            pilot_question, last_bot["body"] if last_bot else "", offer_rows
         )
         if details is not None and len(details) <= 850:
             enqueue_text(conn, tenant_id, conv_id, "bot", details)
@@ -593,8 +613,12 @@ def _handle_conversation(
     # A definite price/link intent and a unique name can be served from registered
     # commercial data at zero model tokens. Preserve the regular plan/tenant guards,
     # opt-out, human handoff and hourly rate limit above this branch.
-    if len(inbound) == 1:
-        cached = catalog_offer_reply(inbound[0]["body"], offer_rows, demo=demo)
+    if len(inbound) == 1 or demo:
+        cached = catalog_offer_reply(
+            pilot_question if pilot_question is not None else inbound[0]["body"],
+            offer_rows,
+            demo=demo,
+        )
         if cached is not None:
             enqueue_text(conn, tenant_id, conv_id, "bot", cached)
             conn.execute(
