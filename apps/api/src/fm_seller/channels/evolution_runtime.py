@@ -183,14 +183,18 @@ def ingest_evolution(
                     and str(tenant_id) == settings.pilot_greeting_tenant_id
                     and phone == settings.pilot_greeting_phone
                 ):
-                    status = conn.execute(
+                    conversation_state = conn.execute(
                         "SELECT status FROM conversations WHERE id = %s", (conv_id,)
                     ).fetchone()
                     suppressed = conn.execute(
                         "SELECT 1 FROM suppressions WHERE tenant_id = %s AND identity = %s",
                         (tenant_id, phone),
                     ).fetchone()
-                    if status is not None and status["status"] == "bot" and not suppressed:
+                    if (
+                        conversation_state is not None
+                        and conversation_state["status"] == "bot"
+                        and not suppressed
+                    ):
                         enqueue_text(conn, tenant_id, conv_id, "bot", AUDIO_UNAVAILABLE_MESSAGE)
         else:
             key = data.get("key")
