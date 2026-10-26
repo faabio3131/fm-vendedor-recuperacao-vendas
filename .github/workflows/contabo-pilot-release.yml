@@ -1,6 +1,11 @@
 name: Contabo pilot release (governed)
 
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   pull_request:
     paths:
       - ".github/workflows/contabo-pilot-release.yml"
@@ -10,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "Somente inspect ou deploy (deploy requer duas aprovações explícitas)"
+        description: "inspect ou deploy (push na main faz deploy automático; autorização = sim do Fábio no chat antes do merge)"
         required: true
         type: choice
         options: [inspect, deploy]
@@ -18,18 +23,6 @@ on:
         description: "SHA de 40 caracteres, HEAD certificado da main"
         required: true
         type: string
-      confirmation:
-        description: "Digite FM-ATENDEVENDEIA- seguido do SHA completo"
-        required: true
-        type: string
-      approve_migrations:
-        description: "Autorização específica para aplicar migrations no banco real"
-        type: boolean
-        default: false
-      approve_deploy:
-        description: "Autorização específica para atualizar Web/API/Worker"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -68,7 +61,7 @@ jobs:
           PY
 
   release:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request'
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -77,46 +70,44 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Confirm FM operator, exact main SHA and approvals
+      - name: Confirm exact main SHA and kill switch
         env:
-          TARGET_SHA: ${{ inputs.target_sha }}
-          CONFIRMATION: ${{ inputs.confirmation }}
-          OPERATION: ${{ inputs.operation }}
-          APPROVE_MIGRATIONS: ${{ inputs.approve_migrations }}
-          APPROVE_DEPLOY: ${{ inputs.approve_deploy }}
+          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
           FM_DEPLOY_ENABLED: ${{ secrets.CONTABO_DEPLOY_ENABLED }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "::error::Only main may be released"; exit 1; }
-          [[ "$GITHUB_ACTOR" == "faabio3131" ]] || { echo "::error::Director account required"; exit 1; }
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid SHA"; exit 1; }
           [[ "$(git rev-parse HEAD)" == "$TARGET_SHA" ]] || { echo "::error::SHA is not current main"; exit 1; }
-          [[ "$CONFIRMATION" == "FM-ATENDEVENDEIA-$TARGET_SHA" ]] || { echo "::error::Confirmation mismatch"; exit 1; }
           [[ "$FM_DEPLOY_ENABLED" == "FM-PILOTO-ATIVO" ]] || { echo "::error::Protected environment not enabled"; exit 1; }
-          if [[ "$OPERATION" == "deploy" ]]; then
-            [[ "$APPROVE_MIGRATIONS" == "true" && "$APPROVE_DEPLOY" == "true" ]] || {
-              echo "::error::Explicit migration AND deployment approvals are required"; exit 1;
-            }
-          fi
 
       - name: Verify CI gates for the exact commit
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: ${{ inputs.target_sha }}
+          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh api --paginate "repos/$GH_REPO/commits/$TARGET_SHA/check-runs?per_page=100" \
-            --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv' > "$RUNNER_TEMP/ci_checks"
-          for name in api web e2e "Cloudflare Pages"; do
-            awk -F '\t' -v n="$name" '$1 == n && $2 == "completed" && $3 == "success" { found=1 } END { exit !found }' \
-              "$RUNNER_TEMP/ci_checks" || { echo "::error::Missing successful CI gate: $name"; exit 1; }
+          for attempt in $(seq 1 80); do
+            gh api --paginate "repos/$GH_REPO/commits/$TARGET_SHA/check-runs?per_page=100" \
+              --jq '.check_runs[] | [.name,.status,.conclusion] | @tsv' > "$RUNNER_TEMP/ci_checks"
+            missing=""
+            for name in api web e2e "Cloudflare Pages"; do
+              if awk -F '\t' -v n="$name" '$1 == n && $2 == "completed" && $3 != "success" { bad=1 } END { exit !bad }' "$RUNNER_TEMP/ci_checks"; then
+                echo "::error::CI gate failed: $name"; exit 1
+              fi
+              awk -F '\t' -v n="$name" '$1 == n && $2 == "completed" && $3 == "success" { found=1 } END { exit !found }' \
+                "$RUNNER_TEMP/ci_checks" || missing="$missing $name"
+            done
+            [[ -z "$missing" ]] && { echo "All CI gates green"; exit 0; }
+            echo "Waiting for CI gates:$missing"; sleep 30
           done
+          echo "::error::Timed out waiting for CI gates"; exit 1
 
       - name: Prepare immutable commit archive
-        if: inputs.operation == 'deploy'
+        if: (github.event_name == 'push' || inputs.operation == 'deploy')
         env:
-          TARGET_SHA: ${{ inputs.target_sha }}
+          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
         run: |
           set -euo pipefail
           git archive --format=tar HEAD | gzip -n > "$RUNNER_TEMP/source.tar.gz"
@@ -146,7 +137,7 @@ jobs:
           }
 
       - name: Inspect live installation (read only)
-        if: inputs.operation == 'inspect'
+        if: (github.event_name != 'push' && inputs.operation == 'inspect')
         env:
           DEPLOY_HOST: ${{ vars.CONTABO_DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.CONTABO_DEPLOY_USER }}
@@ -158,11 +149,11 @@ jobs:
             "sudo -n /usr/local/sbin/fm-contabo-deploy inspect"
 
       - name: Stage checked SHA and publish only after backup/restore
-        if: inputs.operation == 'deploy'
+        if: (github.event_name == 'push' || inputs.operation == 'deploy')
         env:
           DEPLOY_HOST: ${{ vars.CONTABO_DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.CONTABO_DEPLOY_USER }}
-          TARGET_SHA: ${{ inputs.target_sha }}
+          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
         run: |
           set -euo pipefail
           remote="$DEPLOY_USER@$DEPLOY_HOST"
