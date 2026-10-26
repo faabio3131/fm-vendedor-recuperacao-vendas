@@ -167,7 +167,7 @@ def test_outbox_does_not_claim_other_contacts_in_pilot(env: Env, db: Database) -
 
 def test_pilot_gemini_prompt_removes_selling_instructions() -> None:
     ctx = AiContext(
-        persona="Ana Clara, assistente virtual da FM Tecnologia",
+        persona="Ana Clara, assistente virtual da FM Tecnologia IA",
         customer_name="",
         offers=(),
         history=(("customer", "oi"),),
@@ -558,7 +558,7 @@ def test_pilot_hello_is_safe_and_does_not_handoff_even_after_an_earlier_turn(
         )
         == [
             (
-                "Olá! Sou a AnaClara, assistente virtual da FM Tecnologia. "
+                "Olá! Sou a AnaClara, assistente virtual da FM Tecnologia IA. "
                 "Como posso ajudar você com o AtendeVendeIA?",
             )
         ]

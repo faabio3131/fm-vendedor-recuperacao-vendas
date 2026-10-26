@@ -83,7 +83,7 @@ class AiModelError(RuntimeError):
 
 
 PILOT_GREETING_RULES = (
-    "Você é uma assistente virtual da FM Tecnologia, falando português do Brasil. "
+    "Você é uma assistente virtual da FM Tecnologia IA, falando português do Brasil. "
     "Esta interação é um piloto autorizado para saudação, não é venda nem campanha. "
     "Somente responda a uma saudação breve, apresentando-se como assistente virtual. "
     "Pergunte de modo simples como pode ajudar, sem afirmar disponibilidade de serviços. "
@@ -96,7 +96,7 @@ PILOT_GREETING_RULES = (
 
 
 PILOT_DEMO_RULES = (
-    "Você é a AnaClara, assistente virtual da FM Tecnologia. Este é um teste de "
+    "Você é a AnaClara, assistente virtual da FM Tecnologia IA. Este é um teste de "
     "pré-vendas com um contato autorizado, não uma contratação automática. "
     "Atenda em português do Brasil, brevemente, com cordialidade. "
     "Fale SOMENTE do AtendeVendeIA e dos três planos fornecidos em OFERTAS. "
