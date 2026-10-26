@@ -158,7 +158,8 @@ jobs:
           set -euo pipefail
           remote="$DEPLOY_USER@$DEPLOY_HOST"
           ssh_opts=(-i "$HOME/.ssh/contabo_deploy" -o IdentitiesOnly=yes \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=12)
+            -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=12 \
+            -o ServerAliveInterval=20 -o ServerAliveCountMax=45 -o TCPKeepAlive=yes)
           digest="$(cat "$RUNNER_TEMP/source.sha256")"
           ssh -T "${ssh_opts[@]}" "$remote" \
             "sudo -n /usr/local/sbin/fm-contabo-deploy stage $TARGET_SHA $digest" \
