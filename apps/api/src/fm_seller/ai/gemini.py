@@ -35,7 +35,7 @@ log = logging.getLogger("fm_seller.ai")
 DEFAULT_MODEL = "gemini-3.8-flash"
 DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 RETRY_STATUS = {429, 500, 502, 503, 504}
-MAX_OUTPUT_TOKENS = 1024  # folga: pode incluir raciocínio. O tamanho da resposta vem do prompt
+MAX_OUTPUT_TOKENS = 4096  # teto, não consumo: os modelos 3.5 gastam ~1000 tokens pensando mesmo em "low"; com 1024 a resposta era cortada (MAX_TOKENS) e ia para uma pessoa. O tamanho da resposta vem do prompt
 
 SYSTEM_RULES = (
     "Você é o assistente virtual de vendas de uma loja, atendendo clientes pelo WhatsApp em "
