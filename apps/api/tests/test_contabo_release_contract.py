@@ -29,7 +29,7 @@ def test_release_script_is_valid_bash_and_requires_two_independent_approvals() -
     assert "pg_restore -U fm_owner --exit-on-error" in text
     assert "Destructive SQL in pending migration" in text
     assert '"$latest" == "$target"' in text
-    assert "0017_commercial_quotas_60pct.sql\" ]]" not in text
+    assert '0017_commercial_quotas_60pct.sql" ]]' not in text
     assert '--dbname "$testdb"' in text
     assert "SOURCE_COMMIT" in text
     guard = GUARD.read_text()
