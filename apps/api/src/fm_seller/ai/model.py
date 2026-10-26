@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from fm_seller.config import Settings
 from fm_seller.recovery.optout import normalize
@@ -105,7 +105,7 @@ class FallbackAiModel:
             )
             return self._fallback.reply(ctx)
 
-    def __getattr__(self, name: str):  # transcribe, model, with_limits...: segue o principal
+    def __getattr__(self, name: str) -> Any:  # transcribe, model, with_limits...: segue o principal
         return getattr(self._primary, name)
 
 
