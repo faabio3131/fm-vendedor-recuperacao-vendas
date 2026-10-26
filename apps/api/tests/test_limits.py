@@ -114,7 +114,8 @@ def test_model_failures_are_recorded_but_do_not_use_the_quota(
     s.say("oi")
     run_ai_replies(db, Broken())
     assert _usage(s)[:2] == (0, 1)
-    assert s.conv_state() == ("human", "erro_do_modelo")
+    # falha técnica não tira a conversa da automação na primeira vez
+    assert s.conv_state() == ("bot", None)
 
 
 def test_usage_endpoint(client: TestClient, env: Env) -> None:

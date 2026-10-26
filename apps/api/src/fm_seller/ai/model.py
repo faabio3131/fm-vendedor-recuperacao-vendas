@@ -34,6 +34,8 @@ class AiContext:
     history: tuple[tuple[str, str], ...]  # (customer|assistant, texto), do mais antigo ao mais novo
     pilot_greeting: bool = False  # saudação governada, sem ofertas
     pilot_demo: bool = False  # pré-vendas FM para o contato autorizado
+    # Perguntas e respostas cadastradas pelo cliente (pergunta, resposta), só as ativas.
+    knowledge: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
