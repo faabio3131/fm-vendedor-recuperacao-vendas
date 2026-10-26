@@ -628,7 +628,7 @@ def _handle_conversation(
             tenant_id,
             conv_id,
             "bot",
-            "Olá! Sou a AnaClara, assistente virtual da FM Tecnologia. "
+            "Olá! Sou a AnaClara, assistente virtual da FM Tecnologia IA. "
             "Como posso ajudar você com o AtendeVendeIA?",
         )
         conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
@@ -705,7 +705,7 @@ def _handle_conversation(
                 if suitable is None:
                     text = (
                         "Esse volume supera as franquias disponíveis. "
-                        "Posso encaminhar sua necessidade à equipe da FM Tecnologia."
+                        "Posso encaminhar sua necessidade à equipe da FM Tecnologia IA."
                     )
                 else:
                     recommended_text = _demo_recommendation_line(suitable)
