@@ -31,6 +31,12 @@ class OfferIn(BaseModel):
     active: bool = True
 
 
+class KnowledgeIn(BaseModel):
+    question: str = Field(max_length=200)
+    answer: str = Field(max_length=700)
+    active: bool = True
+
+
 class SettingsIn(BaseModel):
     ai_enabled: bool
     ai_persona: str = Field(default="", max_length=600)
@@ -73,6 +79,27 @@ def update_offer(offer_id: uuid.UUID, body: OfferIn, s: Svc, p: Who) -> dict[str
 @router.delete("/seller/offers/{offer_id}")
 def delete_offer(offer_id: uuid.UUID, s: Svc, p: Who) -> dict[str, str]:
     s.delete_offer(p, offer_id)
+    return {"status": "removed"}
+
+
+@router.get("/seller/knowledge")
+def knowledge(s: Svc, p: Who) -> list[dict[str, Any]]:
+    return s.knowledge(p)
+
+
+@router.post("/seller/knowledge")
+def create_knowledge(body: KnowledgeIn, s: Svc, p: Who) -> dict[str, Any]:
+    return s.create_knowledge(p, body.question, body.answer)
+
+
+@router.put("/seller/knowledge/{item_id}")
+def update_knowledge(item_id: uuid.UUID, body: KnowledgeIn, s: Svc, p: Who) -> dict[str, Any]:
+    return s.update_knowledge(p, item_id, body.question, body.answer, body.active)
+
+
+@router.delete("/seller/knowledge/{item_id}")
+def delete_knowledge(item_id: uuid.UUID, s: Svc, p: Who) -> dict[str, str]:
+    s.delete_knowledge(p, item_id)
     return {"status": "removed"}
 
 

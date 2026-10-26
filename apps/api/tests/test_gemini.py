@@ -265,16 +265,38 @@ def test_seller_refuses_a_gemini_reply_with_an_invented_link_or_price(
 
 
 @pytest.mark.parametrize("response", [httpx.Response(401), httpx.Response(200, text="x")])
-def test_model_failure_hands_off_once_instead_of_retrying_forever(
+def test_model_failure_keeps_automation_then_hands_off_if_it_repeats(
     s: Setup,
     db: Database,
     response: httpx.Response,
 ) -> None:
-    s.say("oi")
+    for _ in range(2):  # falha técnica: avisa o cliente e segue na automação
+        s.say("oi")
+        stats = run_ai_replies(db, _gemini(lambda _r: response))
+        assert stats.replied == 1 and s.conv_state() == ("bot", None)
+    assert [b for _, b, _ in s.outbound()] == ["Só um instante, já te respondo."] * 2
+    s.say("oi")  # repetiu: só então uma pessoa assume
     stats = run_ai_replies(db, _gemini(lambda _r: response))
     assert stats.handoffs == 1 and s.conv_state() == ("human", "erro_do_modelo")
     again = run_ai_replies(db, _gemini(lambda _r: response))
     assert again.conversations == 0  # a mensagem foi tratada: nada de tentar de novo
+
+
+def test_registered_knowledge_answers_without_calling_the_model(s: Setup, db: Database) -> None:
+    s.env.sql(
+        "INSERT INTO knowledge_items (tenant_id, question, answer) VALUES (%s, %s, %s)",
+        (s.tid, "Como funciona a entrega do curso?", "O acesso é liberado por e-mail na hora."),
+    )
+    s.say("Como funciona a entrega do curso?")
+    calls: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        calls.append(req)
+        return httpx.Response(500)
+
+    stats = run_ai_replies(db, _gemini(handler))
+    assert stats.replied == 1 and not calls  # zero token
+    assert s.outbound() == [("bot", "O acesso é liberado por e-mail na hora.", "queued")]
 
 
 def test_thinking_tokens_count_as_output_for_the_cost_limit() -> None:

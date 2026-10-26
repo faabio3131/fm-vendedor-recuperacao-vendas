@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { KnowledgeCard } from "@/components/KnowledgeCard";
 import { HandoffReportCard, SandboxCard } from "@/components/SellerTools";
 import { Shell, useMe } from "@/components/Shell";
 import { api, brl, type AiUsage, type Offer, type SellerSettings } from "@/lib/api";
@@ -162,6 +163,8 @@ function Seller() {
 
       <SandboxCard />
       <HandoffReportCard />
+
+      <KnowledgeCard canEdit={canEdit} />
 
       <h2>Ofertas</h2>
       {offers.length === 0 && <p className="muted">Nenhuma oferta ainda.</p>}

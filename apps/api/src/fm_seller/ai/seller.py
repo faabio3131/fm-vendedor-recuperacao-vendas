@@ -46,6 +46,7 @@ MAX_BOT_REPLIES_PER_HOUR = 10
 MAX_PILOT_DEMO_REPLIES_PER_HOUR = 40
 HISTORY = 10
 _HUMAN = ("atendente", "humano", "pessoa", "falar com alguem", "gerente", "responsavel")
+MODEL_RETRY_MESSAGE = "Só um instante, já te respondo."
 _FORBIDDEN = re.compile(r"https?://|www\.|r\$|\breais\b|\bpix\b.*\bchave\b", re.IGNORECASE)
 _PLACEHOLDER = re.compile(r"\{(oferta|preco|link)\}")
 
@@ -61,6 +62,92 @@ class SellerStats:
 def asks_for_human(text: str) -> bool:
     norm = normalize(text)
     return any(k in norm for k in _HUMAN)
+
+
+_STOP = frozenset(
+    [
+        "como",
+        "qual",
+        "quais",
+        "para",
+        "pelo",
+        "pela",
+        "pelos",
+        "pelas",
+        "isso",
+        "essa",
+        "esse",
+        "esta",
+        "este",
+        "aqui",
+        "sobre",
+        "quero",
+        "preciso",
+        "gostaria",
+        "saber",
+        "posso",
+        "pode",
+        "podem",
+        "fazer",
+        "voces",
+        "voce",
+        "seu",
+        "sua",
+        "meu",
+        "minha",
+        "tem",
+        "tenho",
+        "ter",
+        "uma",
+        "uns",
+        "umas",
+        "dos",
+        "das",
+        "nos",
+        "nas",
+        "que",
+        "com",
+        "por",
+        "mais",
+        "muito",
+        "ola",
+        "bom",
+        "dia",
+        "tarde",
+        "noite",
+    ]
+)
+
+
+def _content_words(text: str) -> set[str]:
+    return {w for w in normalize(text).split() if len(w) >= 4 and w not in _STOP}
+
+
+def knowledge_reply(question: str, items: Sequence[tuple[str, str]]) -> str | None:
+    """Resposta sem modelo quando a pergunta do cliente é praticamente uma pergunta cadastrada.
+
+    Exige que ao menos 2 palavras de conteúdo coincidam e que a maior parte das palavras da
+    pergunta cadastrada apareça na do cliente. Se houver dúvida ou empate, devolve None e o
+    modelo (que também recebe a base) decide. O texto vem do cadastro do cliente.
+    """
+    asked = _content_words(question)
+    if len(asked) < 2:
+        return None
+    scored: list[tuple[float, int, str]] = []
+    for stored_q, answer in items:
+        words = _content_words(stored_q)
+        shared = len(words & asked)
+        if len(words) < 2 or shared < 2 or not answer.strip():
+            continue
+        coverage = shared / len(words)
+        if coverage >= 0.7:
+            scored.append((coverage, shared, answer.strip()))
+    if not scored:
+        return None
+    scored.sort(reverse=True)
+    if len(scored) > 1 and scored[0][:2] == scored[1][:2] and scored[0][2] != scored[1][2]:
+        return None  # empate entre respostas diferentes: deixa o modelo decidir
+    return scored[0][2] if len(scored[0][2]) <= 700 else None
 
 
 def render_reply(reply: AiReply, offers: dict[str, tuple[str, str, str]]) -> str | None:
@@ -764,6 +851,28 @@ def _handle_conversation(
             )
             return "replied"
 
+    # Base de conhecimento do cliente: pergunta já cadastrada é respondida sem modelo (zero
+    # token, sem risco de timeout). No piloto de saudação nada além da saudação é permitido.
+    knowledge = (
+        ()
+        if (pilot and not demo)
+        else tuple(
+            (k["question"], k["answer"])
+            for k in conn.execute(
+                "SELECT question, answer FROM knowledge_items WHERE active "
+                "ORDER BY created_at LIMIT 40"
+            ).fetchall()
+        )
+    )
+    if knowledge:
+        known = knowledge_reply(inbound[-1]["body"], knowledge)
+        if known is not None:
+            enqueue_text(conn, tenant_id, conv_id, "bot", known)
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
+            return "replied"
+
     # Only real model calls consume ai_replies_per_month; deterministic replies
     # remain governed by outbound/trial metering in the canonical outbox.
     if not model.available:
@@ -801,12 +910,25 @@ def _handle_conversation(
         ),
         pilot_greeting=pilot and not demo,
         pilot_demo=demo,
+        knowledge=knowledge,
     )
     proposal = propose(model, ctx, registry)
     if proposal.failed:
         usage.record(conn, tenant_id, tz, ok=False)
-        _handoff(conn, tenant_id, conv_id, "erro_do_modelo", notify=True)
-        return "handoffs"
+        # Falha técnica não é motivo para tirar a conversa da automação: avisa o cliente e
+        # tenta de novo na próxima mensagem. Só entrega a uma pessoa se repetir.
+        waits = conn.execute(
+            "SELECT count(*) AS c FROM messages WHERE conversation_id = %s AND direction = 'out' "
+            "AND author = 'bot' AND body = %s AND created_at > %s",
+            (conv_id, MODEL_RETRY_MESSAGE, now - timedelta(hours=1)),
+        ).fetchone()
+        assert waits is not None
+        if waits["c"] >= 2:
+            _handoff(conn, tenant_id, conv_id, "erro_do_modelo", notify=True)
+            return "handoffs"
+        enqueue_text(conn, tenant_id, conv_id, "bot", MODEL_RETRY_MESSAGE)
+        conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
+        return "replied"
     usage.record(
         conn, tenant_id, tz, ok=True, tokens_in=proposal.tokens_in, tokens_out=proposal.tokens_out
     )
