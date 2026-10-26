@@ -163,6 +163,7 @@ class PilotDemoSender(PilotGreetingSender):
         for price in found_prices:
             without_urls = without_urls.replace(price, "")
         numbers = re.findall(r"(?<!\w)[0-9][0-9.]*", without_urls)
-        if any(number not in quotas for number in numbers):
+        echoed = set(config.get("__demo_echo", "").split("|")) - {""}
+        if any(number not in quotas and number.rstrip(".") not in echoed for number in numbers):
             raise SendError("piloto demo: número não autorizado")
         return EvolutionSender.send_text(self, config, to_phone, body)
