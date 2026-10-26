@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     ai_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     ai_thinking_level: Literal["low", "medium", "high"] = "low"
     ai_timeout_seconds: float = Field(default=20.0, ge=1, le=60)
+    # Falha passageira do provedor (503, 429, tempo esgotado): repete antes de desistir e, se
+    # houver modelo reserva, tenta nele. Só depois disso a conversa vai para uma pessoa.
+    ai_retries: int = Field(default=3, ge=0, le=5)
+    ai_fallback_model: str = ""
     # Áudio do cliente (WhatsApp): transcrito pelo mesmo modelo e tratado como texto. Desligado
     # por padrão: o áudio é enviado ao Google (suboperador já listado na política de privacidade).
     voice_transcription: bool = False

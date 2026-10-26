@@ -8,11 +8,14 @@ para uma pessoa em vez de a plataforma fingir que a IA respondeu.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from fm_seller.config import Settings
 from fm_seller.recovery.optout import normalize
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -85,19 +88,48 @@ class UnavailableAiModel:
         raise RuntimeError("Nenhum modelo de IA real está habilitado nesta instalação.")
 
 
+class FallbackAiModel:
+    """Tenta o modelo principal e, se ele falhar de vez, o modelo reserva (mesma chave)."""
+
+    def __init__(self, primary: AiModel, fallback: AiModel) -> None:
+        self._primary = primary
+        self._fallback = fallback
+        self.available = primary.available
+
+    def reply(self, ctx: AiContext) -> AiReply:
+        try:
+            return self._primary.reply(ctx)
+        except Exception as exc:
+            log.warning(
+                "modelo principal falhou; usando reserva", extra={"ctx": {"erro": str(exc)[:120]}}
+            )
+            return self._fallback.reply(ctx)
+
+    def __getattr__(self, name: str) -> Any:  # transcribe, model, with_limits...: segue o principal
+        return getattr(self._primary, name)
+
+
 def build_ai_model(settings: Settings) -> AiModel:
     """Gemini se houver chave (exceto em teste); senão simulador em dev/teste e nada em produção."""
     key = settings.ai_api_key.get_secret_value()
     if key and settings.env != "test":
         from fm_seller.ai.gemini import GeminiModel  # import tardio: evita ciclo com este módulo
 
-        return GeminiModel(
-            key,
-            model=settings.ai_model,
-            base_url=settings.ai_base_url,
-            timeout=settings.ai_timeout_seconds,
-            thinking_level=settings.ai_thinking_level,
-        )
+        def make(name: str) -> GeminiModel:
+            return GeminiModel(
+                key,
+                model=name,
+                base_url=settings.ai_base_url,
+                timeout=settings.ai_timeout_seconds,
+                thinking_level=settings.ai_thinking_level,
+                retries=settings.ai_retries,
+            )
+
+        primary = make(settings.ai_model)
+        reserve = settings.ai_fallback_model.strip()
+        if reserve and reserve != settings.ai_model:
+            return FallbackAiModel(primary, make(reserve))
+        return primary
     if settings.env in ("dev", "test"):
         return SimulatedAiModel()
     return UnavailableAiModel()
