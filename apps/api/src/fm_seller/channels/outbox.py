@@ -13,6 +13,7 @@ manda ID de rede social por um remetente de WhatsApp.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -241,6 +242,21 @@ def _send_one(
                 config["__demo_quotas"] = "|".join(
                     str(r["quota"]) + "|" + f"{int(r['quota']):,}".replace(",", ".") for r in plans
                 )
+                # Números que o próprio cliente escreveu podem ser repetidos de volta
+                # ("para o seu volume de 1.500..."); nunca valem como preço ou franquia.
+                last_in = conn.execute(
+                    "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'in' "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    (row["conversation_id"],),
+                ).fetchone()
+                typed = {
+                    n.rstrip(".")
+                    for n in re.findall(r"(?<!\w)[0-9][0-9.]*", (last_in or {}).get("body") or "")
+                }
+                grouped = {
+                    f"{int(n):,}".replace(",", ".") for n in typed if n.isdigit() and len(n) <= 9
+                }
+                config["__demo_echo"] = "|".join(sorted(typed | grouped))
     if (
         getattr(senders.get("whatsapp"), "pilot_only", False)
         and ctx is not None

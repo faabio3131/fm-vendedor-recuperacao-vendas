@@ -119,8 +119,34 @@ _STOP = frozenset(
 )
 
 
+# Como o cliente se refere ao produto ("o que ela faz?", "o que o sistema faz?"): todas as
+# formas contam como a mesma palavra de conteúdo, senão a pergunta cadastrada não casa.
+_PRODUCT_ALIASES = frozenset(
+    ["ela", "ele", "atendevendeia", "anaclara", "sistema", "ferramenta", "plataforma", "produto"]
+)
+_SHORT_CONTENT = frozenset(["faz"])
+
+
 def _content_words(text: str) -> set[str]:
-    return {w for w in normalize(text).split() if len(w) >= 4 and w not in _STOP}
+    words: set[str] = set()
+    for w in normalize(text).split():
+        if w in _PRODUCT_ALIASES:
+            words.add("produto")
+        elif (len(w) >= 4 or w in _SHORT_CONTENT) and w not in _STOP:
+            words.add(w)
+    return words
+
+
+def asked_for_volume(previous_bot: str) -> bool:
+    """A mensagem anterior do bot terminou pedindo o volume mensal de respostas de IA.
+
+    O modelo também faz essa pergunta (com outras palavras) ao explicar os planos; um "1500"
+    em seguida é a resposta, não uma conversa nova.
+    """
+    if previous_bot == DEMO_VOLUME_QUESTION:
+        return True
+    tail = normalize(previous_bot)[-90:]
+    return bool(re.search(r"quantas respostas de ia .{0,40}por mes$", tail))
 
 
 def knowledge_reply(question: str, items: Sequence[tuple[str, str]]) -> str | None:
@@ -757,7 +783,7 @@ def _handle_conversation(
             "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
             (conv_id,),
         ).fetchone()
-        answering_volume = bool(previous and previous["body"] == DEMO_VOLUME_QUESTION)
+        answering_volume = bool(previous and asked_for_volume(previous["body"]))
         if recommends or answering_volume or stated_volume is not None:
             volume = demo_requested_volume(question, direct_answer=answering_volume)
             words = set(normalize(question).split())

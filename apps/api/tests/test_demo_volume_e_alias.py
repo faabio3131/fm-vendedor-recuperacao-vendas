@@ -1,0 +1,76 @@
+import hashlib
+import uuid
+from typing import Any, cast
+
+import pytest
+
+from fm_seller.ai.seller import asked_for_volume, knowledge_reply
+from fm_seller.channels.pilot_greeting import DEMO_VOLUME_QUESTION, PilotDemoSender
+from fm_seller.recovery.senders import SendError
+
+PHONE = "5511999990000"
+TID = uuid.UUID("19d835d5-2d72-4e75-a3f3-0b1bc9330789")
+
+FAQ = (
+    ("O que é o AtendeVendeIA e o que ele faz?", "Resposta cadastrada sobre o produto."),
+    ("Como funciona o atendimento?", "Resposta cadastrada sobre o atendimento."),
+)
+
+
+class _Client:
+    def state(self, name: str) -> str:
+        return "open"
+
+    def _call(self, method: str, route: str, *, body: dict[str, Any]) -> dict[str, Any]:
+        return {"key": {"id": "ABC123"}}
+
+
+def _sender() -> PilotDemoSender:
+    return PilotDemoSender(cast(Any, _Client()), tenant_id=TID, phone=PHONE)
+
+
+def _cfg(echo: str = "") -> dict[str, str]:
+    return {
+        "__provider": "evolution",
+        "instance_name": "fmav-" + hashlib.sha256(TID.bytes).hexdigest()[:32],
+        "__demo_prices": "R$ 129,90|R$ 199,90|R$ 399,90",
+        "__demo_quotas": "500|1.000|3.000|1000|3000",
+        "__demo_echo": echo,
+    }
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["O que ela faz?", "o que ela faz ?", "O que o sistema faz?", "O que ele faz"],
+)
+def test_product_pronouns_match_the_registered_question(question: str) -> None:
+    assert knowledge_reply(question, FAQ) == FAQ[0][1]
+
+
+def test_pronoun_alone_does_not_match_anything() -> None:
+    assert knowledge_reply("ela", FAQ) is None
+    assert knowledge_reply("o que é isso", FAQ) is None
+
+
+def test_volume_answer_after_the_model_asked_in_its_own_words() -> None:
+    assert asked_for_volume(DEMO_VOLUME_QUESTION)
+    assert asked_for_volume(
+        "Todos os planos têm as mesmas funcionalidades. A diferença é a franquia mensal: "
+        "o Essencial tem 500 respostas de IA e o Escala tem 3.000 respostas por mês. "
+        "Quantas respostas de IA você espera utilizar por mês?"
+    )
+    assert not asked_for_volume("Posso ajudar com mais alguma dúvida?")
+    assert not asked_for_volume("")
+
+
+def test_customer_number_may_be_echoed_but_other_numbers_may_not() -> None:
+    sender = _sender()
+    reply = (
+        "Para o seu volume de 1.500 respostas por mês, o plano recomendado é o Escala, "
+        "que conta com uma franquia mensal de 3.000 respostas de IA."
+    )
+    assert sender.send_text(_cfg("1500|1.500"), PHONE, reply) == "ABC123"
+    with pytest.raises(SendError, match="número não autorizado"):
+        sender.send_text(_cfg(""), PHONE, reply)
+    with pytest.raises(SendError, match="número não autorizado"):
+        sender.send_text(_cfg("1500|1.500"), PHONE, reply.replace("3.000", "7.777"))
