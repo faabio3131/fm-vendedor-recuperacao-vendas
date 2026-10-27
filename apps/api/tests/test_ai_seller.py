@@ -228,3 +228,47 @@ def test_conversation_in_human_mode_is_left_alone(s: Setup, db: Database) -> Non
     s.say("oi")
     model = SimulatedAiModel()
     assert run_ai_replies(db, model).conversations == 0 and model.calls == []
+
+
+def test_buy_intent_sends_registered_link_without_model(s: Setup, db: Database) -> None:
+    s.say("Oi, vcs tem o curso?")
+    run_ai_replies(db, SimulatedAiModel())
+    s.say("blz, quero comprar")
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 1
+    last = s.outbound()[-1][1]
+    assert LINK in last and "R$ 197,00" in last
+    assert s.conv_state() == ("bot", None)
+
+
+def test_yes_after_link_offer_closes_and_discount_question_goes_to_model(
+    s: Setup, db: Database
+) -> None:
+    s.say("Quanto custa o Curso X?")
+    run_ai_replies(db, UnavailableAiModel())
+    s.say("sim")
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 1
+    assert LINK in s.outbound()[-1][1]
+    s.say("quero comprar mas tem desconto?")
+    model = SimulatedAiModel()
+    run_ai_replies(db, model)
+    assert len(model.calls) == 1  # não fecha às cegas: o modelo conduz a negociação
+
+
+def test_close_sale_reply_picks_offer_by_partial_name_or_asks() -> None:
+    from fm_seller.ai.seller import close_sale_reply
+
+    rows = [
+        {"id": "a", "name": "Kit Suculentas", "price_cents": 8990, "payment_url": "https://p/a"},
+        {
+            "id": "b",
+            "name": "Vaso Autoirrigável",
+            "price_cents": 5990,
+            "payment_url": "https://p/b",
+        },
+    ]
+    assert "https://p/a" in (close_sale_reply("quero comprar o kit", "", rows) or "")
+    assert "https://p/b" in (close_sale_reply("manda o link do vaso", "", rows) or "")
+    asked = close_sale_reply("quero comprar", "", rows) or ""
+    assert "Qual você quer levar" in asked and "http" not in asked
+    assert close_sale_reply("quero comprar o kit com frete grátis?", "", rows) is None
+    assert close_sale_reply("oi", "", rows) is None
