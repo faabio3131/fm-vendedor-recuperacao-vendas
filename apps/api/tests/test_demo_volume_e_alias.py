@@ -137,3 +137,12 @@ def test_guard_accepts_registered_payment_link_only() -> None:
         sender.send_text(_cfg(), PHONE, reply)
     with pytest.raises(SendError, match="URL fora"):
         sender.send_text(cfg, PHONE, reply.replace(PAY, "https://golpe.example/x"))
+
+
+def test_guard_allows_pix_as_a_word_but_not_payment_instructions() -> None:
+    sender = _sender()
+    ok = "Retoma vendas paradas, como carrinho abandonado, Pix ou boleto sem pagamento."
+    assert sender.send_text(_cfg(), PHONE, ok) == "ABC123"
+    for bad in ("Use a chave Pix 123", "Pix copia e cola abaixo", "Pagamento confirmado!"):
+        with pytest.raises(SendError):
+            sender.send_text(_cfg(), PHONE, bad)
