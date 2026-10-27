@@ -280,7 +280,8 @@ def _demo_recommendation_line(offer: Mapping[str, Any]) -> str | None:
     formatted_quota = f"{int(quota):,}".replace(",", ".")
     return (
         f"Pelo volume informado, recomendo {name}: {format_brl(cents)}/mês, "
-        f"com até {formatted_quota} respostas de IA mensais. Quer conhecer mais detalhes?"
+        f"com até {formatted_quota} respostas de IA mensais. "
+        "Quer conhecer os detalhes ou já posso te enviar o link de pagamento?"
     )
 
 
@@ -461,7 +462,7 @@ def _demo_checkout_text(offer: Mapping[str, Any]) -> str | None:
     formatted_quota = f"{int(quota):,}".replace(",", ".")
     return (
         f"Perfeito! O {name} custa {format_brl(cents)}/mês, com {formatted_quota} respostas "
-        f"de IA por mês. Para contratar, faça o pagamento neste link seguro: {url} "
+        f"de IA por mês. Para contratar, faça o pagamento neste link seguro:\n{url}\n\n"
         "Quando o pagamento for confirmado, a equipe da FM Tecnologia IA ativa a sua conta. "
         "Se preferir outro plano, é só me dizer."
     )
