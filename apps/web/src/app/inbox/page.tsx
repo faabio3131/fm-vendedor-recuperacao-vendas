@@ -92,7 +92,7 @@ function Detail({ id, onChange }: { id: string; onChange: () => void }) {
         </div>
         <span className={`badge ${d.status === "human" ? "pending" : ""}`}>{STATUS[d.status]}</span>
       </div>
-      <div aria-label="Mensagens" style={{ display: "grid", gap: 8, maxHeight: 360, overflowY: "auto" }}>
+      <div aria-label="Mensagens" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, maxHeight: 360, overflowY: "auto" }}>
         {d.messages.map((m) => (
           <div key={m.id} style={{ justifySelf: m.direction === "in" ? "start" : "end", maxWidth: "85%" }}>
             <div className="muted" style={{ fontSize: 12 }}>
@@ -170,7 +170,7 @@ function Inbox() {
       <h1>Conversas</h1>
       <p className="muted">Quem escreveu no WhatsApp. As que precisam de uma pessoa aparecem primeiro.</p>
       {rows && rows.length === 0 && <div className="alert">Nenhuma conversa ainda. Elas aparecem quando um cliente escreve para o seu número.</div>}
-      <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}>
         {(rows ?? []).map((r) => (
           <div key={r.id}>
             <button

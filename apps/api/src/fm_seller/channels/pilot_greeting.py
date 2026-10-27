@@ -144,7 +144,12 @@ class PilotDemoSender(PilotGreetingSender):
             or to_phone != self.phone
             or not body
             or len(body) > 850
-            or re.search(r"\b(?:pix|chave|pagamento confirmado|assinatura ativada)\b", body, re.I)
+            or re.search(
+                r"\b(?:chave|copia e cola|pagamento confirmado|assinatura ativada)\b|"
+                r"\bpix\s+(?:copia|chave|qr)|\b(?:chave|qr)\s*(?:code\s*)?pix\b",
+                body,
+                re.I,
+            )
         ):
             raise SendError("piloto demo: destino ou conteúdo não autorizado")
         prices = set(config.get("__demo_prices", "").split("|")) - {""}
