@@ -241,7 +241,7 @@ def test_pilot_demo_uses_live_commercial_plans_with_global_ai_off(env: Env, db: 
     assert env.sql(
         "SELECT body FROM messages WHERE conversation_id=%s AND direction='out'",
         (cv,),
-    ) == [("Essencial custa R$ 129,90 por mês. Veja " + DEMO_PAGE,)]
+    ) == [("Essencial custa R$ 129,90 por mês. Veja\n" + DEMO_PAGE,)]
 
 
 def test_pilot_demo_lists_all_live_plans_without_model_inventing_prices(

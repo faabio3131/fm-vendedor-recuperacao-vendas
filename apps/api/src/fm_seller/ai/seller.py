@@ -214,8 +214,12 @@ def render_reply(reply: AiReply, offers: dict[str, tuple[str, str, str]]) -> str
         if reply.offer_id is None or reply.offer_id not in offers:
             return None
         name, price, link = offers[reply.offer_id]
-        values = {"oferta": name, "preco": price, "link": link}
+        values = {"oferta": name, "preco": price, "link": f"\n{link}\n"}
         raw = _PLACEHOLDER.sub(lambda m: values[m.group(1)], raw)
+        # Link sempre sozinho na linha: pontuação colada a ele quebra o toque no WhatsApp.
+        raw = re.sub(r"\n[ \t]*[!.,;:)]+[ \t]*(?=\n|$)", "", raw)
+        raw = re.sub(r"[ \t]*\n[ \t]*", "\n", raw)
+        raw = re.sub(r"\n{3,}", "\n\n", raw).strip()
     return raw
 
 
@@ -597,6 +601,59 @@ _NOT_A_CLOSE = frozenset(
 
 def _name_tokens(name: str) -> set[str]:
     return {w for w in normalize(name).split() if len(w) >= 3 and w not in _NAME_STOPWORDS}
+
+
+_ASKS_TOTAL = re.compile(r"\b(valor total|total|quanto (?:fica|da|ficam)|fica quanto|quanto sai)\b")
+_QUANTITY = re.compile(r"\b(\d{1,2})\s*(?:x\b|un\b|unidades?|kits?|vasos?|pecas?|itens?|produtos?)")
+_QUANTITY_WORD = re.compile(r"\b(?:quero|vou querer|preciso de|levar|comprar)\s+(\d{1,2})\b")
+
+
+def quantity_total_reply(
+    question: str,
+    customer_texts: Sequence[str],
+    previous_bot: str,
+    offer_rows: Sequence[Mapping[str, Any]],
+) -> str | None:
+    """Cliente comum: "valor total" de uma quantidade já dita, calculado do preço cadastrado.
+
+    A conta sai só de preço do cadastro vezes a quantidade que o cliente escreveu. O link
+    cadastrado é de uma unidade; por isso a resposta não promete que o link cobre o total.
+    """
+    phrase = normalize(question)
+    if not _ASKS_TOTAL.search(phrase) or "http" in phrase:
+        return None
+    qty = 0
+    for text in [question, *reversed(customer_texts)]:
+        t = normalize(text)
+        m = _QUANTITY.search(t) or _QUANTITY_WORD.search(t)
+        if m and 2 <= int(m.group(1)) <= 99:
+            qty = int(m.group(1))
+            break
+    if not qty:
+        return None
+    prev = normalize(previous_bot)
+    named = [
+        o
+        for o in offer_rows
+        if isinstance(o.get("name"), str)
+        and isinstance(o.get("price_cents"), int)
+        and not isinstance(o.get("price_cents"), bool)
+        and (
+            normalize(str(o["name"])) in prev
+            or any(normalize(str(o["name"])) in normalize(t) for t in customer_texts)
+            or _name_tokens(str(o["name"]))
+            & set(normalize(" ".join([question, *customer_texts])).split())
+        )
+    ]
+    if len(named) != 1:
+        return None
+    o = named[0]
+    unit = int(o["price_cents"])
+    return (
+        f"{qty} x {o['name']} ({format_brl(unit)} cada) dá {format_brl(unit * qty)} no total. "
+        "O link de pagamento que tenho é de 1 unidade; se quiser pagar tudo de uma vez, "
+        "me diga e eu aviso a equipe para gerar o valor total."
+    )
 
 
 def close_sale_reply(
@@ -1207,14 +1264,22 @@ def _handle_conversation(
             return "replied"
 
     if not demo and not pilot:
+        prior_customer = [
+            h["body"]
+            for h in conn.execute(
+                "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'in' "
+                "ORDER BY created_at DESC LIMIT 8",
+                (conv_id,),
+            ).fetchall()
+        ]
         last_out = conn.execute(
             "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
             "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
             (conv_id,),
         ).fetchone()
-        closing_generic = close_sale_reply(
-            inbound[-1]["body"], last_out["body"] if last_out else "", offer_rows
-        )
+        closing_generic = quantity_total_reply(
+            inbound[-1]["body"], prior_customer, last_out["body"] if last_out else "", offer_rows
+        ) or close_sale_reply(inbound[-1]["body"], last_out["body"] if last_out else "", offer_rows)
         if closing_generic is not None:
             enqueue_text(conn, tenant_id, conv_id, "bot", closing_generic)
             conn.execute(

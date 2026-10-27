@@ -250,7 +250,7 @@ def test_seller_uses_gemini_text_but_price_and_link_come_from_the_registry(
     s.say("Pode explicar como funciona a compra do Curso X?")
     assert run_ai_replies(db, _gemini(handler)).replied == 1
     body = s.outbound()[-1][1]
-    assert body == "Curso X sai por R$ 197,00. Link: https://pay.example.test/curso-x"
+    assert body == "Curso X sai por R$ 197,00. Link:\nhttps://pay.example.test/curso-x"
 
 
 def test_seller_refuses_a_gemini_reply_with_an_invented_link_or_price(

@@ -161,7 +161,7 @@ def test_placeholder_with_unknown_offer_is_refused() -> None:
     ok = render_reply(
         AiReply("Leve {oferta}: {link}", "x"), {"x": ("N", "R$ 1,00", "https://a.example")}
     )
-    assert ok == "Leve N: https://a.example"
+    assert ok == "Leve N:\nhttps://a.example"
 
 
 def test_asking_for_a_person_hands_off_without_calling_the_model(s: Setup, db: Database) -> None:
@@ -272,3 +272,25 @@ def test_close_sale_reply_picks_offer_by_partial_name_or_asks() -> None:
     assert "Qual você quer levar" in asked and "http" not in asked
     assert close_sale_reply("quero comprar o kit com frete grátis?", "", rows) is None
     assert close_sale_reply("oi", "", rows) is None
+
+
+def test_render_reply_puts_link_alone_on_its_line_without_trailing_punctuation() -> None:
+    ok = render_reply(
+        AiReply("Para garantir, pague por este {link}!", "x"),
+        {"x": ("N", "R$ 1,00", "https://a.example")},
+    )
+    assert ok == "Para garantir, pague por este\nhttps://a.example"
+
+
+def test_quantity_total_reply_multiplies_registered_price() -> None:
+    from fm_seller.ai.seller import quantity_total_reply
+
+    offers = [{"name": "Kit Suculentas", "price_cents": 8990, "payment_url": "https://p.example/k"}]
+    out = quantity_total_reply(
+        "Qual o valor total?", ["Quero 3 kits de suculentas"], "Ótima escolha!", offers
+    )
+    assert out is not None
+    assert "R$ 269,70" in out
+    assert "http" not in out
+    assert quantity_total_reply("Qual o valor total?", ["Oi"], "", offers) is None
+    assert quantity_total_reply("Quero 3 kits", [], "", offers) is None
