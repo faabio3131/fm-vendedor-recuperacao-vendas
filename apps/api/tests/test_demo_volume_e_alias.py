@@ -146,3 +146,33 @@ def test_guard_allows_pix_as_a_word_but_not_payment_instructions() -> None:
     for bad in ("Use a chave Pix 123", "Pix copia e cola abaixo", "Pagamento confirmado!"):
         with pytest.raises(SendError):
             sender.send_text(_cfg(), PHONE, bad)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Meu volume de msg 1850", 1850),
+        ("meu volume de mensagem 1850", 1850),
+        ("Meu volume é 1.850", 1850),
+        ("meu volume: 2 mil", 2000),
+        ("o volume de respostas é 700", 700),
+        ("Meu volume de msg", None),
+        ("volume de 1850,50", None),
+    ],
+)
+def test_volume_stated_without_per_month(text: str, expected: int | None) -> None:
+    from fm_seller.channels.pilot_greeting import demo_requested_volume
+
+    assert demo_requested_volume(text) == expected
+
+
+def test_choose_plan_phrases_close_after_recommendation_or_model_link_offer() -> None:
+    from fm_seller.ai.seller import demo_close_sale_reply
+
+    rec = "Pelo volume informado, recomendo Escala: R$ 399,90/mês. Já posso te enviar o link?"
+    for said in ("Pode ser esse", "Vou comprar esse plano que vc indicou", "quero esse"):
+        reply = demo_close_sale_reply(said, rec, OFFERS)
+        assert reply is not None and PAY in reply, said
+    model_offer = "Perfeito! Escala. Posso te enviar o link para agendarmos?"
+    assert PAY in (demo_close_sale_reply("Sim", model_offer, OFFERS) or "")
+    assert demo_close_sale_reply("pode ser", "Olá! Como posso ajudar?", OFFERS) is None

@@ -91,6 +91,16 @@ def demo_requested_volume(text: str, *, direct_answer: bool = False) -> int | No
         answer = parse(text.strip())
         if answer is not None:
             return answer
+    unit = r"(?:respostas|mensagens|mensagem|msgs?|atendimentos)"
+    if not direct_answer and "volume" in clean.split():
+        # "meu volume é 1850", "meu volume de msg 1850": o cliente informou o volume sem "por mês".
+        said = re.search(
+            rf"\bvolume\s*(?:de\s+|é\s+|e\s+|eh\s+|:\s*)?(?:{unit}\s+)?(?:de\s+|é\s+|e\s+)?"
+            rf"(?<![0-9.,])((?:[1-9][0-9]{{0,2}}\s+mil)|{digit_count})(?![0-9.,])",
+            text.lower(),
+        )
+        if said:
+            return parse(said.group(1))
     if not direct_answer and not (
         ("por mes" in clean or "mensais" in clean)
         and set(clean.split())
