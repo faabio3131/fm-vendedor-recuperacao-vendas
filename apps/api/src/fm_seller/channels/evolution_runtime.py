@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 import re
+import time
 import uuid
 from collections.abc import Mapping
 from typing import Any
@@ -222,6 +223,9 @@ def ingest_evolution(
     return counts
 
 
+_STATE_RETRY_DELAYS = (0.5, 1.5, 3.0)
+
+
 class EvolutionSender:
     """MessageSender adapter sharing the canonical worker and existing outbox."""
 
@@ -236,10 +240,17 @@ class EvolutionSender:
             raise SendError("instância Evolution não vinculada")
         if not re.fullmatch(r"[0-9]{10,15}", to_phone) or not body or len(body) > 4000:
             raise SendError("mensagem ou destinatário inválido")
-        try:
-            state = self.client.state(instance)
-        except AppError:
-            raise SendError("sessão Evolution não verificada") from None
+        # A consulta de estado é só leitura e acontece ANTES de qualquer envio: repetir é seguro.
+        # Falha momentânea logo após reinício do serviço não pode perder a resposta da cliente.
+        state = ""
+        for delay in (*_STATE_RETRY_DELAYS, None):
+            try:
+                state = self.client.state(instance)
+                break
+            except AppError:
+                if delay is None:
+                    raise SendError("sessão Evolution não verificada") from None
+                time.sleep(delay)
         if state != "open":
             raise SendError("sessão Evolution desconectada")
         try:
