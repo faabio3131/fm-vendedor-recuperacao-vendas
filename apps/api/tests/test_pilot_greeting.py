@@ -816,7 +816,7 @@ def test_pilot_demo_sender_denies_other_contact_arbitrary_prices_and_checkout() 
     assert len(fake.sent) == 1
 
 
-def test_pilot_demo_prompt_explains_assisted_sale_only() -> None:
+def test_pilot_demo_prompt_closes_sale_with_payment_link_sent_by_system() -> None:
     from fm_seller.ai.model import OfferView
 
     ctx = AiContext(
@@ -829,8 +829,9 @@ def test_pilot_demo_prompt_explains_assisted_sale_only() -> None:
     prompt = build_system_prompt(ctx)
     assert "AnaClara" in prompt
     assert "TOM CADASTRADO" in prompt
-    assert "contratação automática" in prompt
-    assert "não checkout" in prompt
+    assert "sem chamar uma pessoa" in prompt
+    assert "link de pagamento" in prompt
+    assert "NUNCA diga que a contratação é" in prompt
     assert "av-essencial" in prompt
     assert "500 respostas" in prompt
 
