@@ -93,11 +93,12 @@ def demo_requested_volume(text: str, *, direct_answer: bool = False) -> int | No
             return answer
     if not direct_answer and not (
         ("por mes" in clean or "mensais" in clean)
-        and set(clean.split()) & {"respostas", "mensagens", "atendimentos"}
+        and set(clean.split())
+        & {"respostas", "mensagens", "mensagem", "msgs", "msg", "atendimentos"}
     ):
         return None
     match = re.search(
-        rf"(?<![0-9.,])({count_token})\s+(?:respostas|mensagens|atendimentos)\b",
+        rf"(?<![0-9.,])({count_token})\s+(?:respostas|mensagens|mensagem|msgs?|atendimentos)\b",
         text.lower(),
     )
     return parse(match.group(1)) if match else None
