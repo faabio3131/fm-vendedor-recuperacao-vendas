@@ -299,6 +299,8 @@ def demo_plan_details_reply(
         "sim quero",
         "quero sim",
         "quero conhecer",
+        "quero entender",
+        "entender",
         "sim quero conhecer",
         "quero saber mais",
         "sim quero saber mais",
@@ -380,6 +382,8 @@ def demo_plan_details_reply(
         category = "usage"
     elif terms & {"contratar", "contratacao"}:
         category = "contract"
+    elif "entender" in terms and not terms & {"faz", "inclui", "funcionalidades", "recursos"}:
+        category = "usage"
     elif terms & {"faz", "inclui", "funcionalidades", "recursos", "funciona", "beneficios"}:
         category = "features"
     return _demo_detail_text(selected, category)
@@ -393,23 +397,22 @@ def _demo_detail_text(offer: Mapping[str, Any], category: str) -> str:
     if category == "limits":
         return (
             f"O {name} não oferece respostas de IA ilimitadas: a franquia é de "
-            f"{quota} por mês, compartilhada entre canais. Esta demonstração "
-            "não contrata, não cobra e não ativa assinatura automaticamente. "
+            f"{quota} por mês, compartilhada entre canais. "
             "Integrações dependem da configuração das conexões. "
-            f"Veja detalhes: {DEMO_PAGE}. Quer que eu explique as funcionalidades?"
+            "O pagamento é feito por um link seguro e a equipe confirma a ativação da "
+            f"sua conta. {_checkout_cta(name)}"
         )
     if category == "usage":
         return (
             f"No {name}, a franquia é de {quota} respostas de IA por mês, "
             "compartilhada entre canais. Não é ilimitada e os três planos "
             f"oferecem as mesmas funcionalidades. O valor é {price}/mês. "
-            "Quer saber como funciona o atendimento?"
+            f"{_checkout_cta(name)}"
         )
     if category == "contract":
         return (
             f"O {name} custa {price}/mês para {quota} respostas de IA mensais. "
-            "A contratação é assistida: esta conversa não ativa assinatura "
-            f"nem efetua cobrança. Detalhes e demonstração: {DEMO_PAGE}"
+            f"{_checkout_cta(name)}"
         )
     if category == "features":
         return (
@@ -417,16 +420,123 @@ def _demo_detail_text(offer: Mapping[str, Any], category: str) -> str:
             "painel de Conversas e recursos de Recuperação e Relatórios, "
             "conforme as conexões configuradas. Os três planos têm as mesmas "
             f"funcionalidades; no {name}, são {quota} respostas de IA/mês, "
-            f"por {price}/mês. Quer entender a franquia ou a contratação?"
+            f"por {price}/mês. Quer entender a franquia ou já posso te enviar o "
+            "link de pagamento?"
         )
     return (
         f"Claro! O {name} oferece Vendedor IA para atendimento, painel de "
         "Conversas e recursos de Recuperação e Relatórios, conforme as conexões "
         f"configuradas. Inclui {quota} respostas de IA por mês, compartilhadas "
-        f"entre canais, por {price}/mês. Não são respostas ilimitadas; "
-        "a contratação é assistida, sem ativação automática nesta demonstração. "
-        f"Detalhes: {DEMO_PAGE}. O que gostaria de saber primeiro?"
+        f"entre canais, por {price}/mês. Não são respostas ilimitadas. "
+        "Para contratar, o pagamento é feito por um link seguro e a equipe confirma a "
+        f"ativação da sua conta. Detalhes: {DEMO_PAGE}. O que gostaria de saber primeiro?"
     )
+
+
+DEMO_SAFE_FALLBACK = (
+    "Posso te ajudar a escolher o plano e já te envio o link de pagamento. "
+    "Quantas respostas de IA você espera usar por mês, ou qual plano prefere: "
+    "Essencial, Profissional ou Escala?"
+)
+
+
+def _checkout_cta(name: str) -> str:
+    return f"Posso te enviar o link de pagamento do {name}?"
+
+
+def _demo_checkout_text(offer: Mapping[str, Any]) -> str | None:
+    """Fechamento: plano, preço e o link de pagamento cadastrado para ele (nunca do modelo)."""
+    url = offer.get("checkout_url")
+    quota = str(offer.get("quota") or "")
+    name, cents = offer.get("name"), offer.get("price_cents")
+    if (
+        not isinstance(url, str)
+        or not url.startswith("https://")
+        or not quota.isdigit()
+        or not isinstance(name, str)
+        or not isinstance(cents, int)
+        or isinstance(cents, bool)
+    ):
+        return None
+    formatted_quota = f"{int(quota):,}".replace(",", ".")
+    return (
+        f"Perfeito! O {name} custa {format_brl(cents)}/mês, com {formatted_quota} respostas "
+        f"de IA por mês. Para contratar, faça o pagamento neste link seguro: {url} "
+        "Quando o pagamento for confirmado, a equipe da FM Tecnologia IA ativa a sua conta. "
+        "Se preferir outro plano, é só me dizer."
+    )
+
+
+_BUY_VERBS = frozenset(
+    ["contratar", "assinar", "fechar", "comprar", "adquirir", "pagar", "contrato", "assino", "pago"]
+)
+_BUY_SUBJECTS = frozenset(
+    ["quero", "vou", "gostaria", "queria", "desejo", "preciso", "posso", "como", "bora", "topo"]
+)
+_SEND_VERBS = frozenset(["manda", "mande", "mandar", "envia", "envie", "enviar", "passa", "passe"])
+_CHECKOUT_YES = frozenset(
+    [
+        "sim",
+        "quero",
+        "pode",
+        "pode sim",
+        "pode mandar",
+        "manda",
+        "mande",
+        "claro",
+        "bora",
+        "ok",
+        "isso",
+        "fechado",
+        "sim pode",
+        "sim quero",
+        "quero sim",
+    ]
+)
+
+
+def demo_close_sale_reply(
+    question: str, previous_bot: str, offer_rows: Sequence[Mapping[str, Any]]
+) -> str | None:
+    """Leva a conversa até o link de pagamento do plano escolhido, sem modelo e sem pessoa.
+
+    Dispara com intenção de compra ("quero contratar o Escala", "manda o link"), ou com um
+    "sim" logo depois de a AnaClara oferecer o link. O plano vem do que o cliente citou ou do
+    plano de que a AnaClara vinha falando; sem plano definido, ela pergunta qual.
+    """
+    phrase = normalize(question).strip()
+    words = set(phrase.split())
+    wants = bool(
+        (words & _BUY_VERBS and words & _BUY_SUBJECTS) or (words & _SEND_VERBS and "link" in words)
+    )
+    prev_norm = normalize(previous_bot)
+    offered_link = "posso te enviar o link de pagamento" in prev_norm or (
+        "ja posso te enviar o link de pagamento" in prev_norm
+    )
+    said_yes = offered_link and phrase.strip("?!., ") in _CHECKOUT_YES
+    if not wants and not said_yes:
+        return None
+
+    def mentioned(text: str) -> list[Mapping[str, Any]]:
+        return [
+            o
+            for o in offer_rows
+            if isinstance(o.get("name"), str)
+            and re.search(rf"(?<![a-z0-9]){re.escape(normalize(o['name']))}(?![a-z0-9])", text)
+        ]
+
+    chosen = mentioned(phrase)
+    if len(chosen) != 1:
+        chosen = mentioned(prev_norm)
+    if len(chosen) == 1:
+        return _demo_checkout_text(chosen[0])
+    names = [str(o["name"]) for o in offer_rows if isinstance(o.get("name"), str)]
+    if len(names) == 3:
+        return (
+            f"Ótimo! Qual plano você prefere: {names[0]}, {names[1]} ou {names[2]}? "
+            "Se quiser, me diga quantas respostas de IA espera por mês que eu indico o ideal."
+        )
+    return None
 
 
 def demo_verified_commercial_reply(question: str) -> str | None:
@@ -465,10 +575,9 @@ def demo_verified_commercial_reply(question: str) -> str | None:
     )
     if buying:
         return (
-            "Entendi que você quer contratar o AtendeVendeIA! Nesta demonstração, "
-            "a contratação é assistida: não geramos cobrança nem ativamos assinatura "
-            "por esta conversa. Confira as informações oficiais e o caminho de "
-            f"contato comercial em {DEMO_PAGE}. Posso esclarecer mais alguma dúvida?"
+            "Entendi que você quer contratar o AtendeVendeIA! Me diga qual plano você "
+            "prefere (Essencial, Profissional ou Escala) que eu te envio o link de "
+            f"pagamento. Informações oficiais: {DEMO_PAGE}"
         )
     # O piloto bloqueia mensagens de saída que mencionam certos identificadores
     # financeiros, inclusive quando o modelo os usa em frases negativas. Responda
@@ -749,7 +858,25 @@ def _handle_conversation(
         if len(offer_rows) != 3:
             _handoff(conn, tenant_id, conv_id, "catalogo_fm_incompleto", notify=False)
             return "handoffs"
-        offer_rows = [{**dict(o), "payment_url": DEMO_PAGE} for o in offer_rows]
+        paid = conn.execute(
+            "SELECT name, payment_url FROM offers WHERE tenant_id = %s AND active "
+            "AND payment_url LIKE 'https://%%'",
+            (tenant_id,),
+        ).fetchall()
+
+        def _checkout_for(plan_key: str) -> str | None:
+            suffix = plan_key.removeprefix("av-")
+            found = [
+                str(x["payment_url"])
+                for x in paid
+                if normalize(str(x["name"])).split()[-1:] == [suffix]
+            ]
+            return found[0] if len(found) == 1 else None
+
+        offer_rows = [
+            {**dict(o), "payment_url": DEMO_PAGE, "checkout_url": _checkout_for(str(o["id"]))}
+            for o in offer_rows
+        ]
     elif pilot:
         offer_rows = []
     else:
@@ -880,6 +1007,20 @@ def _handle_conversation(
     # Verified FM product questions and purchase intent must not be sent to a
     # generic store-sales prompt. There is no live checkout in this demo.
     if demo and pilot_question is not None:
+        prev_bot = conn.execute(
+            "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
+            "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
+            (conv_id,),
+        ).fetchone()
+        closing = demo_close_sale_reply(
+            pilot_question, prev_bot["body"] if prev_bot else "", offer_rows
+        )
+        if closing is not None and len(closing) <= 850:
+            enqueue_text(conn, tenant_id, conv_id, "bot", closing)
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
+            return "replied"
         verified = demo_verified_commercial_reply(pilot_question)
         if verified is not None and len(verified) <= 850:
             enqueue_text(conn, tenant_id, conv_id, "bot", verified)
@@ -1003,6 +1144,12 @@ def _handle_conversation(
     usage.record(
         conn, tenant_id, tz, ok=True, tokens_in=proposal.tokens_in, tokens_out=proposal.tokens_out
     )
+    if proposal.kind == "handoff" and demo and proposal.reason == "resposta_invalida":
+        # O texto do modelo foi barrado (valor/link livre). Na demonstração a cliente não é
+        # transferida: a AnaClara refaz o convite com dados do cadastro.
+        enqueue_text(conn, tenant_id, conv_id, "bot", DEMO_SAFE_FALLBACK)
+        conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
+        return "replied"
     if proposal.kind == "handoff":
         _handoff(conn, tenant_id, conv_id, proposal.reason or "modelo_pediu", notify=True)
         return "handoffs"

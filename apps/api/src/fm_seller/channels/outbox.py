@@ -258,6 +258,13 @@ def _send_one(
                     f"{int(n):,}".replace(",", ".") for n in typed if n.isdigit() and len(n) <= 9
                 }
                 config["__demo_echo"] = "|".join(sorted(typed | grouped))
+                # Links de pagamento cadastrados da própria FM (planos AtendeVendeIA).
+                links = conn.execute(
+                    "SELECT payment_url FROM offers WHERE tenant_id = %s AND active "
+                    "AND payment_url LIKE 'https://%%'",
+                    (tenant_id,),
+                ).fetchall()
+                config["__demo_links"] = "|".join(str(r["payment_url"]) for r in links)
     if (
         getattr(senders.get("whatsapp"), "pilot_only", False)
         and ctx is not None

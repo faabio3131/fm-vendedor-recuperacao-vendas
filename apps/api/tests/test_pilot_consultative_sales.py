@@ -48,9 +48,9 @@ PHONE = "5511944443333"
         ),
         (
             "Tá bom, eu vou fechar esse plano então. Manda o link para mim.",
-            "contratação é assistida",
+            "link de pagamento",
         ),
-        ("Vou pagar no PIX", "não geramos cobrança"),
+        ("Vou pagar no PIX", "qual plano você prefere"),
         ("Como funciona o pagamento via pix?", "transferência instantânea"),
         ("O pagamento por pix funciona aqui?", "transferência instantânea"),
     ],
@@ -134,8 +134,8 @@ def test_pilot_continues_after_ten_messages_with_real_postgres_and_no_model(
     assert "não gera" not in outgoing[0][0].lower() or "Não cria" in outgoing[0][0]
     assert "configuradas" in outgoing[1][0] or "configurou" in outgoing[1][0]
     assert "Messenger" in outgoing[2][0]
-    assert DEMO_PAGE in outgoing[3][0]
-    assert "cobrança" in outgoing[4][0]
+    assert "Qual plano" in outgoing[3][0]
+    assert "Qual plano" in outgoing[4][0]
     # Regression from production 19:37 and 19:40: each repeated payment-method
     # question must enqueue a distinct message that passes the guarded sender.
     assert "transferência instantânea" in outgoing[5][0]

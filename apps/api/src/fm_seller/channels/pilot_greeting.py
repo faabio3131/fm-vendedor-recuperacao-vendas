@@ -152,7 +152,8 @@ class PilotDemoSender(PilotGreetingSender):
         if not prices or not quotas:
             raise SendError("piloto demo: catálogo comercial indisponível")
         urls = [url.rstrip(".,;!?") for url in re.findall(r"https?://[^\s<>]+", body, re.I)]
-        if any(url != DEMO_PAGE for url in urls):
+        links = set(config.get("__demo_links", "").split("|")) - {""}
+        if any(url != DEMO_PAGE and url not in links for url in urls):
             raise SendError("piloto demo: URL fora da landing oficial")
         without_urls = body
         for url in urls:
