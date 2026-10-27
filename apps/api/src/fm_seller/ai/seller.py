@@ -50,6 +50,10 @@ _HUMAN = ("atendente", "humano", "pessoa", "falar com alguem", "gerente", "respo
 MODEL_RETRY_MESSAGE = "Só um instante, já te respondo."
 _FORBIDDEN = re.compile(r"https?://|www\.|r\$|\breais\b|\bpix\b.*\bchave\b", re.IGNORECASE)
 _PLACEHOLDER = re.compile(r"\{(oferta|preco|link)\}")
+_LINK_PROMISE = re.compile(
+    r"\b(?:vou|irei|vamos)\s+(?:te\s+)?(?:enviar|mandar|passar)\s+o\s+link\b|\bte\s+(?:envio|mando|passo)\s+o\s+link\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -208,6 +212,8 @@ def render_reply(reply: AiReply, offers: dict[str, tuple[str, str, str]]) -> str
     raw = reply.text.strip()
     if not raw or len(raw) > 1000 or _FORBIDDEN.search(raw):
         return None
+    if _LINK_PROMISE.search(raw) and "{link}" not in raw:
+        return None  # prometeu enviar o link sem anexá-lo: nunca vai para o cliente
     if "{" in _PLACEHOLDER.sub("", raw) or "}" in _PLACEHOLDER.sub("", raw):
         return None  # marcador desconhecido ou chave solta: nunca vai para o cliente
     if _PLACEHOLDER.search(raw):
@@ -478,6 +484,9 @@ _BUY_VERBS = frozenset(
 _BUY_SUBJECTS = frozenset(
     ["quero", "vou", "gostaria", "queria", "desejo", "preciso", "posso", "como", "bora", "topo"]
 )
+_LIKED_WORDS = frozenset(
+    ["gostei", "curti", "interessei", "interessante", "adorei", "amei", "legal", "show"]
+)
 _SEND_VERBS = frozenset(["manda", "mande", "mandar", "envia", "envie", "enviar", "passa", "passe"])
 _CHOOSE_PLAN = frozenset(
     [
@@ -537,8 +546,6 @@ def demo_close_sale_reply(
     said_yes = (offered_link and short in _CHECKOUT_YES) or (
         (offered_link or recommended) and short in _CHOOSE_PLAN
     )
-    if not wants and not said_yes:
-        return None
 
     def mentioned(text: str) -> list[Mapping[str, Any]]:
         return [
@@ -547,6 +554,20 @@ def demo_close_sale_reply(
             if isinstance(o.get("name"), str)
             and re.search(rf"(?<![a-z0-9]){re.escape(normalize(o['name']))}(?![a-z0-9])", text)
         ]
+
+    if not wants and not said_yes:
+        liked = mentioned(phrase) if words & _LIKED_WORDS else []
+        if len(liked) == 1 and "?" not in question:
+            o = liked[0]
+            quota = str(o.get("quota") or "")
+            cents = o.get("price_cents")
+            if quota.isdigit() and isinstance(cents, int) and not isinstance(cents, bool):
+                pretty = f"{int(quota):,}".replace(",", ".")
+                return (
+                    f"Que bom que gostou! O {o['name']} custa {format_brl(cents)}/mês, com "
+                    f"{pretty} respostas de IA por mês. " + _checkout_cta(str(o["name"]))
+                )
+        return None
 
     chosen = mentioned(phrase)
     if len(chosen) != 1:

@@ -294,3 +294,37 @@ def test_quantity_total_reply_multiplies_registered_price() -> None:
     assert "http" not in out
     assert quantity_total_reply("Qual o valor total?", ["Oi"], "", offers) is None
     assert quantity_total_reply("Quero 3 kits", [], "", offers) is None
+
+
+def test_model_promising_link_without_attaching_it_is_refused() -> None:
+    offers = {"x": ("N", "R$ 1,00", "https://a.example")}
+    assert (
+        render_reply(AiReply("Vou enviar o link de pagamento do plano Essencial.", "x"), offers)
+        is None
+    )
+    assert render_reply(AiReply("Te envio o link já já!", None), offers) is None
+    ok = render_reply(AiReply("Vou enviar o link: {link}", "x"), offers)
+    assert ok is not None and "https://a.example" in ok
+
+
+def test_demo_liked_plan_gets_price_and_offer_of_link_not_a_model_promise() -> None:
+    from fm_seller.ai.seller import demo_close_sale_reply
+
+    offers = [
+        {"name": "Essencial", "price_cents": 12990, "quota": "500", "checkout_url": "https://p/e"},
+        {
+            "name": "Profissional",
+            "price_cents": 24990,
+            "quota": "2000",
+            "checkout_url": "https://p/p",
+        },
+        {"name": "Escala", "price_cents": 49990, "quota": "6000", "checkout_url": "https://p/s"},
+    ]
+    out = demo_close_sale_reply("Gostei do essencial", "", offers)
+    assert out is not None
+    assert "R$ 129,90" in out and "500 respostas" in out and "link de pagamento" in out
+    assert "http" not in out
+    assert demo_close_sale_reply("Gostei do atendimento", "", offers) is None
+    # depois do "sim" o fechamento entrega o link do plano
+    closed = demo_close_sale_reply("sim", out, offers)
+    assert closed is not None and "https://p/e" in closed
