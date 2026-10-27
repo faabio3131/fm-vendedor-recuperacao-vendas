@@ -475,6 +475,22 @@ _BUY_SUBJECTS = frozenset(
     ["quero", "vou", "gostaria", "queria", "desejo", "preciso", "posso", "como", "bora", "topo"]
 )
 _SEND_VERBS = frozenset(["manda", "mande", "mandar", "envia", "envie", "enviar", "passa", "passe"])
+_CHOOSE_PLAN = frozenset(
+    [
+        "pode ser esse",
+        "pode ser",
+        "esse",
+        "esse mesmo",
+        "quero esse",
+        "vou levar",
+        "fechado",
+        "pode ser esse mesmo",
+        "esse ai",
+        "beleza",
+        "vamos nesse",
+        "bora",
+    ]
+)
 _CHECKOUT_YES = frozenset(
     [
         "sim",
@@ -511,10 +527,12 @@ def demo_close_sale_reply(
         (words & _BUY_VERBS and words & _BUY_SUBJECTS) or (words & _SEND_VERBS and "link" in words)
     )
     prev_norm = normalize(previous_bot)
-    offered_link = "posso te enviar o link de pagamento" in prev_norm or (
-        "ja posso te enviar o link de pagamento" in prev_norm
+    offered_link = "enviar o link" in prev_norm
+    recommended = any(k in prev_norm for k in ("recomendo", "e o ideal", "plano ideal"))
+    short = phrase.strip("?!., ")
+    said_yes = (offered_link and short in _CHECKOUT_YES) or (
+        (offered_link or recommended) and short in _CHOOSE_PLAN
     )
-    said_yes = offered_link and phrase.strip("?!., ") in _CHECKOUT_YES
     if not wants and not said_yes:
         return None
 
@@ -1044,6 +1062,21 @@ def _handle_conversation(
         enqueue_text(conn, tenant_id, conv_id, "bot", text)
         conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
         return "replied"
+    if demo and pilot_question is not None:
+        prev_bot = conn.execute(
+            "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
+            "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
+            (conv_id,),
+        ).fetchone()
+        closing = demo_close_sale_reply(
+            pilot_question, prev_bot["body"] if prev_bot else "", offer_rows
+        )
+        if closing is not None and len(closing) <= 850:
+            enqueue_text(conn, tenant_id, conv_id, "bot", closing)
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
+            return "replied"
     # Small, deterministic qualification: don't hand off when the contact asks for
     # advice without first supplying the monthly usage needed to choose a tier.
     if demo and pilot_question is not None:
@@ -1076,6 +1109,16 @@ def _handle_conversation(
                 if carried is not None
                 else demo_requested_volume(question, direct_answer=answering_volume)
             )
+            if volume is None:
+                # O cliente já disse o volume antes? Não pergunta de novo.
+                for earlier in conn.execute(
+                    "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'in' "
+                    "ORDER BY created_at DESC LIMIT 8 OFFSET 1",
+                    (conv_id,),
+                ).fetchall():
+                    volume = demo_requested_volume(expand_abbreviations(earlier["body"]))
+                    if volume is not None:
+                        break
             words = set(normalize(question).split())
             # Incoming WhatsApp messages are not the same as monthly AI replies.
             # A prospect volunteering their inbox volume needs one clarification,
@@ -1121,20 +1164,6 @@ def _handle_conversation(
     # Verified FM product questions and purchase intent must not be sent to a
     # generic store-sales prompt. There is no live checkout in this demo.
     if demo and pilot_question is not None:
-        prev_bot = conn.execute(
-            "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
-            "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
-            (conv_id,),
-        ).fetchone()
-        closing = demo_close_sale_reply(
-            pilot_question, prev_bot["body"] if prev_bot else "", offer_rows
-        )
-        if closing is not None and len(closing) <= 850:
-            enqueue_text(conn, tenant_id, conv_id, "bot", closing)
-            conn.execute(
-                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
-            )
-            return "replied"
         verified = demo_verified_commercial_reply(pilot_question)
         if verified is not None and len(verified) <= 850:
             enqueue_text(conn, tenant_id, conv_id, "bot", verified)
