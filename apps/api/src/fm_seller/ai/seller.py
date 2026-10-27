@@ -137,13 +137,39 @@ def _content_words(text: str) -> set[str]:
     return words
 
 
+DEMO_MESSAGES_CLARIFICATION = (
+    "Entendi. A franquia dos planos conta respostas de IA, não "
+    "mensagens recebidas. Aproximadamente quantas dessas mensagens "
+    "você gostaria que a IA respondesse por mês?"
+)
+# "Todas", "todas elas", "sim"...: o cliente confirma que quer a IA respondendo o volume que
+# ele mesmo já informou antes.
+_ALL_OF_THEM = frozenset(
+    [
+        "todas",
+        "todos",
+        "tudo",
+        "todas elas",
+        "todos eles",
+        "todas essas",
+        "todas as mensagens",
+        "sim",
+        "sim todas",
+        "isso",
+        "isso mesmo",
+        "exatamente",
+        "pode ser",
+    ]
+)
+
+
 def asked_for_volume(previous_bot: str) -> bool:
     """A mensagem anterior do bot terminou pedindo o volume mensal de respostas de IA.
 
     O modelo também faz essa pergunta (com outras palavras) ao explicar os planos; um "1500"
     em seguida é a resposta, não uma conversa nova.
     """
-    if previous_bot == DEMO_VOLUME_QUESTION:
+    if previous_bot in (DEMO_VOLUME_QUESTION, DEMO_MESSAGES_CLARIFICATION):
         return True
     tail = normalize(previous_bot)[-90:]
     return bool(re.search(r"quantas respostas de ia .{0,40}por mes$", tail))
@@ -784,8 +810,26 @@ def _handle_conversation(
             (conv_id,),
         ).fetchone()
         answering_volume = bool(previous and asked_for_volume(previous["body"]))
-        if recommends or answering_volume or stated_volume is not None:
-            volume = demo_requested_volume(question, direct_answer=answering_volume)
+        carried: int | None = None
+        if (
+            previous
+            and previous["body"] == DEMO_MESSAGES_CLARIFICATION
+            and normalize(question) in _ALL_OF_THEM
+        ):
+            for earlier in conn.execute(
+                "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'in' "
+                "ORDER BY created_at DESC LIMIT 8",
+                (conv_id,),
+            ).fetchall():
+                carried = demo_requested_volume(earlier["body"])
+                if carried is not None:
+                    break
+        if recommends or answering_volume or stated_volume is not None or carried is not None:
+            volume = (
+                carried
+                if carried is not None
+                else demo_requested_volume(question, direct_answer=answering_volume)
+            )
             words = set(normalize(question).split())
             # Incoming WhatsApp messages are not the same as monthly AI replies.
             # A prospect volunteering their inbox volume needs one clarification,
@@ -795,11 +839,7 @@ def _handle_conversation(
                 and words & {"mensagens", "atendimentos"}
                 and "respostas" not in words
             ):
-                text = (
-                    "Entendi. A franquia dos planos conta respostas de IA, não "
-                    "mensagens recebidas. Aproximadamente quantas dessas mensagens "
-                    "você gostaria que a IA respondesse por mês?"
-                )
+                text = DEMO_MESSAGES_CLARIFICATION
             elif volume is None:
                 text = DEMO_VOLUME_QUESTION
             else:

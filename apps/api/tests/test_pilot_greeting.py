@@ -522,6 +522,52 @@ def test_pilot_voice_transcript_with_inbound_messages_volume_qualifies_before_pr
     assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
 
 
+@pytest.mark.parametrize(
+    ("answer", "expected_plan", "expected_quota"),
+    [("Todas", "Escala", "3.000"), ("todas elas", "Escala", "3.000"), ("400", "Essencial", "500")],
+)
+def test_pilot_clarification_answer_reuses_stated_volume_without_model(
+    env: Env, db: Database, answer: str, expected_plan: str, expected_quota: str
+) -> None:
+    """Teste real de 26/10: '1500 mensagens' -> esclarecimento -> 'Todas' caia no modelo,
+    que repetia 1.500 e era barrado pelo envio demo ('número não autorizado')."""
+    from fm_seller.ai.model import UnavailableAiModel
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    tid = uuid.UUID(env.tenant("FM todas", unique_email("pilot-todas")))
+    env.sql(
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) VALUES (%s,false,'AnaClara')",
+        (str(tid),),
+    )
+    with db.tx(tenant_id=tid) as conn:
+        _, conv = upsert_conversation(conn, tid, PHONE, "Contato autorizado")
+    settings = _pilot(tid)
+    settings.pilot_demo_enabled = True
+
+    def say(body: str) -> None:
+        env.sql(
+            "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,"
+            "status,handled) VALUES (%s,%s,'in','customer',%s,'received',false)",
+            (str(tid), conv, body),
+        )
+
+    model = UnavailableAiModel()
+    say("Eu recebo 1500 mensagens por mês")
+    assert run_ai_replies(db, model, pilot_settings=settings).replied == 1
+    say(answer)
+    result = run_ai_replies(db, model, pilot_settings=settings)
+    assert result.replied == 1 and result.handoffs == 0
+    sent = env.sql(
+        "SELECT body FROM messages WHERE conversation_id=%s AND direction='out' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (conv,),
+    )[0][0]
+    assert expected_plan in sent and f"{expected_quota} respostas" in sent
+    assert env.sql("SELECT status FROM conversations WHERE id=%s", (conv,)) == [("bot",)]
+    assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
+
+
 def test_pilot_hello_is_safe_and_does_not_handoff_even_after_an_earlier_turn(
     env: Env, db: Database
 ) -> None:
