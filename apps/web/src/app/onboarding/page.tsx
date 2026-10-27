@@ -71,6 +71,10 @@ function Steps() {
         se atualiza sozinha.
       </p>
 
+      <p>
+        Não sabe por onde começar? Veja o <Link href="/ajuda">passo a passo com modelos prontos</Link>.
+      </p>
+
       <div className="card">
         <strong>
           {data.done} de {data.total} passos prontos
