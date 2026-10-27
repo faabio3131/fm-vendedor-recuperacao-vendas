@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fm_seller.ai import usage
+from fm_seller.ai.abbreviations import expand_abbreviations
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
 from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_text
 from fm_seller.channels.pilot_greeting import (
@@ -669,6 +670,10 @@ def _handle_conversation(
     inbound.sort(key=lambda row: (row["created_at"], str(row["id"])))
     if not inbound:
         return "ignored"
+    # "vc", "msg", "q"...: as camadas sem modelo casam palavras exatas, então leem o texto com
+    # as abreviações expandidas. A mensagem original segue guardada e é a que o modelo lê.
+    for message in inbound:
+        message["body"] = expand_abbreviations(message["body"])
     pilot = locked["channel"] == "whatsapp" and pilot_contact(
         pilot_settings, tenant_id, locked["phone"]
     )
@@ -821,7 +826,7 @@ def _handle_conversation(
                 "ORDER BY created_at DESC LIMIT 8",
                 (conv_id,),
             ).fetchall():
-                carried = demo_requested_volume(earlier["body"])
+                carried = demo_requested_volume(expand_abbreviations(earlier["body"]))
                 if carried is not None:
                     break
         if recommends or answering_volume or stated_volume is not None or carried is not None:
