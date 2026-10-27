@@ -1,4 +1,4 @@
-"""Trial 7d / 500 automatic sends: deterministic persistence and fail-closed boundaries."""
+"""Trial 7d / 200 automatic sends: deterministic persistence and fail-closed boundaries."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def _enroll(client: TestClient, env: Env, db: Database) -> uuid.UUID:
     assert login(client, email).status_code == 200
     actor = env.sql("SELECT user_id FROM memberships WHERE tenant_id = %s", (tenant,))[0][0]
     state = trial.start(db, tenant, actor=actor, now=START)
-    assert state["limit"] == 500 and state["warn_at"] == 400
+    assert state["limit"] == 200 and state["warn_at"] == 160
     assert state["status"] == "active"
     assert state["expires_at"] == START + timedelta(days=7)
     return tenant
@@ -60,14 +60,14 @@ def test_shared_cap_warning_expiry_and_idempotency(
     assert trial.finalize(db, tenant, source_kind="bot", source_id=first, outcome="sent")
     assert not trial.finalize(db, tenant, source_kind="bot", source_id=first, outcome="sent")
 
-    # Start at 399 to exercise the exact warning/limit boundary without 399 real sends.
+    # Start at 159 to exercise the exact warning/limit boundary without 159 real sends.
     env.sql(
-        "UPDATE tenant_plans SET trial_messages_sent = 399 WHERE tenant_id = %s",
+        "UPDATE tenant_plans SET trial_messages_sent = 159 WHERE tenant_id = %s",
         (tenant,),
     )
     with db.tx(tenant_id=tenant) as conn:
         state = trial.snapshot(conn, tenant, now=START + timedelta(days=1))
-        assert state is not None and state["used"] == 399
+        assert state is not None and state["used"] == 159
         assert state["conversion_prompt"] is False
 
     one = uuid.uuid4()
@@ -80,10 +80,10 @@ def test_shared_cap_warning_expiry_and_idempotency(
     assert trial.finalize(db, tenant, source_kind="recovery", source_id=one, outcome="sent")
     with db.tx(tenant_id=tenant) as conn:
         state = trial.snapshot(conn, tenant, now=START + timedelta(days=1))
-        assert state is not None and state["used"] == 400
+        assert state is not None and state["used"] == 160
         assert state["conversion_prompt"] is True
 
-    env.sql("UPDATE tenant_plans SET trial_messages_sent = 499 WHERE tenant_id = %s", (tenant,))
+    env.sql("UPDATE tenant_plans SET trial_messages_sent = 199 WHERE tenant_id = %s", (tenant,))
     last = uuid.uuid4()
     assert trial.reserve(db, tenant, source_kind="bot", source_id=last, now=START) == "reserved"
     assert (
@@ -94,7 +94,7 @@ def test_shared_cap_warning_expiry_and_idempotency(
     with db.tx(tenant_id=tenant) as conn:
         state = trial.snapshot(conn, tenant, now=START)
         assert state is not None and state["status"] == "exhausted"
-        assert state["used"] == 500
+        assert state["used"] == 200
         assert trial.blocked(conn, tenant, now=START)
 
     expiring = _enroll(client, env, db)
@@ -145,7 +145,7 @@ def test_two_workers_cannot_exceed_last_shared_slot(
     client: TestClient, env: Env, db: Database
 ) -> None:
     tenant = _enroll(client, env, db)
-    env.sql("UPDATE tenant_plans SET trial_messages_sent = 499 WHERE tenant_id = %s", (tenant,))
+    env.sql("UPDATE tenant_plans SET trial_messages_sent = 199 WHERE tenant_id = %s", (tenant,))
     bot, recovery = uuid.uuid4(), uuid.uuid4()
     with ThreadPoolExecutor(max_workers=2) as pool:
         a = pool.submit(trial.reserve, db, tenant, source_kind="bot", source_id=bot, now=START)
@@ -182,7 +182,7 @@ def test_trial_admin_grant_requires_platform_role_and_generic_plan_change_is_den
 
     result = client.post(path)
     assert result.status_code == 200, result.text
-    assert result.json()["limit"] == 500 and result.json()["warn_at"] == 400
+    assert result.json()["limit"] == 200 and result.json()["warn_at"] == 160
     assert client.post(path).status_code == 400
     rows = env.sql(
         "SELECT plan_key, trial_message_cap, trial_warn_at, trial_started_at "
@@ -190,5 +190,5 @@ def test_trial_admin_grant_requires_platform_role_and_generic_plan_change_is_den
         (tenant,),
     )
     assert len(rows) == 1
-    assert rows[0][0:3] == ("av-trial", 500, 400)
+    assert rows[0][0:3] == ("av-trial", 200, 160)
     assert rows[0][3] is not None

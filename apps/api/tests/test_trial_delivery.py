@@ -34,7 +34,7 @@ def test_outbox_sends_only_last_trial_message_across_two_claimed(
     tenant_id = _tenant(env, db, client)
     connect_whatsapp(client, env, str(tenant_id))
     env.sql(
-        "UPDATE tenant_plans SET trial_messages_sent = 499 WHERE tenant_id = %s",
+        "UPDATE tenant_plans SET trial_messages_sent = 199 WHERE tenant_id = %s",
         (tenant_id,),
     )
     with db.tx(tenant_id=tenant_id) as conn:
@@ -59,7 +59,7 @@ def test_outbox_sends_only_last_trial_message_across_two_claimed(
     assert sorted(x[0] for x in states) == ["failed", "sent"]
     with db.tx(tenant_id=tenant_id) as conn:
         state = trial.snapshot(conn, tenant_id, now=NOW)
-        assert state is not None and state["used"] == 500
+        assert state is not None and state["used"] == 200
         assert state["remaining"] == 0
 
 
