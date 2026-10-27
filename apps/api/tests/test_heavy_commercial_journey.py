@@ -103,7 +103,7 @@ def test_webhook_to_registered_price_link_to_evolution_ack(
     assert fake.sent == [
         {
             "number": PHONE,
-            "text": "A Produto QA custa R$ 197,00. Veja " + PAYMENT_LINK,
+            "text": "A Produto QA custa R$ 197,00. Veja\n" + PAYMENT_LINK,
         }
     ]
     assert flush_outbox(db, env.box, sender).sent == 0
