@@ -14,7 +14,7 @@ export function useMe(): Me {
   return me;
 }
 
-const ICONS: Record<string, string> = {"/": "M3 11l9-8 9 8M5 10v10h14V10", "/onboarding": "M5 21V4m0 0h12l-2 4 2 4H5", "/inbox": "M4 5h16v11H9l-5 4z", "/seller": "M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z", "/recovery": "M4 12a8 8 0 1 0 3-6.2M4 4v4h4", "/reports": "M5 20V10m5 10V4m5 16v-7m5 7H3", "/connections": "M9 8H7a4 4 0 0 0 0 8h2m6-8h2a4 4 0 0 1 0 8h-2M8 12h8", "/plan": "M3 7h18v12H3zM3 11h18", "/install": "M8 3h8v18H8zM11 18h2", "/privacy": "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"};
+const ICONS: Record<string, string> = {"/": "M3 11l9-8 9 8M5 10v10h14V10", "/onboarding": "M5 21V4m0 0h12l-2 4 2 4H5", "/inbox": "M4 5h16v11H9l-5 4z", "/seller": "M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z", "/recovery": "M4 12a8 8 0 1 0 3-6.2M4 4v4h4", "/reports": "M5 20V10m5 10V4m5 16v-7m5 7H3", "/connections": "M9 8H7a4 4 0 0 0 0 8h2m6-8h2a4 4 0 0 1 0 8h-2M8 12h8", "/plan": "M3 7h18v12H3zM3 11h18", "/install": "M8 3h8v18H8zM11 18h2", "/ajuda": "M12 17v.01M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18", "/privacy": "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"};
 
 function NavIcon({ href }: { href: string }) {
   return (
@@ -27,6 +27,7 @@ function NavIcon({ href }: { href: string }) {
 const NAV: { href: string; label: string; roles?: string[] }[] = [
   { href: "/", label: "Visão geral" },
   { href: "/onboarding", label: "Primeiros passos" },
+  { href: "/ajuda", label: "Ajuda e modelos" },
   { href: "/inbox", label: "Conversas" },
   { href: "/seller", label: "Vendedor IA" },
   { href: "/recovery", label: "Recuperação" },
