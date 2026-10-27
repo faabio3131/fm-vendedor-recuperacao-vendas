@@ -453,7 +453,7 @@ def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
         "ORDER BY created_at DESC LIMIT 1",
         (cv,),
     )[0][0]
-    assert "contratação é assistida" in contract
+    assert "link de pagamento" in contract
     assert allowed.send_text(cfg, PHONE, contract) == "ABC123"
     ask("O que esse plano não faz?")
     sixth = run_ai_replies(db, model, pilot_settings=settings)
@@ -464,7 +464,7 @@ def test_realistic_plan_advice_asks_volume_then_recommends_without_ai_tokens(
         (cv,),
     )[0][0]
     assert "não oferece respostas de IA ilimitadas" in exclusions
-    assert "não ativa assinatura automaticamente" in exclusions
+    assert "equipe confirma a ativação" in exclusions
     assert allowed.send_text(cfg, PHONE, exclusions) == "ABC123"
     assert env.sql("SELECT status FROM conversations WHERE id=%s", (cv,)) == [("bot",)]
     assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
