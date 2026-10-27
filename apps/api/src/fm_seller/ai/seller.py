@@ -836,7 +836,7 @@ def _handle_conversation(
             # not an invented usage estimate or an unsafe LLM price.
             if (
                 volume is not None
-                and words & {"mensagens", "atendimentos"}
+                and words & {"mensagens", "mensagem", "msgs", "msg", "atendimentos"}
                 and "respostas" not in words
             ):
                 text = DEMO_MESSAGES_CLARIFICATION

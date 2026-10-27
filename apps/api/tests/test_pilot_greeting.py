@@ -568,6 +568,54 @@ def test_pilot_clarification_answer_reuses_stated_volume_without_model(
     assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
 
 
+@pytest.mark.parametrize("phrase", ["Eu recebo 1500 msg por mês", "recebo 1.500 msgs por mês"])
+def test_pilot_abbreviated_msg_asks_clarification_instead_of_calling_them_ai_replies(
+    env: Env, db: Database, phrase: str
+) -> None:
+    """Teste real de 26/10 22:16: '1500 msg por mês' pulava o esclarecimento e o modelo
+    tratava mensagens recebidas como respostas de IA; o cliente não podia dizer 'Todas'."""
+    from fm_seller.ai.model import UnavailableAiModel
+    from fm_seller.ai.seller import DEMO_MESSAGES_CLARIFICATION
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    env.sql("UPDATE messages SET handled=true WHERE direction='in'")
+    tid = uuid.UUID(env.tenant("FM msg", unique_email("pilot-msg")))
+    env.sql(
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) VALUES (%s,false,'AnaClara')",
+        (str(tid),),
+    )
+    with db.tx(tenant_id=tid) as conn:
+        _, conv = upsert_conversation(conn, tid, PHONE, "Contato autorizado")
+    settings = _pilot(tid)
+    settings.pilot_demo_enabled = True
+
+    def say(body: str) -> None:
+        env.sql(
+            "INSERT INTO messages(tenant_id,conversation_id,direction,author,body,"
+            "status,handled) VALUES (%s,%s,'in','customer',%s,'received',false)",
+            (str(tid), conv, body),
+        )
+
+    def last_out() -> str:
+        return str(
+            env.sql(
+                "SELECT body FROM messages WHERE conversation_id=%s AND direction='out' "
+                "ORDER BY created_at DESC LIMIT 1",
+                (conv,),
+            )[0][0]
+        )
+
+    model = UnavailableAiModel()
+    say(phrase)
+    assert run_ai_replies(db, model, pilot_settings=settings).replied == 1
+    assert last_out() == DEMO_MESSAGES_CLARIFICATION
+    say("Todas")
+    result = run_ai_replies(db, model, pilot_settings=settings)
+    assert result.replied == 1 and result.handoffs == 0
+    assert "Escala" in last_out() and "3.000 respostas" in last_out()
+    assert env.sql("SELECT count(*) FROM ai_usage WHERE tenant_id=%s", (str(tid),)) == [(0,)]
+
+
 def test_pilot_hello_is_safe_and_does_not_handoff_even_after_an_earlier_turn(
     env: Env, db: Database
 ) -> None:
