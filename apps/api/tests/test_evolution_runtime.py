@@ -466,3 +466,30 @@ def test_evolution_voice_lid_lookup_is_unique_inbound_and_phone_bound(
         {"where": {"key": {"id": msg_id, "remoteJid": jid}}, "page": 1, "offset": 10},
         {"where": {"key": {"id": msg_id}}, "page": 1, "offset": 10},
     ]
+
+
+class FlakyStateClient(FakeSendClient):
+    def __init__(self, failures: int) -> None:
+        super().__init__()
+        self.failures = failures
+        self.state_calls = 0
+
+    def state(self, name: str) -> str:
+        self.state_calls += 1
+        if self.state_calls <= self.failures:
+            raise AppError(502, "evolution_unavailable", "indisponível")
+        return self.state_value
+
+
+def test_state_check_retries_transient_failure_before_sending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("fm_seller.channels.evolution_runtime._STATE_RETRY_DELAYS", (0, 0, 0))
+    config = {"instance_name": "fmav-" + "a" * 32, "__provider": "evolution"}
+    flaky = FlakyStateClient(failures=2)
+    assert EvolutionSender(cast(Any, flaky)).send_text(config, "5511999991234", "Oi") == "ABC123"
+    assert flaky.state_calls == 3 and len(flaky.sent) == 1
+    down = FlakyStateClient(failures=99)
+    with pytest.raises(SendError, match="não verificada"):
+        EvolutionSender(cast(Any, down)).send_text(config, "5511999991234", "Oi")
+    assert down.state_calls == 4 and down.sent == []
