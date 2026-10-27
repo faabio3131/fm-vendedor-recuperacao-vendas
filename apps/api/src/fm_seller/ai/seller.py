@@ -558,6 +558,108 @@ def demo_close_sale_reply(
     return None
 
 
+_CHOOSE_OFFER = frozenset(
+    [
+        "pode ser esse",
+        "pode ser",
+        "esse",
+        "esse mesmo",
+        "quero esse",
+        "vou levar",
+        "fechado",
+        "bora",
+    ]
+)
+_NAME_STOPWORDS = frozenset(
+    ["de", "do", "da", "dos", "das", "o", "a", "os", "as", "e", "com", "para", "mensal", "plano"]
+)
+_NOT_A_CLOSE = frozenset(
+    [
+        "desconto",
+        "descontos",
+        "parcelar",
+        "parcela",
+        "parcelas",
+        "frete",
+        "prazo",
+        "troca",
+        "trocar",
+        "garantia",
+        "cupom",
+        "negociar",
+        "barato",
+        "caro",
+        "devolucao",
+        "reembolso",
+    ]
+)
+
+
+def _name_tokens(name: str) -> set[str]:
+    return {w for w in normalize(name).split() if len(w) >= 3 and w not in _NAME_STOPWORDS}
+
+
+def close_sale_reply(
+    question: str, previous_bot: str, offer_rows: Sequence[Mapping[str, Any]]
+) -> str | None:
+    """Cliente comum: intenção clara de compra leva ao link cadastrado da oferta, sem modelo.
+
+    A oferta vem do que o cliente citou (nome ou palavra do nome), da que a atendente acabou de
+    mencionar ou da única cadastrada. Preço e link saem só do cadastro. Em dúvida (várias ofertas,
+    pergunta sobre desconto, prazo, troca etc.) devolve None e o modelo conduz a conversa.
+    """
+    phrase = normalize(question).strip()
+    words = set(phrase.split())
+    if words & _NOT_A_CLOSE or words & {"ignore", "ignora", "regras", "instrucoes", "prompt"}:
+        return None
+    if "http" in phrase or "www" in phrase:
+        return None
+    prev = normalize(previous_bot)
+    short = phrase.strip("?!., ")
+    wants = bool(
+        (words & _BUY_VERBS and words & _BUY_SUBJECTS)
+        or (words & _SEND_VERBS and "link" in words)
+        or "vou levar" in phrase
+        or "quero esse" in phrase
+    )
+    offered = "enviar o link" in prev or "envie o link" in prev
+    if not wants and not (offered and short in _CHECKOUT_YES | _CHOOSE_OFFER):
+        return None
+    usable = [
+        o
+        for o in offer_rows
+        if isinstance(o.get("name"), str)
+        and isinstance(o.get("payment_url"), str)
+        and str(o["payment_url"]).startswith("https://")
+        and isinstance(o.get("price_cents"), int)
+        and not isinstance(o.get("price_cents"), bool)
+    ]
+
+    def pick(text: str) -> list[Mapping[str, Any]]:
+        toks = set(text.split())
+        exact = [o for o in usable if normalize(str(o["name"])) in text]
+        if len(exact) == 1:
+            return exact
+        return [o for o in usable if _name_tokens(str(o["name"])) & toks]
+
+    chosen = pick(phrase)
+    if len(chosen) != 1:
+        chosen = pick(prev)
+    if len(chosen) != 1 and len(usable) == 1:
+        chosen = usable
+    if len(chosen) == 1:
+        o = chosen[0]
+        return (
+            f"Perfeito! {o['name']} custa {format_brl(o['price_cents'])}. "
+            f"Para finalizar, use este link seguro:\n{o['payment_url']}\n\n"
+            "Qualquer dúvida antes de pagar, é só me chamar."
+        )
+    names = [str(o["name"]) for o in usable]
+    if len(names) >= 2:
+        return "Ótimo! Qual você quer levar: " + ", ".join(names[:-1]) + f" ou {names[-1]}?"
+    return None
+
+
 def demo_verified_commercial_reply(question: str) -> str | None:
     """Answer narrow product/purchase intents from proven capabilities, never from model guesses.
 
@@ -706,14 +808,25 @@ def propose(model: AiModel, ctx: AiContext, registry: dict[str, tuple[str, str, 
             tokens_out=reply.tokens_out,
         )
     text = render_reply(reply, registry)
+    tokens_in, tokens_out = reply.tokens_in, reply.tokens_out
+    if text is None:
+        # Uma segunda tentativa antes de entregar a conversa a uma pessoa: o texto barrado
+        # costuma ser só um valor ou link escrito à mão pelo modelo.
+        try:
+            reply = model.reply(ctx)
+        except Exception:
+            return Proposal("handoff", reason="resposta_invalida", failed=False)
+        tokens_in += reply.tokens_in
+        tokens_out += reply.tokens_out
+        text = None if reply.handoff else render_reply(reply, registry)
     if text is None:
         return Proposal(
             "handoff",
             reason="resposta_invalida",
-            tokens_in=reply.tokens_in,
-            tokens_out=reply.tokens_out,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
         )
-    return Proposal("reply", text=text, tokens_in=reply.tokens_in, tokens_out=reply.tokens_out)
+    return Proposal("reply", text=text, tokens_in=tokens_in, tokens_out=tokens_out)
 
 
 def _handoff(
@@ -1088,6 +1201,22 @@ def _handle_conversation(
         )
         if cached is not None:
             enqueue_text(conn, tenant_id, conv_id, "bot", cached)
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
+            )
+            return "replied"
+
+    if not demo and not pilot:
+        last_out = conn.execute(
+            "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
+            "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
+            (conv_id,),
+        ).fetchone()
+        closing_generic = close_sale_reply(
+            inbound[-1]["body"], last_out["body"] if last_out else "", offer_rows
+        )
+        if closing_generic is not None:
+            enqueue_text(conn, tenant_id, conv_id, "bot", closing_generic)
             conn.execute(
                 "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
             )
