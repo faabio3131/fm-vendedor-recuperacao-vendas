@@ -211,7 +211,7 @@ def run(settings: Settings, model: AiModel, only: str | None = None) -> int:
                 bad = [
                     u
                     for u in re.findall(r"https?://[^\s]+", ultima)
-                    if u.rstrip(".,;)") not in LINKS.values()
+                    if u.rstrip(".,;)!?") not in LINKS.values()
                 ]
                 if bad:
                     print(f"  >> LINK INVENTADO: {bad}")
@@ -233,7 +233,7 @@ def main() -> int:
     ap.add_argument("--real", action="store_true")
     ap.add_argument("--cenario")
     args = ap.parse_args()
-    settings = Settings()  # type: ignore[call-arg]
+    settings = Settings()
     model: AiModel
     if args.real:
         from fm_seller.ai.gemini import GeminiModel
