@@ -83,6 +83,8 @@ def ingest_whatsapp(
     headers: Mapping[str, str],
     raw_body: bytes,
     voice: bool = False,
+    voice_pilot_tenant_id: str = "",
+    voice_pilot_phone: str = "",
 ) -> dict[str, int]:
     if len(raw_body) > MAX_BODY:
         raise AppError(413, "payload_too_large", "Corpo grande demais.")
@@ -115,8 +117,19 @@ def ingest_whatsapp(
                     str(c.get("wa_id", "")): str((c.get("profile") or {}).get("name", ""))
                     for c in value.get("contacts", []) or []
                 }
+                pilot_voice = voice and (
+                    not voice_pilot_tenant_id or str(tenant_id) == voice_pilot_tenant_id
+                )
                 for msg in value.get("messages", []) or []:
-                    _inbound(conn, tenant_id, msg, names, counts, voice)
+                    _inbound(
+                        conn,
+                        tenant_id,
+                        msg,
+                        names,
+                        counts,
+                        pilot_voice,
+                        voice_pilot_phone=voice_pilot_phone,
+                    )
                 for st in value.get("statuses", []) or []:
                     _status(conn, tenant_id, st, counts)
         conn.execute(
@@ -186,6 +199,8 @@ def _inbound(
     names: Mapping[str, str],
     counts: dict[str, int],
     voice: bool = False,
+    *,
+    voice_pilot_phone: str = "",
 ) -> None:
     phone = normalize_phone_br(msg.get("from"))
     message_id = str(msg.get("id", ""))
@@ -194,7 +209,8 @@ def _inbound(
     contact_id, conv_id = upsert_conversation(
         conn, tenant_id, phone, names.get(str(msg.get("from")), "")
     )
-    media_id = _audio_id(msg) if voice else None
+    allowed_voice = voice and (not voice_pilot_phone or phone == voice_pilot_phone)
+    media_id = _audio_id(msg) if allowed_voice else None
     record_inbound(
         conn,
         tenant_id,

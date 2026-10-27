@@ -64,7 +64,7 @@ function Plan() {
                 ? "Você está perto do limite do teste. Conheça os planos pagos para continuar atendendo."
                 : "Seu teste grátis terminou. Os envios automáticos foram bloqueados; seus dados continuam disponíveis."}
               {" "}A contratação de um plano pago exige sua confirmação e não é automática.
-              Solicite à equipe FM Tecnologia os links oficiais dos planos disponíveis.
+              Solicite à equipe FM Tecnologia IA os links oficiais dos planos disponíveis.
             </div>
           )}
         </section>

@@ -27,6 +27,7 @@ fi
 sha="${FM_DEPLOY_SHA:?Missing approved SHA}"
 digest="${FM_DEPLOY_DIGEST:?Missing pinned source digest}"
 [[ "$sha" =~ ^[0-9a-f]{40}$ && "$digest" =~ ^[0-9a-f]{64}$ ]] || exit 2
+# Approval = Fabio's chat "sim" before merge to main; guard injects YES server-side.
 [[ "${FM_DEPLOY_APPROVE_MIGRATIONS:-}" == "YES" ]] || {
   echo "Production migrations were not explicitly approved." >&2; exit 2;
 }
@@ -54,7 +55,7 @@ mkdir -m 700 "$release" "$source"
 tar -xzf "$incoming" --no-same-owner -C "$source"
 for item in "$source/deploy/contabo/compose.yml" "$source/scripts/ops/rls_invariant.sql" \
   "$source/scripts/ops/rls_not_system_readable.sql" \
-  "$source/apps/api/src/fm_seller/migrations/0016_internal_trial.sql"; do
+  "$source/apps/api/src/fm_seller/migrations/0017_commercial_quotas_60pct.sql"; do
   [[ -f "$item" ]] || { echo "Incomplete source archive" >&2; exit 1; }
 done
 printf '%s\n' "$digest" > "$release/source.sha256"
@@ -76,10 +77,21 @@ docker compose --env-file "$root/.env" -f "$source/deploy/contabo/compose.yml" c
 
 last="$(docker exec "$db" psql -U fm_owner -d "$db_name" -Atc \
   'SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1')"
-case "$last" in
-  0014_audio_cliente.sql|0015_commercial_plans.sql|0016_internal_trial.sql) ;;
-  *) echo "Unexpected schema baseline: $last" >&2; exit 1 ;;
-esac
+migdir="$source/apps/api/src/fm_seller/migrations"
+target="$(find "$migdir" -maxdepth 1 -name '[0-9][0-9][0-9][0-9]_*.sql' -printf '%f\n' | sort | tail -1)"
+[[ -n "$target" ]] || { echo "No migrations in source" >&2; exit 1; }
+# Baseline must be a migration known to this source (never newer / unknown).
+[[ -f "$migdir/$last" ]] || { echo "Unexpected schema baseline: $last" >&2; exit 1; }
+# Block destructive SQL in pending migrations: automatic deploy never drops/renames data.
+pending=0
+while IFS= read -r f; do
+  [[ "$f" > "$last" ]] || continue
+  pending=$((pending+1))
+  if grep -Eiq 'DROP[[:space:]]+(TABLE|COLUMN|SCHEMA|DATABASE|CONSTRAINT|INDEX|TYPE)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]]+COLUMN.*TYPE|RENAME' "$migdir/$f"; then
+    echo "Destructive SQL in pending migration $f; manual review required" >&2; exit 1
+  fi
+done < <(find "$migdir" -maxdepth 1 -name '[0-9][0-9][0-9][0-9]_*.sql' -printf '%f\n' | sort)
+echo "Pending migrations: $pending (target $target)"
 echo "Checked DB baseline: $last"
 
 # Validate canonical backup coverage; forced tenant RLS must not silently truncate data.
@@ -150,7 +162,7 @@ docker compose --env-file "$root/.env" -f "$source/deploy/contabo/compose.yml" \
   run --rm --no-deps api python -m fm_seller.cli migrate
 latest="$(docker exec "$db" psql -U fm_owner -d "$db_name" -Atc \
   'SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1')"
-[[ "$latest" == "0016_internal_trial.sql" ]] || {
+[[ "$latest" == "$target" ]] || {
   echo "Database did not reach the expected target migration" >&2; exit 1;
 }
 

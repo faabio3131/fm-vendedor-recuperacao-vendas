@@ -13,12 +13,14 @@ manda ID de rede social por um remetente de WhatsApp.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from fm_seller.channels.outbound import HANDOFF_MESSAGE
 from fm_seller.channels.social import BY_CHANNEL, identity_of
 from fm_seller.db import Database
 from fm_seller.provisioning import trial
@@ -70,7 +72,8 @@ def flush_outbox(
                 "JOIN contacts ct ON ct.id=cv.contact_id AND ct.tenant_id=cv.tenant_id "
                 "WHERE m.direction='out' AND m.status='queued' AND cv.channel='whatsapp' "
                 "AND m.author='bot' AND m.tenant_id=%s AND cv.tenant_id=m.tenant_id "
-                "AND cv.status='bot' AND ct.phone=%s "
+                "AND (cv.status='bot' OR (cv.status='human' "
+                "AND cv.handoff_reason IS NOT NULL AND m.body=%s)) AND ct.phone=%s "
                 "AND cv.last_inbound_at IS NOT NULL "
                 "AND m.created_at >= cv.last_inbound_at AND cv.last_inbound_at >= %s "
                 "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
@@ -78,6 +81,7 @@ def flush_outbox(
                 (
                     now,
                     getattr(sender, "pilot_tenant_id", None),
+                    HANDOFF_MESSAGE,
                     getattr(sender, "pilot_phone", ""),
                     now - timedelta(minutes=10),
                     limit,
@@ -214,6 +218,53 @@ def _send_one(
                         reason = "canal_sem_adaptador"
                 except CryptoError:
                     reason = "credencial_ilegivel"
+        demo_sender: Any = getattr(senders.get("whatsapp"), "evolution", None)
+        if reason is None and getattr(demo_sender, "demo_enabled", False):
+            from fm_seller.money import format_brl
+
+            plans = conn.execute(
+                "SELECT key, price_monthly_cents, limits->>'ai_replies_per_month' AS quota "
+                "FROM plans WHERE key IN "
+                "('av-essencial','av-profissional','av-escala') "
+                "AND active AND price_monthly_cents > 0"
+            ).fetchall()
+            if (
+                len(plans) != 3
+                or row["author"] != "bot"
+                or tenant_id != demo_sender.tenant_id
+                or any(not r["quota"] or int(r["quota"]) <= 0 for r in plans)
+            ):
+                reason = "piloto_demo_catalogo_indisponivel"
+            else:
+                config["__demo_prices"] = "|".join(
+                    format_brl(r["price_monthly_cents"]) for r in plans
+                )
+                config["__demo_quotas"] = "|".join(
+                    str(r["quota"]) + "|" + f"{int(r['quota']):,}".replace(",", ".") for r in plans
+                )
+                # Números que o próprio cliente escreveu podem ser repetidos de volta
+                # ("para o seu volume de 1.500..."); nunca valem como preço ou franquia.
+                recent_in = conn.execute(
+                    "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'in' "
+                    "ORDER BY created_at DESC LIMIT 12",
+                    (row["conversation_id"],),
+                ).fetchall()
+                typed = {
+                    n.rstrip(".")
+                    for m in recent_in
+                    for n in re.findall(r"(?<!\w)[0-9][0-9.]*", m["body"] or "")
+                }
+                grouped = {
+                    f"{int(n):,}".replace(",", ".") for n in typed if n.isdigit() and len(n) <= 9
+                }
+                config["__demo_echo"] = "|".join(sorted(typed | grouped))
+                # Links de pagamento cadastrados da própria FM (planos AtendeVendeIA).
+                links = conn.execute(
+                    "SELECT payment_url FROM offers WHERE tenant_id = %s AND active "
+                    "AND payment_url LIKE 'https://%%'",
+                    (tenant_id,),
+                ).fetchall()
+                config["__demo_links"] = "|".join(str(r["payment_url"]) for r in links)
     if (
         getattr(senders.get("whatsapp"), "pilot_only", False)
         and ctx is not None

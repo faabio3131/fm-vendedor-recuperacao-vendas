@@ -178,6 +178,95 @@ class SellerService:
                 target=str(offer_id),
             )
 
+    # ---- base de conhecimento (perguntas e respostas que o cliente cadastra)
+    KNOWLEDGE_MAX = 40
+
+    @staticmethod
+    def _knowledge(r: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": str(r["id"]),
+            "question": r["question"],
+            "answer": r["answer"],
+            "active": r["active"],
+        }
+
+    def knowledge(self, p: Principal) -> list[dict[str, Any]]:
+        self._guard(p)
+        with self._tx(p) as conn:
+            rows = conn.execute(
+                "SELECT id, question, answer, active FROM knowledge_items ORDER BY created_at"
+            ).fetchall()
+        return [self._knowledge(r) for r in rows]
+
+    def _check_knowledge(self, question: str, answer: str) -> None:
+        if not 3 <= len(question.strip()) <= 200:
+            raise bad_request("invalid_question", "A pergunta deve ter de 3 a 200 caracteres.")
+        if not 1 <= len(answer.strip()) <= 700:
+            raise bad_request("invalid_answer", "A resposta deve ter de 1 a 700 caracteres.")
+
+    def create_knowledge(self, p: Principal, question: str, answer: str) -> dict[str, Any]:
+        self._guard(p, edit=True)
+        self._check_knowledge(question, answer)
+        with self._tx(p) as conn:
+            total = conn.execute("SELECT count(*) AS c FROM knowledge_items").fetchone()
+            assert total is not None
+            if total["c"] >= self.KNOWLEDGE_MAX:
+                raise bad_request(
+                    "knowledge_limit", f"Limite de {self.KNOWLEDGE_MAX} respostas cadastradas."
+                )
+            row = conn.execute(
+                "INSERT INTO knowledge_items (tenant_id, question, answer) VALUES (%s, %s, %s) "
+                "RETURNING id, question, answer, active",
+                (p.tenant_id, question.strip(), answer.strip()),
+            ).fetchone()
+            assert row is not None
+            audit(
+                conn,
+                tenant_id=p.tenant_id,
+                actor=p.user_id,
+                action="knowledge.created",
+                target=question.strip()[:80],
+            )
+        return self._knowledge(row)
+
+    def update_knowledge(
+        self, p: Principal, item_id: uuid.UUID, question: str, answer: str, active: bool
+    ) -> dict[str, Any]:
+        self._guard(p, edit=True)
+        self._check_knowledge(question, answer)
+        with self._tx(p) as conn:
+            row = conn.execute(
+                "UPDATE knowledge_items SET question = %s, answer = %s, active = %s, "
+                "updated_at = now() WHERE id = %s RETURNING id, question, answer, active",
+                (question.strip(), answer.strip(), active, item_id),
+            ).fetchone()
+            if row is None:
+                raise not_found("Resposta não encontrada.")
+            audit(
+                conn,
+                tenant_id=p.tenant_id,
+                actor=p.user_id,
+                action="knowledge.updated",
+                target=str(item_id),
+            )
+        return self._knowledge(row)
+
+    def delete_knowledge(self, p: Principal, item_id: uuid.UUID) -> None:
+        self._guard(p, edit=True)
+        with self._tx(p) as conn:
+            gone = conn.execute(
+                "DELETE FROM knowledge_items WHERE id = %s RETURNING id", (item_id,)
+            ).fetchone()
+            if gone is None:
+                raise not_found("Resposta não encontrada.")
+            audit(
+                conn,
+                tenant_id=p.tenant_id,
+                actor=p.user_id,
+                action="knowledge.deleted",
+                target=str(item_id),
+            )
+
     # ---- ajustes
     def get_settings(self, p: Principal) -> dict[str, Any]:
         self._guard(p)
@@ -421,11 +510,23 @@ class SellerService:
         if status not in STATUSES:
             raise bad_request("invalid_status", "Status inválido.")
         with self._tx(p) as conn:
-            row = conn.execute(
-                "UPDATE conversations SET status = %s, handoff_reason = CASE WHEN %s = 'bot' "
-                "THEN NULL ELSE handoff_reason END WHERE id = %s RETURNING id",
-                (status, status, conv_id),
+            before = conn.execute(
+                "SELECT status FROM conversations WHERE id = %s FOR UPDATE", (conv_id,)
             ).fetchone()
-            if row is None:
+            if before is None:
                 raise not_found("Conversa não encontrada.")
+            conn.execute(
+                "UPDATE conversations SET status = %s, handoff_reason = CASE WHEN %s = 'bot' "
+                "THEN NULL ELSE handoff_reason END WHERE id = %s",
+                (status, status, conv_id),
+            )
+            if status == "bot" and before["status"] != "bot":
+                # Handoff may have queued a bot notice while status was human.
+                # Never release stale bot messages when the operator resumes automation.
+                conn.execute(
+                    "UPDATE messages SET status = 'failed', error = 'cancelado_na_retomada' "
+                    "WHERE tenant_id = %s AND conversation_id = %s AND direction = 'out' "
+                    "AND author = 'bot' AND status = 'queued'",
+                    (p.tenant_id, conv_id),
+                )
         return {"status": status}

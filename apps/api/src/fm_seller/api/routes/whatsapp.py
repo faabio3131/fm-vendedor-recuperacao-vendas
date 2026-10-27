@@ -35,4 +35,14 @@ async def receive(public_id: str, request: Request) -> dict[str, int]:
         headers=request.headers,
         raw_body=raw,
         voice=request.app.state.settings.voice_transcription,
+        voice_pilot_tenant_id=(
+            request.app.state.settings.pilot_greeting_tenant_id
+            if request.app.state.settings.pilot_greeting_enabled
+            else ""
+        ),
+        voice_pilot_phone=(
+            request.app.state.settings.pilot_greeting_phone
+            if request.app.state.settings.pilot_greeting_enabled
+            else ""
+        ),
     )

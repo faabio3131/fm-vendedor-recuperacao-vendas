@@ -121,7 +121,7 @@ MODELO = """<!doctype html>
 <footer>
   <div class="wrap">
     <div class="row">
-      <div class="by"><i></i><span>AtendeVendeIA é um produto da FM Tecnologia</span></div>
+      <div class="by"><i></i><span>AtendeVendeIA é um produto da FM Tecnologia IA</span></div>
       <div class="row"><a href="../termos/">Termos de uso</a><a href="../privacidade/">Política de privacidade</a><a href="../acordo/">Acordo de dados</a></div>
     </div>
   </div>

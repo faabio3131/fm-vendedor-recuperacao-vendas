@@ -114,7 +114,8 @@ def test_model_failures_are_recorded_but_do_not_use_the_quota(
     s.say("oi")
     run_ai_replies(db, Broken())
     assert _usage(s)[:2] == (0, 1)
-    assert s.conv_state() == ("human", "erro_do_modelo")
+    # falha técnica não tira a conversa da automação na primeira vez
+    assert s.conv_state() == ("bot", None)
 
 
 def test_usage_endpoint(client: TestClient, env: Env) -> None:
@@ -244,3 +245,18 @@ def test_same_tenant_parallel_ia_calls_never_exceed_quota(
 
     assert outcomes == ["handoffs", "replied"]
     assert _usage(s)[0] == 1
+
+
+def test_approved_commercial_plans_preserve_prices_and_features(env: Env) -> None:
+    """The migration changes only quotas, never price or the shared feature matrix."""
+    rows = env.sql(
+        "SELECT key, price_monthly_cents, limits->>'ai_replies_per_month', "
+        "features FROM plans WHERE key IN "
+        "('av-essencial', 'av-profissional', 'av-escala') ORDER BY key"
+    )
+    assert [(k, p, int(q)) for k, p, q, _ in rows] == [
+        ("av-escala", 39990, 3000),
+        ("av-essencial", 12990, 500),
+        ("av-profissional", 19990, 1000),
+    ]
+    assert rows[0][3] == rows[1][3] == rows[2][3]

@@ -252,6 +252,13 @@ export type Suppression = { id: string; identity: string; reason: string; create
 export const brl = (cents: number): string =>
   (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+export type KnowledgeItem = {
+  id: string;
+  question: string;
+  answer: string;
+  active: boolean;
+};
+
 export type Offer = {
   id: string;
   name: string;

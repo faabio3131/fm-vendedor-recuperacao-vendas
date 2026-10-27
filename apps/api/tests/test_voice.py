@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import base64
 import json
+import uuid
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -325,3 +326,92 @@ def test_worker_step_is_off_by_default(env: Env, db: Database) -> None:
     on = Settings(**{**env.settings().model_dump(), "voice_transcription": True})
     # modelo sem `transcribe` (IA indisponível): nada a fazer
     assert cli._voice_step(db, env.box, on, object(), logging.getLogger("t")) == {}  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------------------ isolamento de piloto
+
+
+def test_pilot_meta_voice_ingress_requires_exact_tenant_and_phone(
+    wa_on: tuple[TestClient, str, str], env: Env
+) -> None:
+    c, tid, pid = wa_on
+    app = cast(Any, c.app)
+    settings = app.state.settings
+    app.state.settings = settings.model_copy(
+        update={
+            "pilot_greeting_enabled": True,
+            "pilot_greeting_tenant_id": tid,
+            "pilot_greeting_phone": PHONE,
+        }
+    )
+    other = audio("wamid.pilot.other")
+    other["from"] = "5511977008899"
+    assert post(c, pid, payload([other])).status_code == 200
+    assert post(c, pid, payload([audio("wamid.pilot.allowed")])).status_code == 200
+    app.state.settings = app.state.settings.model_copy(
+        update={"pilot_greeting_tenant_id": str(uuid.uuid4())}
+    )
+    assert post(c, pid, payload([audio("wamid.pilot.wrong-tenant")])).status_code == 200
+    rows = env.sql(
+        "SELECT provider_message_id,media_status,media_id FROM messages "
+        "WHERE tenant_id=%s AND provider_message_id LIKE 'wamid.pilot.%%' "
+        "ORDER BY provider_message_id",
+        (tid,),
+    )
+    assert rows == [
+        ("wamid.pilot.allowed", "pending", "media-1"),
+        ("wamid.pilot.other", None, None),
+        ("wamid.pilot.wrong-tenant", None, None),
+    ]
+
+
+def test_pilot_worker_does_not_claim_unapproved_queued_audio(
+    wa_on: tuple[TestClient, str, str], env: Env, db: Database
+) -> None:
+    c, tid, pid = wa_on
+    other = audio("wamid.queue.other")
+    other["from"] = "5511977008899"
+    assert post(c, pid, payload([other, audio("wamid.queue.allowed")])).status_code == 200
+    from fm_seller.channels.inbound import record_inbound
+    from fm_seller.channels.whatsapp import upsert_conversation
+
+    unrelated_id = uuid.UUID(env.tenant("Outro tenant voz", unique_email("voice-scope")))
+    with db.tx(tenant_id=unrelated_id) as conn:
+        contact, conversation = upsert_conversation(conn, unrelated_id, PHONE, "Outro")
+        record_inbound(
+            conn,
+            unrelated_id,
+            contact_id=contact,
+            conv_id=conversation,
+            identity=PHONE,
+            text=voice.FALLBACK_BODY,
+            message_id="wamid.queue.other-tenant",
+            counts={"messages": 0, "duplicates": 0},
+            media_id="media-1",
+        )
+    transcriber = FakeTranscriber()
+    result = voice.transcribe_pending(
+        db,
+        env.box,
+        transcriber,
+        FakeMeta().client(),
+        max_bytes=2_000_000,
+        pilot_tenant_id=uuid.UUID(tid),
+        pilot_phone=PHONE,
+    )
+    assert result.transcribed == 1
+    assert transcriber.calls == 1
+    assert env.sql(
+        "SELECT provider_message_id,media_status,media_attempts FROM messages "
+        "WHERE tenant_id=%s AND provider_message_id LIKE 'wamid.queue.%%' "
+        "ORDER BY provider_message_id",
+        (tid,),
+    ) == [
+        ("wamid.queue.allowed", "done", 1),
+        ("wamid.queue.other", "pending", 0),
+    ]
+    assert env.sql(
+        "SELECT media_status,media_attempts FROM messages "
+        "WHERE tenant_id=%s AND provider_message_id='wamid.queue.other-tenant'",
+        (str(unrelated_id),),
+    ) == [("pending", 0)]

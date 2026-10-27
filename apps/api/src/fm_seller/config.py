@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     ai_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     ai_thinking_level: Literal["low", "medium", "high"] = "low"
     ai_timeout_seconds: float = Field(default=20.0, ge=1, le=60)
+    # Falha passageira do provedor (503, 429, tempo esgotado): repete antes de desistir e, se
+    # houver modelo reserva, tenta nele. Só depois disso a conversa vai para uma pessoa.
+    ai_retries: int = Field(default=3, ge=0, le=5)
+    ai_fallback_model: str = ""
     # Áudio do cliente (WhatsApp): transcrito pelo mesmo modelo e tratado como texto. Desligado
     # por padrão: o áudio é enviado ao Google (suboperador já listado na política de privacidade).
     voice_transcription: bool = False
@@ -84,6 +88,8 @@ class Settings(BaseSettings):
     pilot_greeting_enabled: bool = False
     pilot_greeting_tenant_id: str = ""
     pilot_greeting_phone: str = ""
+    # Extensão de demonstração assistida, mesmo tenant e único número do piloto.
+    pilot_demo_enabled: bool = False
 
     # Captura de eventos reais de checkout para conferir o formato (docs/OPERACAO.md). Desligada por
     # padrão; guarda o corpo cifrado, sem segredos, e apaga sozinha depois do prazo.
@@ -166,6 +172,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _pilot_greeting_gate(self) -> Settings:
+        if self.pilot_demo_enabled and not self.pilot_greeting_enabled:
+            raise ValueError("Piloto de demonstração requer piloto exclusivo habilitado")
         if not self.pilot_greeting_enabled:
             return self
         import uuid

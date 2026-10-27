@@ -27,6 +27,18 @@ const AUTHOR: Record<string, string> = {
   recovery: "Recuperação",
   system: "Sistema",
 };
+// Timestamps come from the API as ISO-8601; render them in the user's local
+// browser timezone, so the operator sees when each real message arrived.
+const MESSAGE_DATE_TIME = new Intl.DateTimeFormat("pt-BR", {
+  dateStyle: "short",
+  timeStyle: "short",
+});
+
+function formatMessageTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Horário indisponível" : MESSAGE_DATE_TIME.format(date);
+}
+
 const DELIVERY: Record<string, string> = {
   queued: "na fila",
   sending: "enviando",
@@ -51,7 +63,13 @@ function Detail({ id, onChange }: { id: string; onChange: () => void }) {
   const load = useCallback(() => {
     api<ConversationDetail>(`/v1/inbox/${id}`).then(setD).catch((e: unknown) => setError(e instanceof Error ? e.message : "Erro."));
   }, [id]);
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [load]);
 
   const act = async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -74,12 +92,16 @@ function Detail({ id, onChange }: { id: string; onChange: () => void }) {
         </div>
         <span className={`badge ${d.status === "human" ? "pending" : ""}`}>{STATUS[d.status]}</span>
       </div>
-      <div aria-label="Mensagens" style={{ display: "grid", gap: 8, maxHeight: 360, overflowY: "auto" }}>
+      <div aria-label="Mensagens" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, maxHeight: 360, overflowY: "auto" }}>
         {d.messages.map((m) => (
           <div key={m.id} style={{ justifySelf: m.direction === "in" ? "start" : "end", maxWidth: "85%" }}>
             <div className="muted" style={{ fontSize: 12 }}>
               {AUTHOR[m.author]}
               {m.direction === "out" && ` · ${DELIVERY[m.status] ?? m.status}`}
+              {" · "}
+              <time dateTime={m.created_at} title="Data e horário locais da mensagem">
+                {formatMessageTime(m.created_at)}
+              </time>
             </div>
             <div className="card" style={{ padding: "8px 10px" }}>
               {m.body}
@@ -134,15 +156,21 @@ function Inbox() {
   const [rows, setRows] = useState<ConversationRow[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const load = useCallback(() => {
-    api<ConversationRow[]>("/v1/inbox").then(setRows).catch(() => setRows([]));
+    api<ConversationRow[]>("/v1/inbox").then(setRows).catch(() => setRows((current) => current ?? []));
   }, []);
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [load]);
   return (
     <>
       <h1>Conversas</h1>
       <p className="muted">Quem escreveu no WhatsApp. As que precisam de uma pessoa aparecem primeiro.</p>
       {rows && rows.length === 0 && <div className="alert">Nenhuma conversa ainda. Elas aparecem quando um cliente escreve para o seu número.</div>}
-      <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}>
         {(rows ?? []).map((r) => (
           <div key={r.id}>
             <button
@@ -155,6 +183,10 @@ function Inbox() {
               <div className="muted">
                 {r.handoff_reason && r.status === "human" ? `${REASON[r.handoff_reason] ?? r.handoff_reason} · ` : ""}
                 {r.preview}
+                {" · "}
+                <time dateTime={r.last_message_at} title="Última mensagem no horário local">
+                  {formatMessageTime(r.last_message_at)}
+                </time>
               </div>
             </button>
             {open === r.id && <Detail id={r.id} onChange={load} />}

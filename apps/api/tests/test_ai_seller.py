@@ -71,6 +71,58 @@ def test_price_and_link_come_from_registry_not_from_the_model(s: Setup, db: Data
     assert LINK in s.outbound()[-1][1]
 
 
+def test_canonical_price_and_link_need_no_model_or_ai_quota(s: Setup, db: Database) -> None:
+    # This plan's model allowance is intentionally exhausted; a registered
+    # commercial fact still goes through the usual tenant/outbox controls.
+    s.env.sql(
+        "INSERT INTO ai_usage (tenant_id,day,calls,failures,tokens_in,tokens_out) "
+        "VALUES (%s,(now() AT TIME ZONE 'America/Sao_Paulo')::date,100000,0,0,0) "
+        "ON CONFLICT (tenant_id,day) DO UPDATE SET calls=100000",
+        (s.tid,),
+    )
+    s.say("Quanto custa o Curso X?")
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 1
+    assert s.outbound()[0] == (
+        "bot",
+        "Curso X custa R$ 197,00. Quer que eu envie o link?",
+        "queued",
+    )
+    s.say("Pode mandar o link do Curso X?")
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 1
+    assert s.outbound()[1] == (
+        "bot",
+        "Aqui está o link cadastrado para Curso X: " + LINK,
+        "queued",
+    )
+    assert s.conv_state() == ("bot", None)
+    assert s.env.sql(
+        "SELECT calls,tokens_in,tokens_out FROM ai_usage WHERE tenant_id=%s", (s.tid,)
+    ) == [(100000, 0, 0)]
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 0
+    assert len(s.outbound()) == 2
+
+
+def test_ambiguous_offer_name_uses_model_and_meters_call(s: Setup, db: Database) -> None:
+    s.env.sql(
+        "INSERT INTO offers (tenant_id,name,description,price_cents,payment_url) "
+        "VALUES (%s,'Curso X Avançado','Mais conteúdos',27900,'https://pay.example.test/x-2')",
+        (s.tid,),
+    )
+    s.say("Qual o preço do Curso X Avançado?")
+    model = SimulatedAiModel()
+    assert run_ai_replies(db, model).replied == 1
+    assert len(model.calls) == 1
+    assert s.env.sql("SELECT calls FROM ai_usage WHERE tenant_id=%s", (s.tid,)) == [(1,)]
+
+
+def test_no_catalogue_bypass_when_automation_disabled(s: Setup, db: Database) -> None:
+    s.env.sql("UPDATE tenant_settings SET ai_enabled=false WHERE tenant_id=%s", (s.tid,))
+    s.say("Quanto custa o Curso X?")
+    assert run_ai_replies(db, UnavailableAiModel()).handoffs == 1
+    assert s.conv_state() == ("human", "ia_desligada")
+    assert not s.outbound()
+
+
 def test_context_has_no_credentials_and_includes_history(s: Setup, db: Database) -> None:
     s.say("oi")
     model = SimulatedAiModel()
@@ -109,7 +161,7 @@ def test_placeholder_with_unknown_offer_is_refused() -> None:
     ok = render_reply(
         AiReply("Leve {oferta}: {link}", "x"), {"x": ("N", "R$ 1,00", "https://a.example")}
     )
-    assert ok == "Leve N: https://a.example"
+    assert ok == "Leve N:\nhttps://a.example"
 
 
 def test_asking_for_a_person_hands_off_without_calling_the_model(s: Setup, db: Database) -> None:
@@ -176,3 +228,69 @@ def test_conversation_in_human_mode_is_left_alone(s: Setup, db: Database) -> Non
     s.say("oi")
     model = SimulatedAiModel()
     assert run_ai_replies(db, model).conversations == 0 and model.calls == []
+
+
+def test_buy_intent_sends_registered_link_without_model(s: Setup, db: Database) -> None:
+    s.say("Oi, vcs tem o curso?")
+    run_ai_replies(db, SimulatedAiModel())
+    s.say("blz, quero comprar")
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 1
+    last = s.outbound()[-1][1]
+    assert LINK in last and "R$ 197,00" in last
+    assert s.conv_state() == ("bot", None)
+
+
+def test_yes_after_link_offer_closes_and_discount_question_goes_to_model(
+    s: Setup, db: Database
+) -> None:
+    s.say("Quanto custa o Curso X?")
+    run_ai_replies(db, UnavailableAiModel())
+    s.say("sim")
+    assert run_ai_replies(db, UnavailableAiModel()).replied == 1
+    assert LINK in s.outbound()[-1][1]
+    s.say("quero comprar mas tem desconto?")
+    model = SimulatedAiModel()
+    run_ai_replies(db, model)
+    assert len(model.calls) == 1  # não fecha às cegas: o modelo conduz a negociação
+
+
+def test_close_sale_reply_picks_offer_by_partial_name_or_asks() -> None:
+    from fm_seller.ai.seller import close_sale_reply
+
+    rows = [
+        {"id": "a", "name": "Kit Suculentas", "price_cents": 8990, "payment_url": "https://p/a"},
+        {
+            "id": "b",
+            "name": "Vaso Autoirrigável",
+            "price_cents": 5990,
+            "payment_url": "https://p/b",
+        },
+    ]
+    assert "https://p/a" in (close_sale_reply("quero comprar o kit", "", rows) or "")
+    assert "https://p/b" in (close_sale_reply("manda o link do vaso", "", rows) or "")
+    asked = close_sale_reply("quero comprar", "", rows) or ""
+    assert "Qual você quer levar" in asked and "http" not in asked
+    assert close_sale_reply("quero comprar o kit com frete grátis?", "", rows) is None
+    assert close_sale_reply("oi", "", rows) is None
+
+
+def test_render_reply_puts_link_alone_on_its_line_without_trailing_punctuation() -> None:
+    ok = render_reply(
+        AiReply("Para garantir, pague por este {link}!", "x"),
+        {"x": ("N", "R$ 1,00", "https://a.example")},
+    )
+    assert ok == "Para garantir, pague por este\nhttps://a.example"
+
+
+def test_quantity_total_reply_multiplies_registered_price() -> None:
+    from fm_seller.ai.seller import quantity_total_reply
+
+    offers = [{"name": "Kit Suculentas", "price_cents": 8990, "payment_url": "https://p.example/k"}]
+    out = quantity_total_reply(
+        "Qual o valor total?", ["Quero 3 kits de suculentas"], "Ótima escolha!", offers
+    )
+    assert out is not None
+    assert "R$ 269,70" in out
+    assert "http" not in out
+    assert quantity_total_reply("Qual o valor total?", ["Oi"], "", offers) is None
+    assert quantity_total_reply("Quero 3 kits", [], "", offers) is None

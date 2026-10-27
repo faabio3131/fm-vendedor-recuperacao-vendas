@@ -27,6 +27,9 @@ def test_release_script_is_valid_bash_and_requires_two_independent_approvals() -
     assert "FM_DEPLOY_APPROVE_RELEASE:-}" in text
     assert "rls_invariant.sql" in text
     assert "pg_restore -U fm_owner --exit-on-error" in text
+    assert "Destructive SQL in pending migration" in text
+    assert '"$latest" == "$target"' in text
+    assert '0017_commercial_quotas_60pct.sql" ]]' not in text
     assert '--dbname "$testdb"' in text
     assert "SOURCE_COMMIT" in text
     guard = GUARD.read_text()
@@ -57,7 +60,9 @@ def test_workflow_requires_main_exact_sha_manual_trigger_and_private_repo_safe_t
     text = WORKFLOW.read_text()
     assert "workflow_dispatch:" in text
     assert "pull_request:" in text
-    assert "push:" not in text
+    assert "push:" in text and "branches: [main]" in text
+    assert "approve_migrations" not in text and "confirmation" not in text
+    assert "Waiting for CI gates" in text
     assert "environment: contabo-pilot" in text
     assert "refs/heads/main" in text
     assert "git rev-parse HEAD" in text
@@ -71,6 +76,15 @@ def test_workflow_requires_main_exact_sha_manual_trigger_and_private_repo_safe_t
     assert "github.actor" not in text or "GITHUB_ACTOR" in text
     assert "github.repository" in text
     assert "git archive --format=tar HEAD" in text
-    assert "approve_migrations" in text and "approve_deploy" in text
     assert "api web e2e" in text
     assert "deploy --auto" not in text
+
+
+def test_compose_passes_ai_thinking_level_to_existing_api_and_worker() -> None:
+    compose = (ROOT / "deploy" / "contabo" / "compose.yml").read_text()
+    assert "FM_AI_THINKING_LEVEL: ${FM_AI_THINKING_LEVEL:-low}" in compose
+    assert "x-app-env: &app-env" in compose
+    assert compose.count("environment: *app-env") >= 2
+    # Default stays conservative until a separately authorized pilot change.
+    assert "FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}" in compose
+    assert 'FM_WHATSAPP_LIVE: "false"' in compose

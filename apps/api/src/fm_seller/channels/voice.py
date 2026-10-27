@@ -2,21 +2,25 @@
 
 Só roda com `FM_VOICE_TRANSCRIPTION=true`. A mensagem entra já "tratada" (o vendedor IA espera);
 aqui o texto é trocado pela transcrição e a mensagem volta a "não tratada". O áudio nunca é
-guardado nem vai para o log, e a transcrição também não. Se algo falhar (3 tentativas), a mensagem
-volta como "[mensagem do tipo audio]", igual ao comportamento de antes, e o vendedor IA decide.
+guardado nem vai para o log, e a transcrição também não. Após três falhas, o piloto
+restrito orienta o contato a escrever; fora do piloto, preserva o fluxo legado.
 A conferência de pedido de parar (opt-out) acontece depois da transcrição.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from dataclasses import dataclass
 from typing import Protocol
 
+from fm_seller.channels.evolution import EvolutionClient
 from fm_seller.channels.inbound import apply_opt_out
 from fm_seller.channels.meta_api import MetaClient, MetaError
+from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_text
 from fm_seller.db import Database
+from fm_seller.errors import AppError
 from fm_seller.recovery.optout import is_opt_out
 from fm_seller.security.crypto import CryptoError, SecretBox
 
@@ -25,6 +29,10 @@ log = logging.getLogger("fm_seller.voice")
 MAX_ATTEMPTS = 3
 CLAIM_MINUTES = 2
 FALLBACK_BODY = "[mensagem do tipo audio]"
+AUDIO_UNAVAILABLE_MESSAGE = (
+    "Desculpe, não consegui entender seu áudio agora. "
+    "Por favor, escreva sua mensagem para eu poder ajudar."
+)
 ALLOWED_MIME = ("audio/ogg", "audio/mpeg", "audio/mp4", "audio/aac", "audio/amr", "audio/webm")
 
 
@@ -58,17 +66,66 @@ def _token(db: Database, box: SecretBox, tenant_id: uuid.UUID) -> str | None:
     return str(config.get("access_token", "")) or None
 
 
+def _evolution_instance(db: Database, box: SecretBox, tenant_id: uuid.UUID) -> str | None:
+    with db.tx(system=True) as conn:
+        row = conn.execute(
+            "SELECT config_encrypted FROM connections WHERE tenant_id = %s "
+            "AND provider = 'evolution' AND status = 'connected' LIMIT 1",
+            (tenant_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    try:
+        config = box.decrypt(
+            row["config_encrypted"], tenant_id=str(tenant_id), provider="evolution"
+        )
+    except CryptoError:
+        return None
+    name = "fmav-" + hashlib.sha256(tenant_id.bytes).hexdigest()[:32]
+    return name if config.get("instance_name") == name else None
+
+
 def _finish(
-    db: Database, tenant_id: uuid.UUID, msg_id: uuid.UUID, conv_id: uuid.UUID, text: str | None
+    db: Database,
+    tenant_id: uuid.UUID,
+    msg_id: uuid.UUID,
+    conv_id: uuid.UUID,
+    text: str | None,
+    *,
+    evolution_audio: bool = False,
+    pilot_audio: bool = False,
 ) -> str:
     """Grava o resultado. `text` None = falha. Devolve 'done', 'opt_out' ou 'failed'."""
     with db.tx(tenant_id=tenant_id) as conn:
         if text is None:
-            conn.execute(
-                "UPDATE messages SET body = %s, handled = false, media_status = 'failed', "
-                "media_id = NULL WHERE id = %s",
-                (FALLBACK_BODY, msg_id),
-            )
+            if evolution_audio:
+                conn.execute(
+                    "UPDATE messages SET body = %s, handled = true, media_status = 'failed', "
+                    "media_id = NULL WHERE id = %s",
+                    ("[áudio não transcrito; equipe necessária]", msg_id),
+                )
+                if pilot_audio:
+                    # Pilot stays in text conversation after a failed audio. Never send a
+                    # generic handoff that suggests someone is handling the request.
+                    status = conn.execute(
+                        "SELECT status FROM conversations WHERE id = %s", (conv_id,)
+                    ).fetchone()
+                    if status is not None and status["status"] == "bot":
+                        enqueue_text(conn, tenant_id, conv_id, "bot", AUDIO_UNAVAILABLE_MESSAGE)
+                else:
+                    conn.execute(
+                        "UPDATE conversations SET status = 'human', "
+                        "handoff_reason = 'audio_nao_transcrito' "
+                        "WHERE id = %s AND status = 'bot'",
+                        (conv_id,),
+                    )
+                    enqueue_text(conn, tenant_id, conv_id, "bot", HANDOFF_MESSAGE)
+            else:
+                conn.execute(
+                    "UPDATE messages SET body = %s, handled = false, media_status = 'failed', "
+                    "media_id = NULL WHERE id = %s",
+                    (FALLBACK_BODY, msg_id),
+                )
             return "failed"
         if is_opt_out(text):
             conn.execute(
@@ -99,44 +156,94 @@ def transcribe_pending(
     meta: MetaClient,
     *,
     max_bytes: int,
+    evolution: EvolutionClient | None = None,
     limit: int = 10,
+    pilot_tenant_id: uuid.UUID | None = None,
+    pilot_phone: str = "",
 ) -> VoiceStats:
     stats = VoiceStats()
+    # A single static parameterized query enforces pilot scope when configured.
+    # No preexisting or alternate-provider queued audio may bypass this gate.
     with db.tx(system=True) as conn:
         rows = conn.execute(
             "UPDATE messages SET media_attempts = media_attempts + 1, claimed_at = now() "
             "WHERE id IN (SELECT id FROM messages WHERE media_status = 'pending' "
             "AND media_attempts < %s AND (claimed_at IS NULL OR claimed_at < "
-            "now() - make_interval(mins => %s)) ORDER BY created_at LIMIT %s "
-            "FOR UPDATE SKIP LOCKED) "
+            "now() - make_interval(mins => %s)) "
+            "AND (%s::uuid IS NULL OR (tenant_id = %s::uuid AND EXISTS ("
+            "SELECT 1 FROM conversations cv JOIN contacts ct ON ct.id = cv.contact_id "
+            "WHERE cv.id = messages.conversation_id "
+            "AND cv.tenant_id = messages.tenant_id "
+            "AND ct.tenant_id = messages.tenant_id AND ct.phone = %s))) "
+            "ORDER BY created_at LIMIT %s FOR UPDATE SKIP LOCKED) "
             "RETURNING id, tenant_id, conversation_id, media_id, media_attempts",
-            (MAX_ATTEMPTS, CLAIM_MINUTES, limit),
+            (
+                MAX_ATTEMPTS,
+                CLAIM_MINUTES,
+                pilot_tenant_id,
+                pilot_tenant_id,
+                pilot_phone,
+                limit,
+            ),
         ).fetchall()
     for row in rows:
         text: str | None = None
         try:
-            token = _token(db, box, row["tenant_id"])
-            if token and row["media_id"]:
-                info = meta.request("GET", str(row["media_id"]), token)
-                mime = str(info.get("mime_type", "")).split(";")[0].strip().lower()
-                url = str(info.get("url", ""))
-                size = info.get("file_size")
-                if (
-                    mime in ALLOWED_MIME
-                    and url
-                    and not (isinstance(size, int) and size > max_bytes)
-                ):
-                    audio = meta.download(url, token, max_bytes=max_bytes)
-                    heard, _tin, _tout = transcriber.transcribe(audio, mime)
-                    text = heard.strip()[:4000] or None
-        except (MetaError, RuntimeError, ValueError) as exc:
+            media = str(row["media_id"] or "")
+            if media.startswith("evo:") and evolution is not None:
+                instance = _evolution_instance(db, box, row["tenant_id"])
+                if instance:
+                    with db.tx(tenant_id=row["tenant_id"]) as conn:
+                        contact = conn.execute(
+                            "SELECT ct.phone FROM conversations cv "
+                            "JOIN contacts ct ON ct.id = cv.contact_id "
+                            "WHERE cv.tenant_id = %s AND cv.id = %s",
+                            (row["tenant_id"], row["conversation_id"]),
+                        ).fetchone()
+                    if contact and contact["phone"]:
+                        audio, mime = evolution.fetch_voice(
+                            instance,
+                            media[4:],
+                            str(contact["phone"]) + "@s.whatsapp.net",
+                            max_bytes=max_bytes,
+                        )
+                        heard, _tin, _tout = transcriber.transcribe(audio, mime)
+                        text = heard.strip()[:4000] or None
+            elif media and not media.startswith("evo:"):
+                token = _token(db, box, row["tenant_id"])
+                if token:
+                    info = meta.request("GET", media, token)
+                    mime = str(info.get("mime_type", "")).split(";")[0].strip().lower()
+                    url = str(info.get("url", ""))
+                    size = info.get("file_size")
+                    if (
+                        mime in ALLOWED_MIME
+                        and url
+                        and not (isinstance(size, int) and size > max_bytes)
+                    ):
+                        audio = meta.download(url, token, max_bytes=max_bytes)
+                        heard, _tin, _tout = transcriber.transcribe(audio, mime)
+                        text = heard.strip()[:4000] or None
+        except (MetaError, AppError, RuntimeError, ValueError) as exc:
             log.warning("áudio não transcrito", extra={"ctx": {"erro": type(exc).__name__}})
         except Exception:
             log.exception("erro inesperado ao transcrever áudio")
         if text is None and row["media_attempts"] < MAX_ATTEMPTS:
             stats.retry += 1  # tenta de novo no próximo ciclo (depois da janela de reserva)
             continue
-        outcome = _finish(db, row["tenant_id"], row["id"], row["conversation_id"], text)
+        outcome = _finish(
+            db,
+            row["tenant_id"],
+            row["id"],
+            row["conversation_id"],
+            text,
+            evolution_audio=str(row["media_id"] or "").startswith("evo:"),
+            pilot_audio=(
+                pilot_tenant_id is not None
+                and row["tenant_id"] == pilot_tenant_id
+                and str(row["media_id"] or "").startswith("evo:")
+            ),
+        )
         if outcome == "done":
             stats.transcribed += 1
         elif outcome == "opt_out":
