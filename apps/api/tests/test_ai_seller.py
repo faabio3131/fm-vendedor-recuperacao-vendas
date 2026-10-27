@@ -328,3 +328,14 @@ def test_demo_liked_plan_gets_price_and_offer_of_link_not_a_model_promise() -> N
     # depois do "sim" o fechamento entrega o link do plano
     closed = demo_close_sale_reply("sim", out, offers)
     assert closed is not None and "https://p/e" in closed
+
+
+def test_link_marker_inside_a_question_is_refused() -> None:
+    offers = {"x": ("N", "R$ 1,00", "https://a.example")}
+    assert (
+        render_reply(AiReply("O vaso custa {preco}. Posso te enviar o {link}?", "x"), offers)
+        is None
+    )
+    assert render_reply(AiReply("Quer que eu envie o {link} para aproveitar?", "x"), offers) is None
+    ok = render_reply(AiReply("Perfeito! Pague por aqui: {link}", "x"), offers)
+    assert ok == "Perfeito! Pague por aqui:\nhttps://a.example"

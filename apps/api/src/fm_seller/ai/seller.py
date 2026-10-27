@@ -50,6 +50,11 @@ _HUMAN = ("atendente", "humano", "pessoa", "falar com alguem", "gerente", "respo
 MODEL_RETRY_MESSAGE = "Só um instante, já te respondo."
 _FORBIDDEN = re.compile(r"https?://|www\.|r\$|\breais\b|\bpix\b.*\bchave\b", re.IGNORECASE)
 _PLACEHOLDER = re.compile(r"\{(oferta|preco|link)\}")
+_LINK_IN_QUESTION = re.compile(
+    r"(?:\b(?:enviar|mandar|passar)\s+(?:te\s+)?(?:o|este|esse)\s+\{link\}"
+    r"|\b(?:posso|quer)\b[^.!?\n]{0,30}\{link\}|\{link\}\s*\?)",
+    re.IGNORECASE,
+)
 _LINK_PROMISE = re.compile(
     r"\b(?:vou|irei|vamos)\s+(?:te\s+)?(?:enviar|mandar|passar)\s+o\s+link\b|\bte\s+(?:envio|mando|passo)\s+o\s+link\b",
     re.IGNORECASE,
@@ -212,6 +217,8 @@ def render_reply(reply: AiReply, offers: dict[str, tuple[str, str, str]]) -> str
     raw = reply.text.strip()
     if not raw or len(raw) > 1000 or _FORBIDDEN.search(raw):
         return None
+    if _LINK_IN_QUESTION.search(raw):
+        return None  # {link} no meio de uma pergunta ("Posso te enviar o <url>?"): frase quebrada
     if _LINK_PROMISE.search(raw) and "{link}" not in raw:
         return None  # prometeu enviar o link sem anexá-lo: nunca vai para o cliente
     if "{" in _PLACEHOLDER.sub("", raw) or "}" in _PLACEHOLDER.sub("", raw):
