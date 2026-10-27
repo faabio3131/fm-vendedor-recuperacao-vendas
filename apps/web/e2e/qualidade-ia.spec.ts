@@ -34,6 +34,9 @@ test("Conversas: mostra a data e o horário local de cada mensagem", async ({ pa
   await page.goto("/login");
   await page.getByLabel("Login de desenvolvimento (e-mail)").fill(EMAIL);
   await page.getByRole("button", { name: "Entrar (simulado)" }).click();
+  // O login é assíncrono: sem esperar a sessão existir, o goto("/inbox") abaixo disputa com ela e,
+  // quando perde, cai de volta no login (o título "Conversas" nunca aparece).
+  await expect(page.getByRole("navigation", { name: "Principal" })).toBeVisible();
 
   // UI contract fixture only. Delivery and audio are certified separately
   // using actual WhatsApp/Evolution on the controlled pilot.
