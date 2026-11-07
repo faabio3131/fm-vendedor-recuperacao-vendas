@@ -6,7 +6,7 @@ on:
 
 jobs:
   api:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16
@@ -25,14 +25,13 @@ jobs:
         with: { python-version: "3.12" }
       - name: Papéis do banco
         run: psql -h localhost -U postgres -v owner_pw=dev_owner_only -v app_pw=dev_app_only -f scripts/db/bootstrap_roles.sql
-      - name: Cliente PostgreSQL (pg_dump e pg_restore dos testes de backup)
+      - name: Cliente PostgreSQL 16 para banco 16 e testes de restore
         run: |
-          if ! command -v pg_dump >/dev/null || ! command -v pg_restore >/dev/null; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq postgresql-client
-          fi
-          pg_dump --version
-          pg_restore --version
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+          /usr/lib/postgresql/16/bin/pg_dump --version
+          /usr/lib/postgresql/16/bin/pg_restore --version
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - name: Instalar
         working-directory: apps/api
         run: pip install -e ".[dev]"
@@ -62,7 +61,7 @@ jobs:
         run: npm run build
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [api, web]
     services:
       postgres:
