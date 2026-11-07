@@ -142,7 +142,8 @@ def test_qr_refresh_is_ephemeral_scoped_and_does_not_reconfigure_webhook(
     assert fake.qr_calls == 2
     fake.current = "missing"
     assert client.get("/v1/connections/evolution/qr").json() == {
-        "status": "disconnected", "connected": False
+        "status": "disconnected",
+        "connected": False,
     }
 
 
