@@ -6,8 +6,8 @@
  * Os campos de texto vazios ("") ficam escondidos na página; nada de "preencher depois" aparece para o visitante.
  */
 window.LANDING = {
-  liberado: false,
-  painel: "", // endereço do painel de PRODUÇÃO, por exemplo "https://painel.exemplo.com.br/login"
+  liberado: true,
+  painel: "https://app.atendevendeia.com.br", // painel de PRODUÇÃO, confirmado no ar (tela de login) em 07/11/2026
   empresa: "FM Tecnologia LTDA",
   cnpj: "07.109.248/0001-57", // por exemplo "00.000.000/0001-00" (aparece no rodapé quando preenchido)
   sede: "Cajamar, SP", // por exemplo "Pouso Alegre, MG"
