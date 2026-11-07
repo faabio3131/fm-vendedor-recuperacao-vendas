@@ -22,6 +22,8 @@ class FakeEvolution:
     def __init__(self) -> None:
         self.current = "missing"
         self.created: list[str] = []
+        self.qr_calls = 0
+        self.webhook_calls = 0
 
     def state(self, name: str) -> str:
         if name not in self.created or self.current == "missing":
@@ -36,8 +38,10 @@ class FakeEvolution:
 
     def configure_webhook(self, name: str, url: str, token: str) -> None:
         assert name in self.created and url.startswith("http") and len(token) >= 32
+        self.webhook_calls += 1
 
     def qr(self, name: str) -> str:
+        self.qr_calls += 1
         return QR
 
 
@@ -79,6 +83,7 @@ def test_qr_is_ephemeral_and_connection_needs_provider_proof(client: TestClient,
     fake = FakeEvolution()
     _enable(client, fake)
     assert client.get("/v1/connections/evolution/status").json()["status"] == "not_configured"
+    assert client.get("/v1/connections/evolution/qr").json()["status"] == "not_configured"
     result = client.post("/v1/connections/evolution/connect")
     assert result.status_code == 200, result.text
     assert result.json()["status"] == "pending"
@@ -103,6 +108,43 @@ def test_qr_is_ephemeral_and_connection_needs_provider_proof(client: TestClient,
     fake.current = "close"
     assert client.get("/v1/connections/evolution/status").json()["status"] == "disconnected"
     assert client.get("/v1/connections").json()[0]["status"] == "disconnected"
+
+
+def test_qr_refresh_is_ephemeral_scoped_and_does_not_reconfigure_webhook(
+    client: TestClient, env: Env
+) -> None:
+    _owner(client, env)
+    fake = FakeEvolution()
+    _enable(client, fake)
+
+    unconfigured = client.get("/v1/connections/evolution/qr")
+    assert unconfigured.status_code == 200
+    assert unconfigured.json() == {"status": "not_configured", "connected": False}
+    assert "no-store" in unconfigured.headers["cache-control"]
+    assert fake.qr_calls == 0
+
+    assert client.post("/v1/connections/evolution/connect").status_code == 200
+    assert fake.qr_calls == 1
+    assert fake.webhook_calls == 1
+    response = client.get("/v1/connections/evolution/qr")
+    assert response.status_code == 200
+    assert response.json()["qr_code"] == QR
+    assert response.json()["status"] == "pending"
+    assert "no-store" in response.headers["cache-control"]
+    assert fake.qr_calls == 2
+    assert fake.webhook_calls == 1
+    assert len(fake.created) == 1
+    assert QR not in client.get("/v1/connections").text
+
+    fake.current = "open"
+    connected = client.get("/v1/connections/evolution/qr")
+    assert connected.json() == {"status": "connected", "connected": True}
+    assert fake.qr_calls == 2
+    fake.current = "missing"
+    assert client.get("/v1/connections/evolution/qr").json() == {
+        "status": "disconnected",
+        "connected": False,
+    }
 
 
 def test_onboarding_whatsapp_requires_verified_evolution_session(
@@ -140,6 +182,7 @@ def test_tenant_and_role_isolation(client: TestClient, env: Env) -> None:
     client.cookies.clear()
     assert login(client, email).status_code == 200
     assert client.get("/v1/connections/evolution/status").status_code == 403
+    assert client.get("/v1/connections/evolution/qr").status_code == 403
     assert client.post("/v1/connections/evolution/connect").status_code == 403
     client.cookies.clear()
     second = _owner(client, env)

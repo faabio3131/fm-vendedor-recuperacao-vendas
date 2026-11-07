@@ -136,6 +136,11 @@ class Guards:
             ok, wait = lim.check(f"login:{ip}", cfg.rate_login_per_5min, 300)
             if not ok:
                 return self.too_many(wait)
+        if path == "/v1/connections/evolution/qr" and request.method == "GET":
+            # QR contém segredo temporário: impedir polling abusivo por sessão.
+            ok, wait = lim.check("evoqr:" + _account_key(request, ip), 8, 60)
+            if not ok:
+                return self.too_many(wait)
         if is_sensitive(request):
             ok, wait = lim.check(
                 "sens:" + _account_key(request, ip), cfg.rate_sensitive_per_10min, 600
