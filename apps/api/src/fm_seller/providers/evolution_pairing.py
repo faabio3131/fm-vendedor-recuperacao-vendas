@@ -178,3 +178,37 @@ class EvolutionPairingService:
             "qr_code": qr_code,
             "expires_in_seconds": _TTL_SECONDS,
         }
+
+def refresh_qr(self, p: Principal) -> dict[str, Any]:
+        """QR atualizado apenas para o tenant autorizado; sem criar instância ou webhook."""
+        self._authorize(p)
+        self._enabled()
+        name = self._bound_instance(p)
+        if name is None:
+            return {"status": "not_configured", "connected": False}
+        try:
+            state = self.client.state(name)
+        except InstanceMissing:
+            self._set_status(p, "disconnected")
+            return {"status": "disconnected", "connected": False}
+        except AppError:
+            self._set_status(p, "needs_attention")
+            raise
+        if state == "open":
+            self._set_status(p, "connected", verified=True)
+            return {"status": "connected", "connected": True}
+        try:
+            qr_code = self.client.qr(name)
+        except InstanceMissing:
+            self._set_status(p, "disconnected")
+            return {"status": "disconnected", "connected": False}
+        except AppError:
+            self._set_status(p, "needs_attention")
+            raise
+        self._set_status(p, "pending")
+        return {
+            "status": "pending",
+            "connected": False,
+            "qr_code": qr_code,
+            "expires_in_seconds": _TTL_SECONDS,
+        }
