@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Provider } from "@/lib/api";
 
 type PairingState = {
@@ -12,28 +12,39 @@ type PairingState = {
 
 type Props = { provider: Provider; canEdit: boolean };
 
+const QR_POLL_MS = 10_000;
+const PAIRING_WINDOW_MS = 5 * 60_000;
+
 export function EvolutionWhatsAppCard({ provider, canEdit }: Props) {
   const [state, setState] = useState<PairingState | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [left, setLeft] = useState(0);
+  const [pairing, setPairing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastQrRef = useRef<string | null>(null);
+
+  const clearQr = useCallback(() => {
+    setQr(null);
+    setExpiresAt(null);
+  }, []);
 
   const check = useCallback(async () => {
     try {
-      const status = await api<PairingState>("/v1/connections/evolution/status");
+      const status = await api<PairingState>("/v1/connections/evolution/status", { cache: "no-store" });
       setState(status);
       if (status.connected) {
-        setQr(null);
-        setExpiresAt(null);
+        setPairing(false);
+        lastQrRef.current = null;
+        clearQr();
       }
       setError(null);
     } catch (e) {
       setState({ status: "needs_attention", connected: false });
       setError(e instanceof Error ? e.message : "Não foi possível conferir o WhatsApp.");
     }
-  }, []);
+  }, [clearQr]);
 
   useEffect(() => {
     if (!canEdit || !provider.enabled) return;
@@ -41,32 +52,78 @@ export function EvolutionWhatsAppCard({ provider, canEdit }: Props) {
   }, [canEdit, provider.enabled, check]);
 
   useEffect(() => {
-    if (!qr && state?.status !== "connected") return;
+    if (!pairing && state?.status !== "connected") return;
     const timer = window.setInterval(() => void check(), 5000);
     return () => window.clearInterval(timer);
-  }, [qr, state?.status, check]);
+  }, [pairing, state?.status, check]);
+
+  useEffect(() => {
+    if (!pairing) return;
+    let cancelled = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const data = await api<PairingState>("/v1/connections/evolution/qr", { cache: "no-store" });
+        if (cancelled) return;
+        setState(data);
+        if (data.connected) {
+          setPairing(false);
+          lastQrRef.current = null;
+          clearQr();
+        } else if (data.qr_code?.startsWith("data:image/png;base64,") && data.expires_in_seconds) {
+          // Não prolongar artificialmente a validade de um mesmo QR.
+          if (data.qr_code !== lastQrRef.current) {
+            lastQrRef.current = data.qr_code;
+            setQr(data.qr_code);
+            setExpiresAt(Date.now() + data.expires_in_seconds * 1000);
+          }
+          setError(null);
+        } else {
+          setError("Aguardando a Evolution disponibilizar um novo QR Code.");
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Falha ao renovar o QR Code.");
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const interval = window.setInterval(() => void refresh(), QR_POLL_MS);
+    const deadline = window.setTimeout(() => {
+      setPairing(false);
+      clearQr();
+      setError("Tempo de pareamento encerrado. Clique em Conectar WhatsApp para tentar novamente.");
+    }, PAIRING_WINDOW_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.clearTimeout(deadline);
+    };
+  }, [pairing, clearQr]);
 
   useEffect(() => {
     if (expiresAt === null) return;
     const tick = () => {
       const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
       setLeft(remaining);
-      if (remaining === 0) {
-        setQr(null);
-        setExpiresAt(null);
-      }
+      if (remaining === 0) clearQr();
     };
     tick();
     const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, [expiresAt]);
+  }, [expiresAt, clearQr]);
 
   async function connect() {
     if (!canEdit || busy || state?.status === "unavailable") return;
     setBusy(true);
+    setPairing(false);
     setError(null);
-    setQr(null);
-    setExpiresAt(null);
+    clearQr();
+    lastQrRef.current = null;
     try {
       const data = await api<PairingState>("/v1/connections/evolution/connect", { method: "POST" });
       setState(data);
@@ -74,14 +131,23 @@ export function EvolutionWhatsAppCard({ provider, canEdit }: Props) {
       if (!data.qr_code?.startsWith("data:image/png;base64,") || !data.expires_in_seconds) {
         throw new Error("A Evolution ainda não disponibilizou um QR Code válido.");
       }
+      lastQrRef.current = data.qr_code;
       setQr(data.qr_code);
       setLeft(data.expires_in_seconds);
       setExpiresAt(Date.now() + data.expires_in_seconds * 1000);
+      setPairing(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao solicitar o QR Code.");
     } finally {
       setBusy(false);
     }
+  }
+
+  function stop() {
+    setPairing(false);
+    lastQrRef.current = null;
+    clearQr();
+    setError(null);
   }
 
   const label = state?.connected
@@ -90,8 +156,8 @@ export function EvolutionWhatsAppCard({ provider, canEdit }: Props) {
       ? "Integração ainda não liberada pela FM"
       : state?.status === "not_configured"
         ? "Nenhum WhatsApp conectado"
-        : state?.status === "pending"
-          ? "Aguardando leitura do QR Code"
+        : pairing
+          ? "Aguardando pareamento no celular"
           : state?.status === "needs_attention"
             ? "Conexão não verificável"
             : "WhatsApp desconectado";
@@ -115,18 +181,22 @@ export function EvolutionWhatsAppCard({ provider, canEdit }: Props) {
           {qr && left > 0 && (
             <div className="alert">
               <p>Abra WhatsApp no celular → Aparelhos conectados → Conectar aparelho.</p>
-              {/* A imagem temporária vem da Evolution, via backend autenticado. */}
+              {/* QR temporário da Evolution, nunca persistido nem exibido em logs. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr} alt="QR Code temporário para conectar WhatsApp" width={256} height={256}
                 style={{ maxWidth: "100%", background: "#fff", padding: 12, borderRadius: 12 }} />
-              <p>QR temporário — atualização em {left}s. Não compartilhe este código.</p>
+              <p>Exibição por até {left}s. O QR é renovado automaticamente e pode expirar antes.</p>
             </div>
+          )}
+          {pairing && !qr && (
+            <p className="muted" role="status">Aguardando o próximo QR Code válido da Evolution…</p>
           )}
           <div className="row">
             <button className="primary" type="button" onClick={() => void connect()}
               disabled={busy || state?.status === "unavailable"}>
-              {busy ? "Solicitando…" : qr ? "Gerar novo QR Code" : "Conectar WhatsApp"}
+              {busy ? "Solicitando…" : pairing ? "Reiniciar pareamento" : "Conectar WhatsApp"}
             </button>
+            {pairing && <button type="button" onClick={stop}>Parar tentativa</button>}
             <button type="button" onClick={() => void check()} disabled={busy}>
               Verificar conexão
             </button>
