@@ -179,7 +179,7 @@ class EvolutionPairingService:
             "expires_in_seconds": _TTL_SECONDS,
         }
 
-def refresh_qr(self, p: Principal) -> dict[str, Any]:
+    def refresh_qr(self, p: Principal) -> dict[str, Any]:
         """QR atualizado apenas para o tenant autorizado; sem criar instância ou webhook."""
         self._authorize(p)
         self._enabled()
