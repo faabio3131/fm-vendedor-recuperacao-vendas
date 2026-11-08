@@ -83,6 +83,59 @@ def fm_consultative_reply(
     if not phrase or len(phrase) > 600:
         return None
 
+    # Reporting is a shipped feature: cite only metrics and navigation confirmed
+    # by apps/web/src/app/reports/page.tsx and recovery/reports.py.
+    if words & {"relatorio", "relatorios"} and (
+        words & {"como", "funciona", "ver", "vejo", "onde", "mostra", "indicadores"}
+        or "relatorio de recuperacao" in phrase
+    ):
+        return (
+            "No painel do AtendeVendeIA, abra o menu Relatórios. Ali você escolhe "
+            "o período e vê oportunidades de recuperação, mensagens enviadas, "
+            "entregues e lidas, clientes que responderam, taxa de recuperação "
+            "e valor recuperado quando há compra confirmada e vinculada. "
+            "Pode agrupar por dia, produto, sequência ou origem e baixar o CSV. "
+            "Uma resposta no WhatsApp não é, sozinha, uma venda paga. "
+            "Quer que eu explique como ler a taxa de recuperação?"
+        )
+
+    # Give the prospect an example in their own retail segment. No unsupported
+    # inventory sync, marketplace integration, checkout creation or Pix status.
+    retail_question = (
+        "minha empresa" in phrase
+        or "minha loja" in phrase
+        or "meu negocio" in phrase
+        or "o que ela faria" in phrase
+        or "como me ajudaria" in phrase
+        or "como ajudaria" in phrase
+        or "eu vendo" in phrase
+        or "trabalho com" in phrase
+    )
+    if retail_question:
+        if words & {"bolsas", "bolsa", "mochila", "mochilas"}:
+            return (
+                "Na sua loja de bolsas, por exemplo, você cadastraria as ofertas "
+                "com marca, modelo, características e link de compra. Se uma cliente "
+                "perguntar por uma bolsa transversal de certa marca, a IA pode "
+                "explicar os modelos que constam no seu catálogo, esclarecer "
+                "as informações cadastradas e encaminhar o link do escolhido. "
+                "Se a conversa parar, pode tentar retomá-la pelas regras "
+                "de recuperação. Ela não consulta estoque em tempo real nem "
+                "sabe que um Pix não foi pago sem integração específica. "
+                "Você já tem os modelos organizados em um catálogo?"
+            )
+        if words & {"roupa", "roupas", "vestidos", "camisetas", "calcados", "sapatos"}:
+            return (
+                "Na sua loja, você cadastra cada oferta com descrição, variações "
+                "que queira informar e link de compra. Quando alguém perguntar "
+                "por um item, a IA responde com base nesse catálogo, pode ajudar "
+                "a escolher uma opção e enviar o link já cadastrado. "
+                "Se a conversa esfriar, pode haver acompanhamento automático "
+                "conforme as regras de contato; estoque e pagamento só são "
+                "confirmados por integrações próprias. "
+                "Você já tem os produtos e links organizados?"
+            )
+
     # Ask about payment mechanics before a generic "como funciona" explanation.
     if words & _RECOVERY_TERMS and (
         words & {"como", "funciona", "fazer", "faz", "vendas", "clientes", "pagamento"}
