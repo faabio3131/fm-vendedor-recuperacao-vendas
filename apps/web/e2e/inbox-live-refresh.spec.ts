@@ -22,6 +22,7 @@ test("Conversas mostra respostas posteriores sem recarregar e preserva rascunho 
           preview: answerIsAvailable ? "Resposta posterior" : "Mensagem inicial",
           last_message_at: at,
           window_open: true,
+          reply_allowed: true,
         },
       ],
     }),
@@ -34,6 +35,9 @@ test("Conversas mostra respostas posteriores sem recarregar e preserva rascunho 
         channel: "whatsapp",
         status: "bot",
         window_open: true,
+        reply_allowed: true,
+        evolution_manual_reply: false,
+        ai_enabled: true,
         messages: [
           {
             id: "m1",
