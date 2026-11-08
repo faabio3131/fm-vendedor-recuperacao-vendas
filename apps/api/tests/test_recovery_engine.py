@@ -386,3 +386,44 @@ def test_webhook_to_case_end_to_end(env: Env, db: Database, ctx: Ctx, client: Te
     out = client.post(f"/v1/webhooks/cakto/{pid}", json=body)
     assert out.json() == {"status": "accepted"}
     assert ctx.case("ck-e2e")["status"] == "open"
+
+
+def test_single_contact_pilot_recovery_never_claims_other_contacts(ctx: Ctx) -> None:
+    from fm_seller.recovery.engine import Opportunity, open_opportunity
+
+    with ctx.db.tx(tenant_id=ctx.tid) as conn:
+        for ref, phone in (("pilot-ok", PHONE), ("pilot-other", "5511999998877")):
+            case_id, reason = open_opportunity(
+                conn,
+                ctx.tid,
+                Opportunity(
+                    kind=n.CONVERSATION_COLD,
+                    source="conversa",
+                    external_ref=ref,
+                    name="Teste",
+                    phone=phone,
+                ),
+                now=NOW,
+            )
+            assert case_id is not None, reason
+
+    ctx.env.sql(
+        "INSERT INTO conversations (tenant_id, contact_id, channel, last_inbound_at) "
+        "SELECT %s, id, 'whatsapp', %s FROM contacts WHERE tenant_id = %s AND phone = %s",
+        (str(ctx.tid), NOW, str(ctx.tid), PHONE),
+    )
+
+    class PilotSender(SimulatedSender):
+        pilot_only = True
+        pilot_recovery_enabled = True
+        pilot_tenant_id = ctx.tid
+        pilot_phone = PHONE
+
+    sender = PilotSender()
+    stats = run_due_steps(ctx.db, ctx.env.box, sender, now=NOW + timedelta(minutes=2))
+    assert stats.sent == 1 and len(sender.sent) == 1
+    assert sender.sent[0].to_phone == PHONE
+    assert [s["status"] for s in ctx.steps("pilot-other")] == [
+        "scheduled",
+        "scheduled",
+    ]

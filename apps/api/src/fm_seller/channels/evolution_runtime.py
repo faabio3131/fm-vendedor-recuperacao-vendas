@@ -122,8 +122,50 @@ def ingest_evolution(
             msg = data.get("message")
             if not isinstance(key, dict) or not isinstance(msg, dict):
                 raise AppError(400, "invalid_message", "Mensagem inválida.")
+            if key.get("fromMe") is True:
+                # A signed, instance-bound outbound upsert is independent evidence
+                # that an uncertain attempt actually left via WhatsApp. Correlate
+                # only one exact recipient+body+recent intent; never guess/retry.
+                jid = key.get("remoteJid")
+                provider_id = key.get("id")
+                outbound_text = msg.get("conversation") or (
+                    msg.get("extendedTextMessage") or {}
+                ).get("text")
+                match = JID.fullmatch(jid) if isinstance(jid, str) else None
+                if (
+                    match
+                    and isinstance(provider_id, str)
+                    and 1 <= len(provider_id) <= 200
+                    and isinstance(outbound_text, str)
+                    and outbound_text
+                ):
+                    phone = normalize_phone_br(match.group(1))
+                    if phone:
+                        candidates = conn.execute(
+                            "SELECT m.id FROM messages m "
+                            "JOIN conversations cv ON cv.id = m.conversation_id "
+                            "JOIN contacts ct ON ct.id = cv.contact_id "
+                            "WHERE m.tenant_id = %s AND cv.tenant_id = %s "
+                            "AND ct.tenant_id = %s AND cv.channel = 'whatsapp' "
+                            "AND ct.phone = %s AND m.direction = 'out' "
+                            "AND m.status IN ('sending', 'uncertain') "
+                            "AND m.provider_message_id IS NULL AND m.body = %s "
+                            "AND m.claimed_at >= now() - interval '30 minutes' "
+                            "FOR UPDATE OF m",
+                            (tenant_id, tenant_id, tenant_id, phone, outbound_text),
+                        ).fetchall()
+                        if len(candidates) == 1:
+                            changed = conn.execute(
+                                "UPDATE messages SET status = 'sent', error = NULL, "
+                                "provider_message_id = %s WHERE tenant_id = %s "
+                                "AND id = %s AND status IN ('sending', 'uncertain') "
+                                "AND provider_message_id IS NULL",
+                                (provider_id, tenant_id, candidates[0]["id"]),
+                            )
+                            counts["statuses"] += changed.rowcount
+                return counts  # Own messages must never create a bot reply.
             if key.get("fromMe") is not False:
-                return counts  # Never reply to our own messages.
+                return counts
             jid = str(key.get("remoteJid", ""))
             match = JID.fullmatch(jid)
             message_id = str(key.get("id", ""))
@@ -265,6 +307,9 @@ class EvolutionSender:
                 raise SendError("Evolution recusou envio") from None
             raise RuntimeError("resultado do envio Evolution incerto") from None
         key = response.get("key")
+        # Evolution releases may nest the provider ACK below "data".
+        if not isinstance(key, dict) and isinstance(response.get("data"), dict):
+            key = response["data"].get("key")
         message_id = key.get("id") if isinstance(key, dict) else None
         if not isinstance(message_id, str) or not 1 <= len(message_id) <= 200:
             raise RuntimeError("Evolution não confirmou ID do envio")
@@ -286,10 +331,12 @@ class RoutedWhatsAppSender:
         evolution_enabled: bool,
         pilot_tenant_id: uuid.UUID | None = None,
         pilot_phone: str = "",
+        pilot_recovery_enabled: bool = False,
     ) -> None:
         self.pilot_only = pilot_tenant_id is not None
         self.pilot_tenant_id = pilot_tenant_id
         self.pilot_phone = pilot_phone
+        self.pilot_recovery_enabled = pilot_recovery_enabled
         self.meta = meta
         self.evolution = evolution
         self.meta_enabled = meta_enabled

@@ -351,15 +351,42 @@ def reap_stuck(db: Database, now: datetime) -> int:
         return cur.rowcount
 
 
-def _claim(db: Database, now: datetime, limit: int) -> list[_Step]:
+def _claim(
+    db: Database,
+    now: datetime,
+    limit: int,
+    *,
+    pilot_scope: tuple[uuid.UUID, str] | None = None,
+) -> list[_Step]:
     with db.tx(system=True) as conn:
-        rows = conn.execute(
-            "UPDATE recovery_steps SET status = 'sending', claimed_at = %s WHERE id IN ("
-            "SELECT id FROM recovery_steps WHERE status = 'scheduled' AND scheduled_at <= %s "
-            "ORDER BY scheduled_at LIMIT %s FOR UPDATE SKIP LOCKED) "
-            "RETURNING id, tenant_id, case_id, template_key",
-            (now, now, limit),
-        ).fetchall()
+        if pilot_scope is None:
+            statement = (
+                "UPDATE recovery_steps SET status = 'sending', claimed_at = %s WHERE id IN ("
+                "SELECT id FROM recovery_steps WHERE status = 'scheduled' AND scheduled_at <= %s "
+                "ORDER BY scheduled_at LIMIT %s FOR UPDATE SKIP LOCKED) "
+                "RETURNING id, tenant_id, case_id, template_key"
+            )
+            params: tuple[Any, ...] = (now, now, limit)
+        else:
+            # The demo worker may NEVER claim steps for any other contact or
+            # checkout source. It also must not consume their scheduled jobs.
+            statement = (
+                "UPDATE recovery_steps SET status = 'sending', claimed_at = %s WHERE id IN ("
+                "SELECT s.id FROM recovery_steps s "
+                "JOIN recovery_cases rc ON rc.id = s.case_id AND rc.tenant_id = s.tenant_id "
+                "JOIN contacts ct ON ct.id = rc.contact_id AND ct.tenant_id = rc.tenant_id "
+                "WHERE s.status = 'scheduled' AND s.scheduled_at <= %s "
+                "AND s.tenant_id = %s AND ct.phone = %s "
+                "AND rc.trigger_kind = 'conversation_cold' AND s.step_no = 1 "
+                "AND EXISTS (SELECT 1 FROM conversations cv "
+                "WHERE cv.tenant_id = rc.tenant_id AND cv.contact_id = ct.id "
+                "AND cv.channel = 'whatsapp' "
+                "AND cv.last_inbound_at >= %s - interval '24 hours') "
+                "ORDER BY s.scheduled_at LIMIT %s FOR UPDATE OF s SKIP LOCKED) "
+                "RETURNING id, tenant_id, case_id, template_key"
+            )
+            params = (now, now, pilot_scope[0], pilot_scope[1], now, limit)
+        rows = conn.execute(statement, params).fetchall()
     return [_Step(r["id"], r["tenant_id"], r["case_id"], r["template_key"]) for r in rows]
 
 
@@ -373,14 +400,20 @@ def run_due_steps(
 ) -> RunStats:
     now = now or datetime.now(UTC)
     stats = RunStats()
+    pilot_scope: tuple[uuid.UUID, str] | None = None
     if getattr(sender, "pilot_only", False):
-        # Do not claim or discard a recovery step while only a one-contact greeting is live.
-        return stats
+        if not getattr(sender, "pilot_recovery_enabled", False):
+            return stats
+        pilot_id = getattr(sender, "pilot_tenant_id", None)
+        pilot_phone = getattr(sender, "pilot_phone", "")
+        if not isinstance(pilot_id, uuid.UUID) or not re.fullmatch(r"[0-9]{10,15}", pilot_phone):
+            return stats
+        pilot_scope = (pilot_id, pilot_phone)
     if not sender.available:
         log.warning("envio indisponível nesta instalação: nenhum passo foi pego")
         return stats
     stats.reaped = reap_stuck(db, now)
-    for step in _claim(db, now, limit):
+    for step in _claim(db, now, limit, pilot_scope=pilot_scope):
         stats.claimed += 1
         try:
             outcome = _process(db, box, sender, step, now)

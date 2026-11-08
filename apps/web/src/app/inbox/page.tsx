@@ -46,6 +46,7 @@ const DELIVERY: Record<string, string> = {
   delivered: "entregue",
   read: "lida",
   failed: "não enviada",
+  uncertain: "envio sem confirmação — não reenviar",
 };
 const FAILURE: Record<string, string> = {
   janela_24h_fechada: "Passou de 24 h desde a última mensagem do cliente",

@@ -147,6 +147,34 @@ class PilotDemoSender(PilotGreetingSender):
 
     demo_enabled = True
 
+    def __init__(
+        self,
+        client: object,
+        *,
+        tenant_id: uuid.UUID,
+        phone: str,
+        recovery_enabled: bool = False,
+    ) -> None:
+        super().__init__(client, tenant_id=tenant_id, phone=phone)
+        self.recovery_enabled = recovery_enabled
+
+    def send(self, config: dict[str, str], message: OutboundMessage) -> str:
+        # One explicit cold-conversation follow-up for the pilot contact.
+        # A checkout link or arbitrary campaign remains outside pilot scope.
+        if (
+            not self.recovery_enabled
+            or message.tenant_id != self.tenant_id
+            or message.to_phone != self.phone
+            or message.template_key != "conversa_1"
+            or config.get("__provider") != "evolution"
+            or config.get("instance_name") != self.instance
+            or not message.body
+            or len(message.body) > 500
+            or UNSAFE_OUTBOUND.search(message.body)
+        ):
+            raise SendError("piloto: recuperacao nao autorizada para este contato")
+        return EvolutionSender.send_text(self, config, message.to_phone, message.body)
+
     def send_text(self, config: dict[str, str], to_phone: str, body: str) -> str:
         if (
             config.get("__provider") != "evolution"
