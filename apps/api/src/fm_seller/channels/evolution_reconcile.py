@@ -44,6 +44,7 @@ def reconcile_uncertain_sends(
             "JOIN conversations cv ON cv.id=m.conversation_id AND cv.tenant_id=m.tenant_id "
             "JOIN tenants t ON t.id=m.tenant_id AND t.status='active' "
             "WHERE m.direction='out' AND m.author='bot' AND m.status='uncertain' "
+            "AND m.outbound_kind='text' "
             "AND m.provider_message_id IS NULL AND cv.channel='whatsapp' "
             "AND m.created_at BETWEEN %s AND %s "
             "AND (m.evolution_reconcile_checked_at IS NULL "

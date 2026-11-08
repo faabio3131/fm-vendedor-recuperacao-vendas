@@ -3,11 +3,13 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from fm_seller.ai.model import build_ai_model
 from fm_seller.api.deps import get_db, get_principal
+from fm_seller.errors import bad_request
+from fm_seller.seller.photos import MAX_UPLOAD
 from fm_seller.seller.service import SellerService
 from fm_seller.services import Principal
 
@@ -26,6 +28,7 @@ Svc = Annotated[SellerService, Depends(svc)]
 class OfferIn(BaseModel):
     name: str = Field(max_length=120)
     description: str = Field(default="", max_length=1000)
+    brand: str = Field(default="", max_length=120)
     price_cents: int = Field(ge=0)
     payment_url: str = Field(max_length=500)
     active: bool = True
@@ -66,19 +69,69 @@ def offers(s: Svc, p: Who) -> list[dict[str, Any]]:
 
 @router.post("/seller/offers")
 def create_offer(body: OfferIn, s: Svc, p: Who) -> dict[str, Any]:
-    return s.create_offer(p, body.name, body.description, body.price_cents, body.payment_url)
+    return s.create_offer(
+        p, body.name, body.description, body.price_cents, body.payment_url, body.brand
+    )
 
 
 @router.put("/seller/offers/{offer_id}")
 def update_offer(offer_id: uuid.UUID, body: OfferIn, s: Svc, p: Who) -> dict[str, Any]:
     return s.update_offer(
-        p, offer_id, body.name, body.description, body.price_cents, body.payment_url, body.active
+        p,
+        offer_id,
+        body.name,
+        body.description,
+        body.price_cents,
+        body.payment_url,
+        body.active,
+        body.brand,
     )
 
 
 @router.delete("/seller/offers/{offer_id}")
 def delete_offer(offer_id: uuid.UUID, s: Svc, p: Who) -> dict[str, str]:
     s.delete_offer(p, offer_id)
+    return {"status": "removed"}
+
+
+@router.post("/seller/offers/{offer_id}/photos")
+async def upload_offer_photo(
+    offer_id: uuid.UUID, request: Request, s: Svc, p: Who
+) -> dict[str, Any]:
+    # No multipart parser, external URLs or public media buckets.
+    # Stream with an explicit cap to avoid unbounded request buffering.
+    if request.headers.get("content-type", "").split(";")[0] not in (
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    ):
+        raise bad_request("invalid_image_type", "Envie uma imagem JPG, PNG ou WebP.")
+    supplied_length = request.headers.get("content-length")
+    if supplied_length is not None and (
+        not supplied_length.isdecimal() or int(supplied_length) > MAX_UPLOAD
+    ):
+        raise bad_request("invalid_image_size", "Foto acima de 3 MB.")
+    payload = bytearray()
+    async for chunk in request.stream():
+        if len(payload) + len(chunk) > MAX_UPLOAD:
+            raise bad_request("invalid_image_size", "Foto acima de 3 MB.")
+        payload.extend(chunk)
+    return s.upload_offer_photo(p, offer_id, bytes(payload))
+
+
+@router.get("/seller/offers/{offer_id}/photos/{photo_id}")
+def get_offer_photo(offer_id: uuid.UUID, photo_id: uuid.UUID, s: Svc, p: Who) -> Response:
+    raw = s.get_offer_photo(p, offer_id, photo_id)
+    return Response(
+        content=raw,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.delete("/seller/offers/{offer_id}/photos/{photo_id}")
+def delete_offer_photo(offer_id: uuid.UUID, photo_id: uuid.UUID, s: Svc, p: Who) -> dict[str, str]:
+    s.delete_offer_photo(p, offer_id, photo_id)
     return {"status": "removed"}
 
 

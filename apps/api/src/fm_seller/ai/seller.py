@@ -23,7 +23,7 @@ from fm_seller.ai import usage
 from fm_seller.ai.abbreviations import expand_abbreviations
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
 from fm_seller.ai.sales_quality import fm_consultative_reply, needs_contextual_answer
-from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_text
+from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_photo, enqueue_text
 from fm_seller.channels.pilot_greeting import (
     DEMO_PAGE,
     DEMO_VOLUME_QUESTION,
@@ -40,6 +40,7 @@ from fm_seller.money import format_brl
 from fm_seller.provisioning import trial
 from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.optout import normalize
+from fm_seller.seller.photos import photo_reply
 
 log = logging.getLogger("fm_seller.seller")
 MAX_BOT_REPLIES_PER_HOUR = 10
@@ -1099,7 +1100,7 @@ def _handle_conversation(
         offer_rows = []
     else:
         offer_rows = conn.execute(
-            "SELECT id, name, description, price_cents, payment_url FROM offers "
+            "SELECT id, name, brand, description, price_cents, payment_url FROM offers "
             "WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 20",
             (tenant_id,),
         ).fetchall()
@@ -1298,6 +1299,33 @@ def _handle_conversation(
             conn.execute(
                 "UPDATE conversations SET last_message_at = now() WHERE id = %s",
                 (conv_id,),
+            )
+            return "replied"
+
+    # Actual product photos: deterministic catalog lookup, not LLM-guessed media.
+    # The same tenant/plan/opt-out/hourly safeguards above remain effective.
+    if not demo and not pilot and locked["channel"] == "whatsapp":
+        context = conn.execute(
+            "SELECT body FROM messages WHERE tenant_id=%s AND conversation_id=%s "
+            "AND direction='out' AND author='bot' AND status IN ('sent','queued') "
+            "ORDER BY created_at DESC LIMIT 1",
+            (tenant_id, conv_id),
+        ).fetchone()
+        selected_photo = photo_reply(
+            conn,
+            tenant_id,
+            inbound[-1]["body"],
+            offer_rows,
+            last_bot_text=str(context["body"]) if context else None,
+        )
+        if selected_photo is not None:
+            caption, photo_id = selected_photo
+            if photo_id is not None:
+                enqueue_photo(conn, tenant_id, conv_id, photo_id, caption)
+            else:
+                enqueue_text(conn, tenant_id, conv_id, "bot", caption)
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,)
             )
             return "replied"
 
