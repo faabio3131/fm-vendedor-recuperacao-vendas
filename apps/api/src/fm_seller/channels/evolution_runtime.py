@@ -332,8 +332,12 @@ class RoutedWhatsAppSender:
         pilot_tenant_id: uuid.UUID | None = None,
         pilot_phone: str = "",
         pilot_recovery_enabled: bool = False,
+        general_enabled: bool = False,
+        pilot_sender: MessageSender | None = None,
     ) -> None:
-        self.pilot_only = pilot_tenant_id is not None
+        self.pilot_only = pilot_tenant_id is not None and not general_enabled
+        self.pilot_sender = pilot_sender
+        self.general_enabled = general_enabled
         self.pilot_tenant_id = pilot_tenant_id
         self.pilot_phone = pilot_phone
         self.pilot_recovery_enabled = pilot_recovery_enabled
@@ -343,16 +347,22 @@ class RoutedWhatsAppSender:
         self.evolution_enabled = evolution_enabled
         self.available = meta_enabled or evolution_enabled
 
-    def _selected(self, config: dict[str, str]) -> MessageSender:
+    def _selected(self, config: dict[str, str], phone: str) -> MessageSender:
         provider = config.get("__provider", "whatsapp_cloud")
         if provider == "evolution" and self.evolution_enabled:
+            # Never apply the commercial-demo restrictions to another tenant.
+            # The tenant-bound instance name and recipient must BOTH match.
+            if self.pilot_sender is not None and self.pilot_tenant_id is not None:
+                expected = "fmav-" + hashlib.sha256(self.pilot_tenant_id.bytes).hexdigest()[:32]
+                if config.get("instance_name") == expected and phone == self.pilot_phone:
+                    return self.pilot_sender
             return self.evolution
         if provider == "whatsapp_cloud" and self.meta_enabled:
             return self.meta
         raise SendError("provedor WhatsApp não habilitado")
 
     def send(self, config: dict[str, str], message: OutboundMessage) -> str:
-        return self._selected(config).send(config, message)
+        return self._selected(config, message.to_phone).send(config, message)
 
     def send_text(self, config: dict[str, str], to_phone: str, body: str) -> str:
-        return self._selected(config).send_text(config, to_phone, body)
+        return self._selected(config, to_phone).send_text(config, to_phone, body)
