@@ -150,8 +150,6 @@ def scan_confirmed_checkout_links(
     for row in candidates:
         with db.tx(tenant_id=row["tenant_id"]) as conn:
             opened += bool(
-                record_confirmed_checkout_link(
-                    conn, row["tenant_id"], row["id"], now=now
-                )
+                record_confirmed_checkout_link(conn, row["tenant_id"], row["id"], now=now)
             )
     return opened
