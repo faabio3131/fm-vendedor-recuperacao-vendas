@@ -120,11 +120,20 @@ def _finish(
     provider_id: str | None,
 ) -> None:
     with db.tx(tenant_id=tenant_id) as conn:
-        conn.execute(
+        changed = conn.execute(
             "UPDATE messages SET status = %s, error = %s, provider_message_id = %s "
             "WHERE tenant_id = %s AND id = %s AND status = 'sending'",
             (status, error, provider_id, tenant_id, message_id),
-        )
+        ).rowcount
+    if changed and status == "sent" and provider_id:
+        # Never let an optional follow-up failing roll back the verified send.
+        try:
+            from fm_seller.recovery.checkout_link import record_confirmed_checkout_link
+
+            with db.tx(tenant_id=tenant_id) as conn:
+                record_confirmed_checkout_link(conn, tenant_id, message_id)
+        except Exception:
+            log.exception("falha ao registrar acompanhamento do checkout confirmado")
 
 
 def _send_one(
