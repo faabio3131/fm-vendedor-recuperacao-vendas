@@ -357,9 +357,10 @@ def _claim(
     limit: int,
     *,
     pilot_scope: tuple[uuid.UUID, str] | None = None,
+    pilot_exclusion: tuple[uuid.UUID, str] | None = None,
 ) -> list[_Step]:
     with db.tx(system=True) as conn:
-        if pilot_scope is None:
+        if pilot_scope is None and pilot_exclusion is None:
             statement = (
                 "UPDATE recovery_steps SET status = 'sending', claimed_at = %s WHERE id IN ("
                 "SELECT id FROM recovery_steps WHERE status = 'scheduled' AND scheduled_at <= %s "
@@ -367,7 +368,19 @@ def _claim(
                 "RETURNING id, tenant_id, case_id, template_key"
             )
             params: tuple[Any, ...] = (now, now, limit)
-        else:
+        elif pilot_scope is None and pilot_exclusion is not None:
+            statement = (
+                "UPDATE recovery_steps SET status = 'sending', claimed_at = %s WHERE id IN ("
+                "SELECT s.id FROM recovery_steps s "
+                "JOIN recovery_cases rc ON rc.id = s.case_id AND rc.tenant_id = s.tenant_id "
+                "JOIN contacts ct ON ct.id = rc.contact_id AND ct.tenant_id = s.tenant_id "
+                "WHERE s.status = 'scheduled' AND s.scheduled_at <= %s "
+                "AND (s.tenant_id <> %s OR ct.phone = %s) "
+                "ORDER BY s.scheduled_at LIMIT %s FOR UPDATE OF s SKIP LOCKED) "
+                "RETURNING id, tenant_id, case_id, template_key"
+            )
+            params = (now, now, pilot_exclusion[0], pilot_exclusion[1], limit)
+        elif pilot_scope is not None:
             # The demo worker may NEVER claim steps for any other contact or
             # checkout source. It also must not consume their scheduled jobs.
             statement = (
@@ -386,6 +399,8 @@ def _claim(
                 "RETURNING id, tenant_id, case_id, template_key"
             )
             params = (now, now, pilot_scope[0], pilot_scope[1], now, limit)
+        else:
+            raise ValueError("escopo piloto inconsistente")
         rows = conn.execute(statement, params).fetchall()
     return [_Step(r["id"], r["tenant_id"], r["case_id"], r["template_key"]) for r in rows]
 
@@ -413,7 +428,19 @@ def run_due_steps(
         log.warning("envio indisponível nesta instalação: nenhum passo foi pego")
         return stats
     stats.reaped = reap_stuck(db, now)
-    for step in _claim(db, now, limit, pilot_scope=pilot_scope):
+    protected_id = getattr(sender, "pilot_tenant_id", None)
+    protected_phone = getattr(sender, "pilot_phone", None)
+    pilot_exclusion = (
+        (protected_id, protected_phone)
+        if (
+            not getattr(sender, "pilot_only", False)
+            and getattr(sender, "pilot_sender", None) is not None
+            and isinstance(protected_id, uuid.UUID)
+            and isinstance(protected_phone, str)
+        )
+        else None
+    )
+    for step in _claim(db, now, limit, pilot_scope=pilot_scope, pilot_exclusion=pilot_exclusion):
         stats.claimed += 1
         try:
             outcome = _process(db, box, sender, step, now)
@@ -587,6 +614,17 @@ def _check(conn: Conn, box: SecretBox, step: _Step, now: datetime) -> _Decision 
         reason = "canal_ambiguo" if choices else "canal_nao_conectado"
         return ("skipped", "skipped", reason, None)
     provider = choices[0]["provider"]
+    if provider == "evolution":
+        # Evolution text cannot initiate unsolicited conversations. The
+        # contact must have messaged this exact tenant within the last 24h.
+        recent_inbound = conn.execute(
+            "SELECT 1 FROM conversations cv WHERE cv.tenant_id = %s "
+            "AND cv.contact_id = %s AND cv.channel = 'whatsapp' "
+            "AND cv.last_inbound_at >= %s LIMIT 1",
+            (step.tenant_id, ctx["contact_id"], now - timedelta(hours=24)),
+        ).fetchone()
+        if recent_inbound is None:
+            return ("skipped", "skipped", "janela_24h_fechada", None)
     if tpl is None or (provider == "whatsapp_cloud" and tpl["meta_status"] != "approved"):
         return ("skipped", "skipped", "template_nao_aprovado", None)
     try:

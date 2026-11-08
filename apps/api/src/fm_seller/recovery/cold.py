@@ -54,6 +54,8 @@ WHERE c.status IN ('bot', 'human') AND c.channel = 'whatsapp' AND c.last_inbound
                   AND rs.trigger_kind = 'conversation_cold' AND NOT rs.enabled)
   AND (%(pilot_tenant)s::uuid IS NULL OR
        (c.tenant_id = %(pilot_tenant)s::uuid AND ct.phone = %(pilot_phone)s))
+  AND (%(exclude_tenant)s::uuid IS NULL OR
+       c.tenant_id <> %(exclude_tenant)s::uuid OR ct.phone = %(exclude_phone)s)
 ORDER BY lm.created_at
 LIMIT %(limit)s
 """
@@ -65,6 +67,7 @@ def detect_cold_conversations(
     now: datetime | None = None,
     limit: int = 200,
     pilot_scope: tuple[uuid.UUID, str] | None = None,
+    pilot_exclusion: tuple[uuid.UUID, str] | None = None,
 ) -> int:
     """Abre oportunidades para as conversas que esfriaram. Devolve quantas abriu."""
     now = now or datetime.now(UTC)
@@ -78,6 +81,8 @@ def detect_cold_conversations(
                 "limit": limit,
                 "pilot_tenant": pilot_scope[0] if pilot_scope else None,
                 "pilot_phone": pilot_scope[1] if pilot_scope else None,
+                "exclude_tenant": pilot_exclusion[0] if pilot_exclusion else None,
+                "exclude_phone": pilot_exclusion[1] if pilot_exclusion else None,
             },
         ).fetchall()
     opened = 0

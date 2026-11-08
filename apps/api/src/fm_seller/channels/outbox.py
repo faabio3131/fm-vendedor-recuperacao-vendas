@@ -120,11 +120,20 @@ def _finish(
     provider_id: str | None,
 ) -> None:
     with db.tx(tenant_id=tenant_id) as conn:
-        conn.execute(
+        changed = conn.execute(
             "UPDATE messages SET status = %s, error = %s, provider_message_id = %s "
             "WHERE tenant_id = %s AND id = %s AND status = 'sending'",
             (status, error, provider_id, tenant_id, message_id),
-        )
+        ).rowcount
+    if changed and status == "sent" and provider_id:
+        # Never let an optional follow-up failing roll back the verified send.
+        try:
+            from fm_seller.recovery.checkout_link import record_confirmed_checkout_link
+
+            with db.tx(tenant_id=tenant_id) as conn:
+                record_confirmed_checkout_link(conn, tenant_id, message_id)
+        except Exception:
+            log.exception("falha ao registrar acompanhamento do checkout confirmado")
 
 
 def _send_one(
@@ -219,8 +228,14 @@ def _send_one(
                         reason = "canal_sem_adaptador"
                 except CryptoError:
                     reason = "credencial_ilegivel"
-        demo_sender: Any = getattr(senders.get("whatsapp"), "evolution", None)
-        if reason is None and getattr(demo_sender, "demo_enabled", False):
+        route = senders.get("whatsapp")
+        demo_sender: Any = getattr(route, "pilot_sender", None) or getattr(route, "evolution", None)
+        if (
+            reason is None
+            and getattr(demo_sender, "demo_enabled", False)
+            and tenant_id == getattr(demo_sender, "tenant_id", None)
+            and recipient == getattr(demo_sender, "phone", None)
+        ):
             from fm_seller.money import format_brl
 
             plans = conn.execute(

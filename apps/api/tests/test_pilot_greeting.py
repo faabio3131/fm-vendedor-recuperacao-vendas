@@ -86,6 +86,43 @@ def test_pilot_sender_restricts_recipient_instance_and_content() -> None:
     assert fake.sent == [{"number": PHONE, "text": "Olá, sou a AnaClara!"}]
 
 
+def test_multitenant_evolution_routes_only_the_fm_contact_to_the_demo() -> None:
+    tenant = uuid.uuid4()
+    unrelated_tenant = uuid.uuid4()
+    fake = FakeSendClient()
+    pilot = PilotGreetingSender(cast(Any, fake), tenant_id=tenant, phone=PHONE)
+    general = SimulatedSender()
+    route = RoutedWhatsAppSender(
+        SimulatedSender(),
+        general,
+        meta_enabled=False,
+        evolution_enabled=True,
+        general_enabled=True,
+        pilot_sender=pilot,
+        pilot_tenant_id=tenant,
+        pilot_phone=PHONE,
+    )
+    assert not route.pilot_only
+    own_config = {
+        "__provider": "evolution",
+        "instance_name": "fmav-" + hashlib.sha256(tenant.bytes).hexdigest()[:32],
+    }
+    other_config = {
+        "__provider": "evolution",
+        "instance_name": "fmav-" + hashlib.sha256(unrelated_tenant.bytes).hexdigest()[:32],
+    }
+    assert route.send_text(own_config, PHONE, "Olá, sou a AnaClara!") == "ABC123"
+    with pytest.raises(SendError):
+        route.send_text(own_config, "5511977008899", "Contato FM não autorizado")
+    route.send_text(other_config, PHONE, "Outro tenant, mesmo número")
+    route.send_text(other_config, "5511988887777", "Outro cliente autorizado")
+    assert fake.sent == [{"number": PHONE, "text": "Olá, sou a AnaClara!"}]
+    assert general.texts == [
+        (PHONE, "Outro tenant, mesmo número"),
+        ("5511988887777", "Outro cliente autorizado"),
+    ]
+
+
 def test_pilot_can_greet_without_offer_or_global_ai(env: Env, db: Database) -> None:
     env.sql("UPDATE messages SET handled=true WHERE direction='in'")
     tid = uuid.UUID(env.tenant("Piloto FM", unique_email("pilot-greet")))
@@ -842,5 +879,5 @@ def test_contabo_compose_forwards_opt_in_demo_to_api_and_worker() -> None:
         Path(__file__).resolve().parents[3] / "deploy" / "contabo" / "compose.yml"
     ).read_text(encoding="utf-8")
     assert "FM_PILOT_DEMO_ENABLED: ${FM_PILOT_DEMO_ENABLED:-false}" in compose
-    assert "FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}" in compose
+    assert 'FM_EVOLUTION_SEND_ENABLED: "true"' in compose
     assert "environment: *app-env" in compose

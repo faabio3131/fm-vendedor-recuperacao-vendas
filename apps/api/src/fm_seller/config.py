@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     evolution_timeout_seconds: float = Field(default=8.0, ge=2.0, le=20.0)
     evolution_webhook_key: SecretStr = SecretStr("")
     evolution_send_enabled: bool = False
+    # Emergency transport pause for all tenants; inbound webhooks remain enabled.
+    evolution_outbound_paused: bool = False
 
     # Piloto interno, explicitamente restrito a UM tenant e UM destinatário.
     # Não ativa FM_EVOLUTION_SEND_ENABLED nem campanhas/recuperação.
@@ -185,13 +187,12 @@ class Settings(BaseSettings):
         if (
             self.env != "prod"
             or not self.evolution_enabled
-            or self.evolution_send_enabled
             or self.whatsapp_live
             or not self.ai_api_key.get_secret_value()
             or not re.fullmatch(r"55[1-9][0-9]{9,11}", self.pilot_greeting_phone)
         ):
             raise ValueError(
-                "Piloto exige produção, Evolution conectável, IA real e envio geral desligado"
+                "Piloto exige produção, Evolution conectável, IA real e canal Meta separado"
             )
         try:
             parsed = uuid.UUID(self.pilot_greeting_tenant_id)

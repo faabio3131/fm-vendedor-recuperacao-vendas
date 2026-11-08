@@ -88,8 +88,10 @@ def build_sender(settings: Settings) -> MessageSender:
                 timeout=settings.meta_timeout_seconds,
             )
         )
-    if settings.evolution_enabled and (
-        settings.evolution_send_enabled or settings.pilot_greeting_enabled
+    if (
+        settings.evolution_enabled
+        and not settings.evolution_outbound_paused
+        and (settings.evolution_send_enabled or settings.pilot_greeting_enabled)
     ):
         from fm_seller.channels.evolution import EvolutionClient
         from fm_seller.channels.evolution_runtime import EvolutionSender, RoutedWhatsAppSender
@@ -105,24 +107,34 @@ def build_sender(settings: Settings) -> MessageSender:
             if settings.pilot_greeting_enabled
             else None
         )
+        pilot_sender: MessageSender | None = None
         if pilot_id is not None and settings.pilot_demo_enabled:
-            evolution: MessageSender = PilotDemoSender(
+            pilot_sender = PilotDemoSender(
                 client,
                 tenant_id=pilot_id,
                 phone=settings.pilot_greeting_phone,
                 recovery_enabled=settings.pilot_recovery_enabled,
             )
         elif pilot_id is not None:
-            evolution = PilotGreetingSender(
+            pilot_sender = PilotGreetingSender(
                 client, tenant_id=pilot_id, phone=settings.pilot_greeting_phone
             )
-        else:
-            evolution = EvolutionSender(client)
+        # General traffic always uses the per-tenant Evolution adapter. Keep the
+        # restricted FM demo for the exact pilot recipient, even after GA launch.
+        evolution: MessageSender = (
+            EvolutionSender(client)
+            if settings.evolution_send_enabled
+            else pilot_sender
+            if pilot_sender is not None
+            else UnavailableSender()
+        )
         return RoutedWhatsAppSender(
             meta,
             evolution,
             meta_enabled=settings.whatsapp_live,
             evolution_enabled=True,
+            general_enabled=settings.evolution_send_enabled,
+            pilot_sender=pilot_sender if settings.evolution_send_enabled else None,
             pilot_tenant_id=pilot_id,
             pilot_phone=settings.pilot_greeting_phone if pilot_id is not None else "",
             pilot_recovery_enabled=settings.pilot_recovery_enabled,
