@@ -380,7 +380,7 @@ def _claim(
                 "RETURNING id, tenant_id, case_id, template_key"
             )
             params = (now, now, pilot_exclusion[0], pilot_exclusion[1], limit)
-        else:
+        elif pilot_scope is not None:
             # The demo worker may NEVER claim steps for any other contact or
             # checkout source. It also must not consume their scheduled jobs.
             statement = (
@@ -399,6 +399,8 @@ def _claim(
                 "RETURNING id, tenant_id, case_id, template_key"
             )
             params = (now, now, pilot_scope[0], pilot_scope[1], now, limit)
+        else:
+            raise ValueError("escopo piloto inconsistente")
         rows = conn.execute(statement, params).fetchall()
     return [_Step(r["id"], r["tenant_id"], r["case_id"], r["template_key"]) for r in rows]
 
