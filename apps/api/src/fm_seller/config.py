@@ -185,13 +185,12 @@ class Settings(BaseSettings):
         if (
             self.env != "prod"
             or not self.evolution_enabled
-            or self.evolution_send_enabled
             or self.whatsapp_live
             or not self.ai_api_key.get_secret_value()
             or not re.fullmatch(r"55[1-9][0-9]{9,11}", self.pilot_greeting_phone)
         ):
             raise ValueError(
-                "Piloto exige produção, Evolution conectável, IA real e envio geral desligado"
+                "Piloto exige produção, Evolution conectável, IA real e canal Meta separado"
             )
         try:
             parsed = uuid.UUID(self.pilot_greeting_tenant_id)
