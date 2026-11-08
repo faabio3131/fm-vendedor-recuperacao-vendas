@@ -362,7 +362,9 @@ class RoutedWhatsAppSender:
             # The tenant-bound instance name and recipient must BOTH match.
             if self.pilot_sender is not None and self.pilot_tenant_id is not None:
                 expected = "fmav-" + hashlib.sha256(self.pilot_tenant_id.bytes).hexdigest()[:32]
-                if config.get("instance_name") == expected and phone == self.pilot_phone:
+                if config.get("instance_name") == expected:
+                    # Keep the FM demonstration tenant restricted to its original
+                    # pilot sender even while other subscriber tenants are live.
                     return self.pilot_sender
             return self.evolution
         if provider == "whatsapp_cloud" and self.meta_enabled:
