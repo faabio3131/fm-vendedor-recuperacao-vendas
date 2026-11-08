@@ -1100,8 +1100,8 @@ def _handle_conversation(
         offer_rows = []
     else:
         offer_rows = conn.execute(
-            "SELECT id, name, brand, description, price_cents, payment_url FROM offers "
-            "WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 20",
+            "SELECT id, name, brand, category, description, price_cents, payment_url FROM offers "
+            "WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 80",
             (tenant_id,),
         ).fetchall()
     if not offer_rows and not pilot:
@@ -1415,7 +1415,13 @@ def _handle_conversation(
         persona=settings["ai_persona"],
         customer_name=(locked["name"] or "").split(" ")[0],
         offers=tuple(
-            OfferView(str(o["id"]), o["name"], o["description"], format_brl(o["price_cents"]))
+            OfferView(
+                str(o["id"]),
+                o["name"],
+                (f"Categoria: {o.get('category', '')}. " if o.get("category") else "")
+                + str(o["description"]),
+                format_brl(o["price_cents"]),
+            )
             for o in offer_rows
         ),
         history=(

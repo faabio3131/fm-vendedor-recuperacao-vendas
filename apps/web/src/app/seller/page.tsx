@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { KnowledgeCard } from "@/components/KnowledgeCard";
+import { MenuImporter } from "@/components/MenuImporter";
 import { OfferPhotoGallery } from "@/components/OfferPhotoGallery";
 import { HandoffReportCard, SandboxCard } from "@/components/SellerTools";
 import { Shell, useMe } from "@/components/Shell";
 import { api, brl, type AiUsage, type Offer, type SellerSettings } from "@/lib/api";
 
-type Draft = { name: string; brand: string; description: string; price: string; payment_url: string };
-const EMPTY: Draft = { name: "", brand: "", description: "", price: "", payment_url: "https://" };
+type Draft = { name: string; brand: string; category: string; description: string; price: string; payment_url: string };
+const EMPTY: Draft = { name: "", brand: "", category: "", description: "", price: "", payment_url: "https://" };
 
 function toCents(price: string): number {
   return Math.round(Number(price.replace(/\./g, "").replace(",", ".")) * 100);
@@ -74,7 +75,7 @@ function Seller() {
       if (!Number.isFinite(cents)) throw new Error("Informe o preço, por exemplo 197,00.");
       await api("/v1/seller/offers", {
         method: "POST",
-        body: JSON.stringify({ name: draft.name, brand: draft.brand, description: draft.description, price_cents: cents, payment_url: draft.payment_url }),
+        body: JSON.stringify({ name: draft.name, brand: draft.brand, category: draft.category, description: draft.description, price_cents: cents, payment_url: draft.payment_url }),
       });
       setDraft(EMPTY);
       return "Oferta cadastrada.";
@@ -167,6 +168,11 @@ function Seller() {
 
       <KnowledgeCard canEdit={canEdit} />
 
+      {canEdit && (<>
+        <h2>Importar cardápio</h2>
+        <MenuImporter onChanged={load} />
+      </>)}
+
       <h2>Ofertas</h2>
       {offers.length === 0 && <p className="muted">Nenhuma oferta ainda.</p>}
       {offers.map((o) => (
@@ -177,6 +183,7 @@ function Seller() {
           </div>
           <div>{brl(o.price_cents)}</div>
           {o.brand && <div className="muted">Marca: {o.brand}</div>}
+          {o.category && <div className="muted">Categoria: {o.category}</div>}
           <div className="muted">{o.description}</div>
           <code>{o.payment_url}</code>
           <OfferPhotoGallery offer={o} canEdit={canEdit} onChanged={load} />
@@ -198,6 +205,8 @@ function Seller() {
           <input id="o-name" value={draft.name} maxLength={120} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           <label htmlFor="o-brand">Marca (opcional)</label>
           <input id="o-brand" value={draft.brand} maxLength={120} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} />
+          <label htmlFor="o-cat">Categoria (opcional)</label>
+          <input id="o-cat" value={draft.category} maxLength={80} onChange={(e) => setDraft({ ...draft, category: e.target.value })} />
           <label htmlFor="o-desc">Descrição</label>
           <textarea id="o-desc" maxLength={1000} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
           <label htmlFor="o-price">Preço (R$)</label>
