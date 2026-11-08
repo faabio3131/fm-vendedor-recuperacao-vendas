@@ -92,14 +92,15 @@ def test_photo_validation_and_five_image_limit(client: TestClient, env: Env) -> 
     env.tenant("Loja de Bolsas", email)
     assert login(client, email).status_code == 200
     photo_path = f"/v1/seller/offers/{offer(client)}/photos"
-    for raw, mime in (
-        (b"<svg>bad</svg>", "image/png"),
-        (b"not an image", "image/jpeg"),
-        (b"x" * 3_000_001, "image/png"),
-        (image_png(), "text/html"),
+    for raw, mime, expected_status in (
+        (b"<svg>bad</svg>", "image/png", 400),
+        (b"not an image", "image/jpeg", 400),
+        (b"x" * 3_000_001, "image/png", 413),
+        (image_png(), "text/html", 400),
     ):
         assert (
-            client.post(photo_path, content=raw, headers={"Content-Type": mime}).status_code == 400
+            client.post(photo_path, content=raw, headers={"Content-Type": mime}).status_code
+            == expected_status
         )
     for _ in range(5):
         assert (
