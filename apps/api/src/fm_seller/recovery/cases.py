@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 
 from fm_seller.db import Conn
+from fm_seller.recovery.followups import cancel_case_reviews
 
 
 def close_case(
@@ -27,13 +28,16 @@ def close_case(
         "WHERE case_id = %s AND status = 'scheduled'",
         (reason, case_id),
     )
+    cancel_case_reviews(conn, case_id, now)
 
 
 def stop_cold_cases(conn: Conn, tenant_id: uuid.UUID, contact_id: uuid.UUID, now: datetime) -> int:
     """O cliente voltou a escrever: a conversa está viva, então para a recuperação dela."""
     rows = conn.execute(
         "SELECT id FROM recovery_cases WHERE tenant_id = %s AND contact_id = %s "
-        "AND source = 'conversa' AND status = 'open'",
+        "AND source = 'conversa' AND (status='open' OR (status='exhausted' "
+        "AND EXISTS (SELECT 1 FROM recovery_followups f WHERE f.case_id=recovery_cases.id "
+        "AND f.status='pending')))",
         (tenant_id, contact_id),
     ).fetchall()
     for row in rows:

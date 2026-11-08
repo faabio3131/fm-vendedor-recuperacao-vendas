@@ -59,6 +59,16 @@ def suppress_identity(
         "ON CONFLICT (tenant_id, identity) DO NOTHING",
         (tenant_id, identity, reason),
     )
+    # Clear even exhausted-case review tasks so an opt-out is never shown as
+    # an actionable human follow-up (review queues do not send messages).
+    conn.execute(
+        "UPDATE recovery_followups f SET status='canceled', closed_at=COALESCE(%s,now()) "
+        "WHERE f.status='pending' AND f.case_id IN "
+        "(SELECT rc.id FROM recovery_cases rc "
+        "JOIN contacts ct ON ct.id=rc.contact_id AND ct.tenant_id=rc.tenant_id "
+        "WHERE rc.tenant_id=%s AND (ct.phone=%s OR lower(ct.email)=%s))",
+        (now, tenant_id, identity, identity),
+    )
     conn.execute(
         "UPDATE recovery_steps SET status = 'canceled', detail = 'nao_contatar' "
         "WHERE status = 'scheduled' AND case_id IN (SELECT c.id FROM recovery_cases c "

@@ -218,6 +218,7 @@ export type RecoverySummary = {
   cases_by_status: Record<"open" | "recovered" | "purchased" | "stopped" | "exhausted", number>;
   recovered_cents: number;
   messages_sent: number;
+  manual_followups_pending: number;
   skipped_reasons: { reason: string; count: number }[];
   readiness: {
     whatsapp_connected: boolean;
@@ -258,6 +259,21 @@ export type RecoveryTemplate = {
   synced_at: string | null;
   saved: boolean;
   note?: string | null;
+};
+
+export type RecoveryFollowup = {
+  id: string;
+  case_id: string;
+  reason: "evolution_outside_window" | "cloud_template_unavailable";
+  status: "pending" | "reviewed" | "dismissed" | "canceled";
+  case_status: string;
+  product: string;
+  amount_cents: number;
+  trigger: string;
+  template_key: string;
+  contact: { name: string; phone: string; email: string };
+  created_at: string;
+  closed_at: string | null;
 };
 
 export type RecoveryCase = {

@@ -79,6 +79,25 @@ def cases(
     return s.cases(p, status, limit)
 
 
+class FollowupIn(BaseModel):
+    action: str = Field(max_length=20)
+
+
+@router.get("/followups")
+def followups(
+    s: Svc,
+    p: Who,
+    status: str = "pending",
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> list[dict[str, Any]]:
+    return s.followups(p, status, limit)
+
+
+@router.post("/followups/{followup_id}/resolve")
+def resolve_followup(followup_id: uuid.UUID, body: FollowupIn, s: Svc, p: Who) -> dict[str, str]:
+    return s.resolve_followup(p, followup_id, body.action)
+
+
 @router.get("/settings")
 def get_settings(s: Svc, p: Who) -> dict[str, Any]:
     return s.get_settings(p)
