@@ -88,8 +88,10 @@ def build_sender(settings: Settings) -> MessageSender:
                 timeout=settings.meta_timeout_seconds,
             )
         )
-    if settings.evolution_enabled and not settings.evolution_outbound_paused and (
-        settings.evolution_send_enabled or settings.pilot_greeting_enabled
+    if (
+        settings.evolution_enabled
+        and not settings.evolution_outbound_paused
+        and (settings.evolution_send_enabled or settings.pilot_greeting_enabled)
     ):
         from fm_seller.channels.evolution import EvolutionClient
         from fm_seller.channels.evolution_runtime import EvolutionSender, RoutedWhatsAppSender
@@ -122,7 +124,9 @@ def build_sender(settings: Settings) -> MessageSender:
         evolution: MessageSender = (
             EvolutionSender(client)
             if settings.evolution_send_enabled
-            else pilot_sender if pilot_sender is not None else UnavailableSender()
+            else pilot_sender
+            if pilot_sender is not None
+            else UnavailableSender()
         )
         return RoutedWhatsAppSender(
             meta,
