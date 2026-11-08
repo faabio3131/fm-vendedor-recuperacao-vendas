@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     evolution_timeout_seconds: float = Field(default=8.0, ge=2.0, le=20.0)
     evolution_webhook_key: SecretStr = SecretStr("")
     evolution_send_enabled: bool = False
+    # Emergency transport pause for all tenants; inbound webhooks remain enabled.
+    evolution_outbound_paused: bool = False
 
     # Piloto interno, explicitamente restrito a UM tenant e UM destinatário.
     # Não ativa FM_EVOLUTION_SEND_ENABLED nem campanhas/recuperação.
