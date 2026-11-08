@@ -107,6 +107,7 @@ def scan_confirmed_checkout_links(
     now: datetime | None = None,
     limit: int = 60,
     pilot_scope: tuple[uuid.UUID, str] | None = None,
+    pilot_exclusion: tuple[uuid.UUID, str] | None = None,
 ) -> int:
     """Reconcile confirmed links even if the webhook arrived before the worker ACK.
 
@@ -128,6 +129,7 @@ def scan_confirmed_checkout_links(
             "AND m.body LIKE '%%https://%%' "
             "AND cv.channel = 'whatsapp' AND cv.last_inbound_at <= m.created_at "
             "AND (%s::uuid IS NULL OR (m.tenant_id = %s AND ct.phone = %s)) "
+            "AND (%s::uuid IS NULL OR m.tenant_id <> %s OR ct.phone = %s) "
             "AND NOT EXISTS (SELECT 1 FROM recovery_cases rc "
             "WHERE rc.tenant_id = m.tenant_id AND rc.trigger_kind = 'conversation_cold' "
             "AND rc.external_ref = 'offer-link:' || m.id::text) "
@@ -138,6 +140,9 @@ def scan_confirmed_checkout_links(
                 pilot_scope[0] if pilot_scope else None,
                 pilot_scope[0] if pilot_scope else None,
                 pilot_scope[1] if pilot_scope else None,
+                pilot_exclusion[0] if pilot_exclusion else None,
+                pilot_exclusion[0] if pilot_exclusion else None,
+                pilot_exclusion[1] if pilot_exclusion else None,
                 limit,
             ),
         ).fetchall()
