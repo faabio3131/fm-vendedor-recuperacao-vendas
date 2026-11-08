@@ -178,8 +178,18 @@ def create_photo(
 
 def request_for_photo(question: str) -> bool:
     words = set(normalize(question).split())
-    # "Quero ver os planos" is NOT a request to send a product photo.
-    return bool(words & PHOTO_WORDS and words & PHOTO_REQUEST_WORDS)
+    if words & PHOTO_WORDS and words & PHOTO_REQUEST_WORDS:
+        return True
+    # Follow-up "quero ver esse modelo" is contextual, but never interpret
+    # "quero ver os planos" as a product-photo request.
+    viewing = {"ver", "mostrar", "mostra", "mostre"}
+    products = {
+        "esse", "essa", "este", "esta", "aquele", "aquela", "modelo",
+        "produto", "item", "bolsa", "vestido", "sapato", "tenis", "mochila",
+        "camisa", "blusa", "calca", "sandalia",
+    }
+    non_products = {"plano", "planos", "assinatura", "assinaturas", "relatorio", "sistema"}
+    return bool(words & viewing and words & products and not words & non_products)
 
 
 def photo_reply(
