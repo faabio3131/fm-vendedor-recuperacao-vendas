@@ -168,9 +168,7 @@ def ingest_evolution(
                                     record_confirmed_checkout_link,
                                 )
 
-                                record_confirmed_checkout_link(
-                                    conn, tenant_id, candidates[0]["id"]
-                                )
+                                record_confirmed_checkout_link(conn, tenant_id, candidates[0]["id"])
                 return counts  # Own messages must never create a bot reply.
             if key.get("fromMe") is not False:
                 return counts
