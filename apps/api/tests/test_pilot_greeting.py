@@ -878,5 +878,5 @@ def test_contabo_compose_forwards_opt_in_demo_to_api_and_worker() -> None:
         Path(__file__).resolve().parents[3] / "deploy" / "contabo" / "compose.yml"
     ).read_text(encoding="utf-8")
     assert "FM_PILOT_DEMO_ENABLED: ${FM_PILOT_DEMO_ENABLED:-false}" in compose
-    assert "FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}" in compose
+    assert 'FM_EVOLUTION_SEND_ENABLED: "true"' in compose
     assert "environment: *app-env" in compose
