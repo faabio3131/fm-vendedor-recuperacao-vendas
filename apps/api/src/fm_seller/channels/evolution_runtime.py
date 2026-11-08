@@ -6,6 +6,7 @@ Webhook auth is a per-instance bearer derived from an independent platform secre
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -343,6 +344,49 @@ class EvolutionSender:
             raise RuntimeError("Evolution não confirmou ID do envio")
         return message_id
 
+    def send_image(
+        self, config: dict[str, str], to_phone: str, caption: str, content: bytes
+    ) -> str:
+        instance = config.get("instance_name", "")
+        if not re.fullmatch(r"fmav-[a-f0-9]{32}", instance):
+            raise SendError("instância Evolution não vinculada")
+        if (
+            not re.fullmatch(r"[0-9]{10,15}", to_phone)
+            or not 1 <= len(caption) <= 1000
+            or not 1 <= len(content) <= 2_000_000
+            or content[:3] != bytes((255, 216, 255))
+        ):
+            raise SendError("Imagem ou destinatário inválido")
+        try:
+            if self.client.state(instance) != "open":
+                raise SendError("sessão Evolution desconectada")
+            response = self.client._call(
+                "POST",
+                f"/message/sendMedia/{instance}",
+                body={
+                    "number": to_phone,
+                    "mediatype": "image",
+                    "mimetype": "image/jpeg",
+                    "caption": caption,
+                    # Evolution 2.3.7 image binding expects lowercase filename.
+                    "filename": "foto-produto.jpg",
+                    # Private binary, not a publicly reachable/photo SSRF URL.
+                    "media": base64.b64encode(content).decode("ascii"),
+                },
+            )
+        except AppError as exc:
+            if exc.code == "evolution_rejected":
+                raise SendError("Evolution recusou a foto") from None
+            # A timeout after sendMedia is ambiguous: do not send a second copy.
+            raise RuntimeError("resultado de imagem Evolution incerto") from None
+        key = response.get("key")
+        if not isinstance(key, dict) and isinstance(response.get("data"), dict):
+            key = response["data"].get("key")
+        msg_id = key.get("id") if isinstance(key, dict) else None
+        if not isinstance(msg_id, str) or not 1 <= len(msg_id) <= 200:
+            raise RuntimeError("Evolution não confirmou o envio da imagem")
+        return msg_id
+
     def send(self, config: dict[str, str], message: OutboundMessage) -> str:
         return self.send_text(config, message.to_phone, message.body)
 
@@ -396,3 +440,11 @@ class RoutedWhatsAppSender:
 
     def send_text(self, config: dict[str, str], to_phone: str, body: str) -> str:
         return self._selected(config, to_phone).send_text(config, to_phone, body)
+
+    def send_image(
+        self, config: dict[str, str], to_phone: str, caption: str, content: bytes
+    ) -> str:
+        sender = self._selected(config, to_phone)
+        if not isinstance(sender, EvolutionSender):
+            raise SendError("Este canal não suporta envio de imagem.")
+        return sender.send_image(config, to_phone, caption, content)

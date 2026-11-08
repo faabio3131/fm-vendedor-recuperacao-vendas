@@ -77,7 +77,8 @@ def flush_outbox(
                 "AND cv.last_inbound_at IS NOT NULL "
                 "AND m.created_at >= cv.last_inbound_at AND cv.last_inbound_at >= %s "
                 "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
-                "RETURNING id, tenant_id, conversation_id, author, body",
+                "RETURNING id, tenant_id, conversation_id, author, body, "
+                "outbound_kind, outbound_photo_id",
                 (
                     now,
                     getattr(sender, "pilot_tenant_id", None),
@@ -93,7 +94,8 @@ def flush_outbox(
                 "SELECT m.id FROM messages m JOIN conversations cv ON cv.id = m.conversation_id "
                 "WHERE m.direction = 'out' AND m.status = 'queued' AND cv.channel = ANY(%s) "
                 "ORDER BY m.created_at LIMIT %s FOR UPDATE OF m SKIP LOCKED) "
-                "RETURNING id, tenant_id, conversation_id, author, body",
+                "RETURNING id, tenant_id, conversation_id, author, body, "
+                "outbound_kind, outbound_photo_id",
                 (now, channels, limit),
             ).fetchall()
     for row in rows:
@@ -299,14 +301,34 @@ def _send_one(
             _finish(db, tenant_id, message_id, "failed", "trial_limit_or_expired", None)
             return False
     try:
-        provider_id = senders[ctx["channel"]].send_text(config, recipient, row["body"])
+        if row["outbound_kind"] == "offer_photo":
+            if ctx["channel"] != "whatsapp" or provider != "evolution":
+                raise SendError("Envio de fotos requer o WhatsApp Evolution conectado.")
+            photo_id = row["outbound_photo_id"]
+            if photo_id is None:
+                raise SendError("Foto removida do catálogo antes do envio.")
+            with db.tx(tenant_id=tenant_id) as conn:
+                photo = conn.execute(
+                    "SELECT ph.bytes FROM offer_photos ph JOIN offers o "
+                    "ON o.id=ph.offer_id AND o.tenant_id=ph.tenant_id "
+                    "WHERE ph.tenant_id=%s AND ph.id=%s AND o.active",
+                    (tenant_id, photo_id),
+                ).fetchone()
+            if photo is None:
+                raise SendError("Foto indisponível no catálogo.")
+            send_image = getattr(senders["whatsapp"], "send_image", None)
+            if not callable(send_image):
+                raise SendError("Este canal não suporta envio de imagem.")
+            provider_id = send_image(config, recipient, row["body"], bytes(photo["bytes"]))
+        else:
+            provider_id = senders[ctx["channel"]].send_text(config, recipient, row["body"])
     except SendError as exc:
         _finish(db, tenant_id, message_id, "failed", str(exc)[:200], None)
         if reserved == "reserved":
             trial.finalize(db, tenant_id, source_kind="bot", source_id=message_id, outcome="failed")
         return False
     except Exception as exc:
-        log.exception("envio de texto com resultado incerto")
+        log.exception("envio com resultado incerto; não repetir automaticamente")
         _finish(
             db, tenant_id, message_id, "uncertain", f"resultado_incerto: {type(exc).__name__}", None
         )

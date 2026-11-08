@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { KnowledgeCard } from "@/components/KnowledgeCard";
+import { OfferPhotoGallery } from "@/components/OfferPhotoGallery";
 import { HandoffReportCard, SandboxCard } from "@/components/SellerTools";
 import { Shell, useMe } from "@/components/Shell";
 import { api, brl, type AiUsage, type Offer, type SellerSettings } from "@/lib/api";
@@ -177,6 +178,7 @@ function Seller() {
           <div>{brl(o.price_cents)}</div>
           <div className="muted">{o.description}</div>
           <code>{o.payment_url}</code>
+          <OfferPhotoGallery offer={o} canEdit={canEdit} onChanged={load} />
           {canEdit && (
             <div className="row">
               <button onClick={() => void toggle(o)}>{o.active ? "Desativar" : "Ativar"}</button>

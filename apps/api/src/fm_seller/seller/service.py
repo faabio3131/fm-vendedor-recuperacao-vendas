@@ -18,6 +18,7 @@ from fm_seller.errors import AppError, bad_request, forbidden, not_found
 from fm_seller.money import format_brl
 from fm_seller.recovery.optout import is_opt_out
 from fm_seller.recovery.service import mask_phone
+from fm_seller.seller import photos
 from fm_seller.services import EDIT_ROLES, Principal, audit, tenant_features
 
 FEATURE = "ai.seller"
@@ -85,20 +86,67 @@ class SellerService:
         return {
             "id": str(r["id"]),
             "name": r["name"],
+            "brand": r.get("brand", ""),
             "description": r["description"],
             "price_cents": r["price_cents"],
             "payment_url": r["payment_url"],
             "active": r["active"],
+            "photos": r.get("photos", []),
         }
 
     def offers(self, p: Principal) -> list[dict[str, Any]]:
         self._guard(p)
         with self._tx(p) as conn:
             rows = conn.execute(
-                "SELECT id, name, description, price_cents, payment_url, active FROM offers "
+                "SELECT id, name, brand, description, price_cents, payment_url, active FROM offers "
                 "ORDER BY created_at"
             ).fetchall()
-        return [self._offer(r) for r in rows]
+            images = photos.photo_summaries(conn, p.tenant_id)
+        return [self._offer({**r, "photos": images.get(r["id"], [])}) for r in rows]
+
+    def upload_offer_photo(self, p: Principal, offer_id: uuid.UUID, raw: bytes) -> dict[str, Any]:
+        self._guard(p, edit=True)
+        with self._tx(p) as conn:
+            photo = photos.create_photo(conn, p.tenant_id, offer_id, raw)
+            audit(
+                conn,
+                tenant_id=p.tenant_id,
+                actor=p.user_id,
+                action="offer.photo.added",
+                target=str(offer_id),
+            )
+        return photo
+
+    def get_offer_photo(self, p: Principal, offer_id: uuid.UUID, photo_id: uuid.UUID) -> bytes:
+        self._guard(p)
+        with self._tx(p) as conn:
+            row = conn.execute(
+                "SELECT ph.bytes FROM offer_photos ph JOIN offers o "
+                "ON o.id=ph.offer_id AND o.tenant_id=ph.tenant_id "
+                "WHERE ph.tenant_id=%s AND ph.offer_id=%s AND ph.id=%s",
+                (p.tenant_id, offer_id, photo_id),
+            ).fetchone()
+        if row is None:
+            raise not_found("Foto não encontrada.")
+        return bytes(row["bytes"])
+
+    def delete_offer_photo(self, p: Principal, offer_id: uuid.UUID, photo_id: uuid.UUID) -> None:
+        self._guard(p, edit=True)
+        with self._tx(p) as conn:
+            removed = conn.execute(
+                "DELETE FROM offer_photos WHERE tenant_id=%s AND offer_id=%s AND id=%s "
+                "RETURNING id",
+                (p.tenant_id, offer_id, photo_id),
+            ).fetchone()
+            if removed is None:
+                raise not_found("Foto não encontrada.")
+            audit(
+                conn,
+                tenant_id=p.tenant_id,
+                actor=p.user_id,
+                action="offer.photo.deleted",
+                target=str(offer_id),
+            )
 
     def _check_offer(self, name: str, description: str, price_cents: int, url: str) -> None:
         if not 1 <= len(name.strip()) <= 120:
@@ -111,16 +159,19 @@ class SellerService:
             raise bad_request("invalid_url", "O link de pagamento precisa começar com https://.")
 
     def create_offer(
-        self, p: Principal, name: str, description: str, price_cents: int, url: str
+        self, p: Principal, name: str, description: str, price_cents: int, url: str,
+        brand: str = "",
     ) -> dict[str, Any]:
         self._guard(p, edit=True)
         self._check_offer(name, description, price_cents, url)
+        if len(brand.strip()) > 120:
+            raise bad_request("invalid_brand", "A marca pode ter até 120 caracteres.")
         with self._tx(p) as conn:
             row = conn.execute(
-                "INSERT INTO offers (tenant_id, name, description, price_cents, payment_url) "
-                "VALUES (%s, %s, %s, %s, %s) RETURNING id, name, description, price_cents, "
-                "payment_url, active",
-                (p.tenant_id, name.strip(), description.strip(), price_cents, url),
+                "INSERT INTO offers (tenant_id, name, brand, description, price_cents, payment_url) "
+                "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, name, brand, description, "
+                "price_cents, payment_url, active",
+                (p.tenant_id, name.strip(), brand.strip(), description.strip(), price_cents, url),
             ).fetchone()
             assert row is not None
             audit(
@@ -141,15 +192,18 @@ class SellerService:
         price_cents: int,
         url: str,
         active: bool,
+        brand: str = "",
     ) -> dict[str, Any]:
         self._guard(p, edit=True)
         self._check_offer(name, description, price_cents, url)
+        if len(brand.strip()) > 120:
+            raise bad_request("invalid_brand", "A marca pode ter até 120 caracteres.")
         with self._tx(p) as conn:
             row = conn.execute(
-                "UPDATE offers SET name = %s, description = %s, price_cents = %s, "
+                "UPDATE offers SET name = %s, brand = %s, description = %s, price_cents = %s, "
                 "payment_url = %s, active = %s, updated_at = now() WHERE id = %s "
-                "RETURNING id, name, description, price_cents, payment_url, active",
-                (name.strip(), description.strip(), price_cents, url, active, offer_id),
+                "RETURNING id, name, brand, description, price_cents, payment_url, active",
+                (name.strip(), brand.strip(), description.strip(), price_cents, url, active, offer_id),
             ).fetchone()
             if row is None:
                 raise not_found("Oferta não encontrada.")

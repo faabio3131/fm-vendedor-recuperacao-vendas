@@ -176,6 +176,42 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+// Private photo transport: same cookie and selected-tenant context as api().
+function photoHeaders(): Headers {
+  const headers = new Headers();
+  const tenant = getStoredTenant();
+  if (tenant) headers.set("X-Tenant-Id", tenant);
+  return headers;
+}
+
+export async function apiOfferPhoto(offerId: string, file: File): Promise<OfferPhoto> {
+  const headers = photoHeaders();
+  headers.set("Content-Type", file.type);
+  const res = await fetch(API_URL + "/v1/seller/offers/" + offerId + "/photos", {
+    method: "POST",
+    headers,
+    body: file,
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    const err = payload as { error?: { message?: string } };
+    throw new Error(err.error?.message ?? "Não foi possível adicionar a foto.");
+  }
+  return (await res.json()) as OfferPhoto;
+}
+
+export async function fetchOfferPhoto(
+  offerId: string, photoId: string, signal?: AbortSignal,
+): Promise<Blob> {
+  const res = await fetch(
+    API_URL + "/v1/seller/offers/" + offerId + "/photos/" + photoId,
+    { headers: photoHeaders(), credentials: "include", signal, cache: "no-store" },
+  );
+  if (!res.ok) throw new Error("Foto indisponível.");
+  return res.blob();
+}
+
 export type RecoverySummary = {
   days: number;
   cases_total: number;
@@ -259,6 +295,12 @@ export type KnowledgeItem = {
   active: boolean;
 };
 
+export type OfferPhoto = {
+  id: string;
+  width: number;
+  height: number;
+};
+
 export type Offer = {
   id: string;
   name: string;
@@ -266,6 +308,7 @@ export type Offer = {
   price_cents: number;
   payment_url: string;
   active: boolean;
+  photos?: OfferPhoto[];
 };
 
 export type SellerSettings = {
