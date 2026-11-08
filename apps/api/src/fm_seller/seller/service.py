@@ -159,7 +159,12 @@ class SellerService:
             raise bad_request("invalid_url", "O link de pagamento precisa começar com https://.")
 
     def create_offer(
-        self, p: Principal, name: str, description: str, price_cents: int, url: str,
+        self,
+        p: Principal,
+        name: str,
+        description: str,
+        price_cents: int,
+        url: str,
         brand: str = "",
     ) -> dict[str, Any]:
         self._guard(p, edit=True)
@@ -168,7 +173,8 @@ class SellerService:
             raise bad_request("invalid_brand", "A marca pode ter até 120 caracteres.")
         with self._tx(p) as conn:
             row = conn.execute(
-                "INSERT INTO offers (tenant_id, name, brand, description, price_cents, payment_url) "
+                "INSERT INTO offers (tenant_id, name, brand, description, price_cents, "
+                "payment_url) "
                 "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, name, brand, description, "
                 "price_cents, payment_url, active",
                 (p.tenant_id, name.strip(), brand.strip(), description.strip(), price_cents, url),
@@ -203,7 +209,15 @@ class SellerService:
                 "UPDATE offers SET name = %s, brand = %s, description = %s, price_cents = %s, "
                 "payment_url = %s, active = %s, updated_at = now() WHERE id = %s "
                 "RETURNING id, name, brand, description, price_cents, payment_url, active",
-                (name.strip(), brand.strip(), description.strip(), price_cents, url, active, offer_id),
+                (
+                    name.strip(),
+                    brand.strip(),
+                    description.strip(),
+                    price_cents,
+                    url,
+                    active,
+                    offer_id,
+                ),
             ).fetchone()
             if row is None:
                 raise not_found("Oferta não encontrada.")

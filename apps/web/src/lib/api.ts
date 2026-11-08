@@ -304,6 +304,7 @@ export type OfferPhoto = {
 export type Offer = {
   id: string;
   name: string;
+  brand: string;
   description: string;
   price_cents: number;
   payment_url: string;

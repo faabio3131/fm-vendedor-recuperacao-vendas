@@ -7,8 +7,8 @@ import { HandoffReportCard, SandboxCard } from "@/components/SellerTools";
 import { Shell, useMe } from "@/components/Shell";
 import { api, brl, type AiUsage, type Offer, type SellerSettings } from "@/lib/api";
 
-type Draft = { name: string; description: string; price: string; payment_url: string };
-const EMPTY: Draft = { name: "", description: "", price: "", payment_url: "https://" };
+type Draft = { name: string; brand: string; description: string; price: string; payment_url: string };
+const EMPTY: Draft = { name: "", brand: "", description: "", price: "", payment_url: "https://" };
 
 function toCents(price: string): number {
   return Math.round(Number(price.replace(/\./g, "").replace(",", ".")) * 100);
@@ -74,7 +74,7 @@ function Seller() {
       if (!Number.isFinite(cents)) throw new Error("Informe o preço, por exemplo 197,00.");
       await api("/v1/seller/offers", {
         method: "POST",
-        body: JSON.stringify({ name: draft.name, description: draft.description, price_cents: cents, payment_url: draft.payment_url }),
+        body: JSON.stringify({ name: draft.name, brand: draft.brand, description: draft.description, price_cents: cents, payment_url: draft.payment_url }),
       });
       setDraft(EMPTY);
       return "Oferta cadastrada.";
@@ -176,6 +176,7 @@ function Seller() {
             <span className={`badge ${o.active ? "connected" : "locked"}`}>{o.active ? "Ativa" : "Inativa"}</span>
           </div>
           <div>{brl(o.price_cents)}</div>
+          {o.brand && <div className="muted">Marca: {o.brand}</div>}
           <div className="muted">{o.description}</div>
           <code>{o.payment_url}</code>
           <OfferPhotoGallery offer={o} canEdit={canEdit} onChanged={load} />
@@ -195,6 +196,8 @@ function Seller() {
           <strong>Nova oferta</strong>
           <label htmlFor="o-name">Nome</label>
           <input id="o-name" value={draft.name} maxLength={120} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          <label htmlFor="o-brand">Marca (opcional)</label>
+          <input id="o-brand" value={draft.brand} maxLength={120} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} />
           <label htmlFor="o-desc">Descrição</label>
           <textarea id="o-desc" maxLength={1000} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
           <label htmlFor="o-price">Preço (R$)</label>

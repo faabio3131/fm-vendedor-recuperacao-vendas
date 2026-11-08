@@ -178,22 +178,23 @@ def create_photo(
 
 def request_for_photo(question: str) -> bool:
     words = set(normalize(question).split())
-    # "Quero ver esse modelo" after the seller has shown a named product is a
-    # real photo request even without the literal word "foto".
-    viewing = {"ver", "mostrar", "mostra", "mostre", "manda", "mande", "envia", "envie"}
-    return bool((words & PHOTO_WORDS and words & PHOTO_REQUEST_WORDS)
-                or (words & {"ver", "mostrar", "mostra", "mostre"}))
+    # "Quero ver os planos" is NOT a request to send a product photo.
+    return bool(words & PHOTO_WORDS and words & PHOTO_REQUEST_WORDS)
 
 
 def photo_reply(
-    conn: Conn, tenant_id: uuid.UUID, question: str, offers: Sequence[Mapping[str, Any]],
-    *, last_bot_text: str | None = None,
+    conn: Conn,
+    tenant_id: uuid.UUID,
+    question: str,
+    offers: Sequence[Mapping[str, Any]],
+    *,
+    last_bot_text: str | None = None,
 ) -> tuple[str, uuid.UUID | None] | None:
     """Never choose an image based on a model's invented SKU or URL."""
     if not request_for_photo(question):
         return None
     with_photos = conn.execute(
-        "SELECT op.offer_id,op.id,op.sort_order,o.name,o.description,o.price_cents "
+        "SELECT op.offer_id,op.id,op.sort_order,o.name,o.brand,o.description,o.price_cents "
         "FROM offer_photos op JOIN offers o "
         "ON o.id=op.offer_id AND o.tenant_id=op.tenant_id "
         "WHERE op.tenant_id=%s AND o.active ORDER BY op.sort_order,op.created_at "
@@ -207,6 +208,7 @@ def photo_reply(
         catalog[row["offer_id"]] = {
             "id": row["offer_id"],
             "name": row["name"],
+            "brand": row["brand"],
             "description": row["description"],
             "price_cents": row["price_cents"],
         }
@@ -223,10 +225,15 @@ def photo_reply(
     if tokens:
         scored = []
         for offer in relevant:
-            hay = set(normalize(
-                str(offer["name"]) + " " + str(offer.get("brand", "")) + " " +
-                str(offer["description"])
-            ).split())
+            hay = set(
+                normalize(
+                    str(offer["name"])
+                    + " "
+                    + str(offer.get("brand", ""))
+                    + " "
+                    + str(offer["description"])
+                ).split()
+            )
             match = len(tokens & hay)
             if match:
                 scored.append((match, offer))
@@ -239,12 +246,22 @@ def photo_reply(
                 "Pode me dizer o nome ou a marca?",
                 None,
             )
+    if len(relevant) != 1 and not tokens and last_bot_text:
+        # A demonstrative request is resolved only if the last bot response
+        # uniquely identifies an active product with a registered image.
+        prior = normalize(last_bot_text)
+        mentioned = [o for o in relevant if normalize(str(o["name"])) in prior]
+        if len(mentioned) == 1:
+            relevant = mentioned
     if len(relevant) != 1:
         names = ", ".join(str(o["name"]) for o in relevant[:5])
         return (f"Tenho fotos destes produtos: {names}. Qual modelo você quer ver?", None)
     chosen = relevant[0]
+    brand = (str(chosen.get("brand") or "") + " ") if chosen.get("brand") else ""
+    details = str(chosen["description"]).strip()[:350]
     caption = (
-        f"Foto de {chosen['name']} — {format_brl(chosen['price_cents'])}. "
-        "Quer que eu te passe o link de compra?"
-    )
+        f"Foto de {brand}{chosen['name']} — {format_brl(chosen['price_cents'])}."
+        + (f" {details}." if details else "")
+        + " Quer que eu te passe o link de compra?"
+    )[:1000]
     return (caption, first[chosen["id"]])

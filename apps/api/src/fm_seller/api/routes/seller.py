@@ -69,13 +69,22 @@ def offers(s: Svc, p: Who) -> list[dict[str, Any]]:
 
 @router.post("/seller/offers")
 def create_offer(body: OfferIn, s: Svc, p: Who) -> dict[str, Any]:
-    return s.create_offer(p, body.name, body.description, body.price_cents, body.payment_url, body.brand)
+    return s.create_offer(
+        p, body.name, body.description, body.price_cents, body.payment_url, body.brand
+    )
 
 
 @router.put("/seller/offers/{offer_id}")
 def update_offer(offer_id: uuid.UUID, body: OfferIn, s: Svc, p: Who) -> dict[str, Any]:
     return s.update_offer(
-        p, offer_id, body.name, body.description, body.price_cents, body.payment_url, body.active, body.brand
+        p,
+        offer_id,
+        body.name,
+        body.description,
+        body.price_cents,
+        body.payment_url,
+        body.active,
+        body.brand,
     )
 
 
