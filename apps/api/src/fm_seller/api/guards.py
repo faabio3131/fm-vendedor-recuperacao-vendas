@@ -187,8 +187,15 @@ class BodyLimitMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        path = str(scope.get("path", ""))
+        limit = self.max_bytes
+        # Narrow, authenticated upload routes; other API requests keep the usual cap.
+        if path == "/v1/seller/menu-import/preview":
+            limit = max(limit, 8_000_000)
+        elif path.startswith("/v1/seller/offers/") and path.endswith("/photos"):
+            limit = max(limit, 3_000_000)
         declared = dict(scope["headers"]).get(b"content-length", b"")
-        if declared.isdigit() and int(declared) > self.max_bytes:
+        if declared.isdigit() and int(declared) > limit:
             await self._refuse(send)
             return
         seen = 0
@@ -205,7 +212,7 @@ class BodyLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 seen += len(message.get("body", b""))
-                if seen > self.max_bytes:
+                if seen > limit:
                     raise BodyTooLarge
             return message
 

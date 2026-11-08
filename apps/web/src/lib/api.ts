@@ -305,6 +305,7 @@ export type Offer = {
   id: string;
   name: string;
   brand: string;
+  category: string;
   description: string;
   price_cents: number;
   payment_url: string;

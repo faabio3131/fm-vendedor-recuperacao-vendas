@@ -87,6 +87,7 @@ class SellerService:
             "id": str(r["id"]),
             "name": r["name"],
             "brand": r.get("brand", ""),
+            "category": r.get("category", ""),
             "description": r["description"],
             "price_cents": r["price_cents"],
             "payment_url": r["payment_url"],
@@ -98,7 +99,8 @@ class SellerService:
         self._guard(p)
         with self._tx(p) as conn:
             rows = conn.execute(
-                "SELECT id, name, brand, description, price_cents, payment_url, active FROM offers "
+                "SELECT id, name, brand, category, description, price_cents, "
+                "payment_url, active FROM offers "
                 "ORDER BY created_at"
             ).fetchall()
             images = photos.photo_summaries(conn, p.tenant_id)
@@ -166,18 +168,28 @@ class SellerService:
         price_cents: int,
         url: str,
         brand: str = "",
+        category: str = "",
     ) -> dict[str, Any]:
         self._guard(p, edit=True)
         self._check_offer(name, description, price_cents, url)
+        if len(category.strip()) > 80:
+            raise bad_request("invalid_category", "Categoria muito longa.")
         if len(brand.strip()) > 120:
             raise bad_request("invalid_brand", "A marca pode ter até 120 caracteres.")
         with self._tx(p) as conn:
             row = conn.execute(
-                "INSERT INTO offers (tenant_id, name, brand, description, price_cents, "
-                "payment_url) "
-                "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, name, brand, description, "
-                "price_cents, payment_url, active",
-                (p.tenant_id, name.strip(), brand.strip(), description.strip(), price_cents, url),
+                "INSERT INTO offers (tenant_id, name, brand, category, description, "
+                "price_cents, payment_url) VALUES (%s,%s,%s,%s,%s,%s,%s) "
+                "RETURNING id,name,brand,category,description,price_cents,payment_url,active",
+                (
+                    p.tenant_id,
+                    name.strip(),
+                    brand.strip(),
+                    category.strip(),
+                    description.strip(),
+                    price_cents,
+                    url,
+                ),
             ).fetchone()
             assert row is not None
             audit(
@@ -199,19 +211,24 @@ class SellerService:
         url: str,
         active: bool,
         brand: str = "",
+        category: str = "",
     ) -> dict[str, Any]:
         self._guard(p, edit=True)
         self._check_offer(name, description, price_cents, url)
+        if len(category.strip()) > 80:
+            raise bad_request("invalid_category", "Categoria muito longa.")
         if len(brand.strip()) > 120:
             raise bad_request("invalid_brand", "A marca pode ter até 120 caracteres.")
         with self._tx(p) as conn:
             row = conn.execute(
-                "UPDATE offers SET name = %s, brand = %s, description = %s, price_cents = %s, "
-                "payment_url = %s, active = %s, updated_at = now() WHERE id = %s "
-                "RETURNING id, name, brand, description, price_cents, payment_url, active",
+                "UPDATE offers SET name = %s, brand = %s, category = %s, "
+                "description = %s, price_cents = %s, payment_url = %s, active = %s, "
+                "updated_at = now() WHERE id = %s RETURNING id,name,brand,category,"
+                "description,price_cents,payment_url,active",
                 (
                     name.strip(),
                     brand.strip(),
+                    category.strip(),
                     description.strip(),
                     price_cents,
                     url,
@@ -245,6 +262,63 @@ class SellerService:
                 action="offer.deleted",
                 target=str(offer_id),
             )
+
+    def import_menu(
+        self, p: Principal, entries: list[dict[str, Any]], payment_url: str
+    ) -> dict[str, Any]:
+        """Publish reviewed records atomically, never a raw model response."""
+        from fm_seller.recovery.optout import normalize
+
+        self._guard(p, edit=True)
+        if not _valid_url(payment_url):
+            raise bad_request(
+                "menu_payment_url", "Cadastre um link HTTPS real para pedidos ou pagamento."
+            )
+        if not 1 <= len(entries) <= 80:
+            raise bad_request("menu_items", "Selecione entre 1 e 80 produtos.")
+        with self._tx(p) as conn:
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                (f"fmav:menu-import:{p.tenant_id}",),
+            )
+            current = conn.execute(
+                "SELECT name,category FROM offers WHERE tenant_id=%s",
+                (p.tenant_id,),
+            ).fetchall()
+            existing = {(normalize(r["name"]), normalize(r["category"])) for r in current}
+            if len(current) + len(entries) > 300:
+                raise bad_request("menu_capacity", "Limite de 300 ofertas por loja.")
+            added = 0
+            duplicates = 0
+            for item in entries:
+                name = str(item["name"]).strip()
+                description = str(item["description"]).strip()
+                category = str(item["category"]).strip()
+                price = item["price_cents"]
+                if not isinstance(price, int) or isinstance(price, bool):
+                    raise bad_request("menu_price", "Confirme todos os preços antes de publicar.")
+                if len(category) > 80:
+                    raise bad_request("menu_category", "Categoria inválida.")
+                self._check_offer(name, description, price, payment_url)
+                key = (normalize(name), normalize(category))
+                if key in existing:
+                    duplicates += 1
+                    continue
+                conn.execute(
+                    "INSERT INTO offers(tenant_id,name,brand,category,description,"
+                    "price_cents,payment_url,active) VALUES(%s,%s,'',%s,%s,%s,%s,true)",
+                    (p.tenant_id, name, category, description, price, payment_url),
+                )
+                existing.add(key)
+                added += 1
+            audit(
+                conn,
+                tenant_id=p.tenant_id,
+                actor=p.user_id,
+                action="menu_import.published",
+                target=f"{added} produtos",
+            )
+        return {"created": added, "duplicates": duplicates}
 
     # ---- base de conhecimento (perguntas e respostas que o cliente cadastra)
     KNOWLEDGE_MAX = 40

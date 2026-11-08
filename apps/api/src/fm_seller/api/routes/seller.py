@@ -5,10 +5,19 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from fm_seller.ai.model import build_ai_model
 from fm_seller.api.deps import get_db, get_principal
 from fm_seller.errors import bad_request
+from fm_seller.seller.menu_import import (
+    MAX_MENU_BYTES,
+    MIME_TYPES,
+    reserve_ai_import,
+)
+from fm_seller.seller.menu_import import (
+    preview as preview_menu_document,
+)
 from fm_seller.seller.photos import MAX_UPLOAD
 from fm_seller.seller.service import SellerService
 from fm_seller.services import Principal
@@ -29,6 +38,7 @@ class OfferIn(BaseModel):
     name: str = Field(max_length=120)
     description: str = Field(default="", max_length=1000)
     brand: str = Field(default="", max_length=120)
+    category: str = Field(default="", max_length=80)
     price_cents: int = Field(ge=0)
     payment_url: str = Field(max_length=500)
     active: bool = True
@@ -70,7 +80,13 @@ def offers(s: Svc, p: Who) -> list[dict[str, Any]]:
 @router.post("/seller/offers")
 def create_offer(body: OfferIn, s: Svc, p: Who) -> dict[str, Any]:
     return s.create_offer(
-        p, body.name, body.description, body.price_cents, body.payment_url, body.brand
+        p,
+        body.name,
+        body.description,
+        body.price_cents,
+        body.payment_url,
+        body.brand,
+        body.category,
     )
 
 
@@ -85,6 +101,7 @@ def update_offer(offer_id: uuid.UUID, body: OfferIn, s: Svc, p: Who) -> dict[str
         body.payment_url,
         body.active,
         body.brand,
+        body.category,
     )
 
 
@@ -133,6 +150,48 @@ def get_offer_photo(offer_id: uuid.UUID, photo_id: uuid.UUID, s: Svc, p: Who) ->
 def delete_offer_photo(offer_id: uuid.UUID, photo_id: uuid.UUID, s: Svc, p: Who) -> dict[str, str]:
     s.delete_offer_photo(p, offer_id, photo_id)
     return {"status": "removed"}
+
+
+class MenuItemIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    category: str = Field(default="", max_length=80)
+    description: str = Field(default="", max_length=1000)
+    price_cents: int = Field(ge=0, le=100_000_000)
+
+
+class MenuCommitIn(BaseModel):
+    items: list[MenuItemIn] = Field(min_length=1, max_length=80)
+    payment_url: str = Field(min_length=8, max_length=500)
+
+
+@router.post("/seller/menu-import/preview")
+async def preview_menu(request: Request, s: Svc, p: Who) -> dict[str, Any]:
+    # Deny unauthorized clients before reading bytes or incurring an AI charge.
+    s._guard(p, edit=True)
+    mime = request.headers.get("content-type", "").split(";")[0].lower().strip()
+    if mime not in MIME_TYPES:
+        raise bad_request("menu_format", "Use foto JPG/PNG/WebP, PDF ou CSV.")
+    length = request.headers.get("content-length")
+    if length is not None and (not length.isdecimal() or int(length) > MAX_MENU_BYTES):
+        raise bad_request("menu_size", "Arquivo acima de 8 MB.")
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > MAX_MENU_BYTES:
+            raise bad_request("menu_size", "Arquivo acima de 8 MB.")
+        data.extend(chunk)
+    if not data:
+        raise bad_request("menu_size", "Selecione um arquivo válido.")
+    if mime != "text/csv":
+        with s._tx(p) as conn:
+            reserve_ai_import(conn, p)
+    return await run_in_threadpool(
+        preview_menu_document, bytes(data), mime, request.app.state.settings
+    )
+
+
+@router.post("/seller/menu-import/commit")
+def publish_menu(body: MenuCommitIn, s: Svc, p: Who) -> dict[str, Any]:
+    return s.import_menu(p, [item.model_dump() for item in body.items], body.payment_url)
 
 
 @router.get("/seller/knowledge")
