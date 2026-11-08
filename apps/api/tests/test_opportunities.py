@@ -355,7 +355,6 @@ def test_cold_conversation_opens_one_case_and_not_again(
     assert detect_cold_conversations(db) == 0  # descansa antes de tentar o mesmo contato
 
 
-
 def test_pilot_cold_detection_only_creates_case_for_authorized_contact(
     client: TestClient, env: Env, db: Database
 ) -> None:
@@ -372,7 +371,6 @@ def test_pilot_cold_detection_only_creates_case_for_authorized_contact(
     )
     assert found == [(WA_PHONE,)]
     assert detect_cold_conversations(db, pilot_scope=(uuid.UUID(tid), WA_PHONE)) == 0
-
 
 
 @pytest.mark.parametrize(
