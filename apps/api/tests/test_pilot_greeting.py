@@ -89,7 +89,8 @@ def test_pilot_sender_restricts_recipient_instance_and_content() -> None:
 def test_multitenant_evolution_routes_only_the_fm_contact_to_the_demo() -> None:
     tenant = uuid.uuid4()
     unrelated_tenant = uuid.uuid4()
-    demo = SimulatedSender()
+    fake = FakeSendClient()
+    pilot = PilotGreetingSender(cast(Any, fake), tenant_id=tenant, phone=PHONE)
     general = SimulatedSender()
     route = RoutedWhatsAppSender(
         SimulatedSender(),
@@ -97,7 +98,7 @@ def test_multitenant_evolution_routes_only_the_fm_contact_to_the_demo() -> None:
         meta_enabled=False,
         evolution_enabled=True,
         general_enabled=True,
-        pilot_sender=demo,
+        pilot_sender=pilot,
         pilot_tenant_id=tenant,
         pilot_phone=PHONE,
     )
@@ -110,13 +111,13 @@ def test_multitenant_evolution_routes_only_the_fm_contact_to_the_demo() -> None:
         "__provider": "evolution",
         "instance_name": "fmav-" + hashlib.sha256(unrelated_tenant.bytes).hexdigest()[:32],
     }
-    route.send_text(own_config, PHONE, "Atendimento FM autorizado")
-    route.send_text(own_config, "5511977008899", "Cliente do mesmo estabelecimento")
+    assert route.send_text(own_config, PHONE, "Olá, sou a AnaClara!") == "ABC123"
+    with pytest.raises(SendError):
+        route.send_text(own_config, "5511977008899", "Contato FM não autorizado")
     route.send_text(other_config, PHONE, "Outro tenant, mesmo número")
     route.send_text(other_config, "5511988887777", "Outro cliente autorizado")
-    assert demo.texts == [(PHONE, "Atendimento FM autorizado")]
+    assert fake.sent == [{"number": PHONE, "text": "Olá, sou a AnaClara!"}]
     assert general.texts == [
-        ("5511977008899", "Cliente do mesmo estabelecimento"),
         (PHONE, "Outro tenant, mesmo número"),
         ("5511988887777", "Outro cliente autorizado"),
     ]
