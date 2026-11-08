@@ -29,12 +29,14 @@ def test_uncertain_evolution_send_reconciles_only_one_provider_record(
     now = datetime.now(UTC)
     with db.tx(tenant_id=tid) as conn:
         _, conv_id = upsert_conversation(conn, tid, PHONE, "Cliente autorizado")
-        message_id = conn.execute(
+        inserted = conn.execute(
             "INSERT INTO messages "
             "(tenant_id,conversation_id,direction,author,body,status,claimed_at,created_at) "
             "VALUES (%s,%s,'out','bot',%s,'uncertain',%s,%s) RETURNING id",
             (tid, conv_id, BODY, now, now),
-        ).fetchone()["id"]
+        ).fetchone()
+        assert inserted is not None
+        message_id = inserted["id"]
 
     class FakeLookup:
         def _call(self, method: str, route: str, **kwargs: Any) -> dict[str, Any]:
