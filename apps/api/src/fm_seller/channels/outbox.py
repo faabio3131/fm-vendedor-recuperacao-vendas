@@ -229,9 +229,7 @@ def _send_one(
                 except CryptoError:
                     reason = "credencial_ilegivel"
         route = senders.get("whatsapp")
-        demo_sender: Any = getattr(route, "pilot_sender", None) or getattr(
-            route, "evolution", None
-        )
+        demo_sender: Any = getattr(route, "pilot_sender", None) or getattr(route, "evolution", None)
         if (
             reason is None
             and getattr(demo_sender, "demo_enabled", False)
