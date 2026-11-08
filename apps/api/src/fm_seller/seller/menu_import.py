@@ -169,7 +169,7 @@ def _validated_media(raw: bytes, mime: str) -> tuple[bytes, str]:
         try:
             with Image.open(io.BytesIO(raw)) as img:
                 actual = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
-                if actual.get(img.format) != mime:
+                if actual.get(str(img.format)) != mime:
                     raise bad_request("menu_format", "Formato real não corresponde ao arquivo.")
             normalized, _, _ = normalize_image(raw)
         except (OSError, Image.DecompressionBombError):
