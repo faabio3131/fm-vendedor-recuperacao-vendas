@@ -88,7 +88,7 @@ def build_sender(settings: Settings) -> MessageSender:
                 timeout=settings.meta_timeout_seconds,
             )
         )
-    if settings.evolution_enabled and (
+    if settings.evolution_enabled and not settings.evolution_outbound_paused and (
         settings.evolution_send_enabled or settings.pilot_greeting_enabled
     ):
         from fm_seller.channels.evolution import EvolutionClient
