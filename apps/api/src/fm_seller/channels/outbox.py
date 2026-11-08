@@ -219,8 +219,16 @@ def _send_one(
                         reason = "canal_sem_adaptador"
                 except CryptoError:
                     reason = "credencial_ilegivel"
-        demo_sender: Any = getattr(senders.get("whatsapp"), "evolution", None)
-        if reason is None and getattr(demo_sender, "demo_enabled", False):
+        route = senders.get("whatsapp")
+        demo_sender: Any = getattr(route, "pilot_sender", None) or getattr(
+            route, "evolution", None
+        )
+        if (
+            reason is None
+            and getattr(demo_sender, "demo_enabled", False)
+            and tenant_id == getattr(demo_sender, "tenant_id", None)
+            and recipient == getattr(demo_sender, "phone", None)
+        ):
             from fm_seller.money import format_brl
 
             plans = conn.execute(
