@@ -352,7 +352,10 @@ def reap_stuck(db: Database, now: datetime) -> int:
 
 
 def _claim(
-    db: Database, now: datetime, limit: int, *,
+    db: Database,
+    now: datetime,
+    limit: int,
+    *,
     pilot_scope: tuple[uuid.UUID, str] | None = None,
 ) -> list[_Step]:
     with db.tx(system=True) as conn:

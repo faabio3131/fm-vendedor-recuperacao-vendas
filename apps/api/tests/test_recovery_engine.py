@@ -394,10 +394,14 @@ def test_single_contact_pilot_recovery_never_claims_other_contacts(ctx: Ctx) -> 
     with ctx.db.tx(tenant_id=ctx.tid) as conn:
         for ref, phone in (("pilot-ok", PHONE), ("pilot-other", "5511999998877")):
             case_id, reason = open_opportunity(
-                conn, ctx.tid,
+                conn,
+                ctx.tid,
                 Opportunity(
-                    kind=n.CONVERSATION_COLD, source="conversa",
-                    external_ref=ref, name="Teste", phone=phone,
+                    kind=n.CONVERSATION_COLD,
+                    source="conversa",
+                    external_ref=ref,
+                    name="Teste",
+                    phone=phone,
                 ),
                 now=NOW,
             )
@@ -420,5 +424,6 @@ def test_single_contact_pilot_recovery_never_claims_other_contacts(ctx: Ctx) -> 
     assert stats.sent == 1 and len(sender.sent) == 1
     assert sender.sent[0].to_phone == PHONE
     assert [s["status"] for s in ctx.steps("pilot-other")] == [
-        "scheduled", "scheduled",
+        "scheduled",
+        "scheduled",
     ]

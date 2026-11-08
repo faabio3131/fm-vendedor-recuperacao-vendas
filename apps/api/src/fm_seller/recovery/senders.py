@@ -107,7 +107,9 @@ def build_sender(settings: Settings) -> MessageSender:
         )
         if pilot_id is not None and settings.pilot_demo_enabled:
             evolution: MessageSender = PilotDemoSender(
-                client, tenant_id=pilot_id, phone=settings.pilot_greeting_phone,
+                client,
+                tenant_id=pilot_id,
+                phone=settings.pilot_greeting_phone,
                 recovery_enabled=settings.pilot_recovery_enabled,
             )
         elif pilot_id is not None:

@@ -148,7 +148,11 @@ class PilotDemoSender(PilotGreetingSender):
     demo_enabled = True
 
     def __init__(
-        self, client: object, *, tenant_id: uuid.UUID, phone: str,
+        self,
+        client: object,
+        *,
+        tenant_id: uuid.UUID,
+        phone: str,
         recovery_enabled: bool = False,
     ) -> None:
         super().__init__(client, tenant_id=tenant_id, phone=phone)

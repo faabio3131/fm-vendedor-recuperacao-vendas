@@ -496,14 +496,20 @@ def test_state_check_retries_transient_failure_before_sending(
 
 
 def test_evolution_signed_outbound_receipt_repairs_uncertain(
-    client: TestClient, env: Env, db: Any,
+    client: TestClient,
+    env: Env,
+    db: Any,
 ) -> None:
     tenant, instance, token = _provision(client, env)
     url = f"/v1/webhooks/evolution/{instance}"
-    assert client.post(
-        url, content=_event(instance, message_id="in-reconcile"),
-        headers={"x-fm-evolution-auth": token},
-    ).status_code == 200
+    assert (
+        client.post(
+            url,
+            content=_event(instance, message_id="in-reconcile"),
+            headers={"x-fm-evolution-auth": token},
+        ).status_code
+        == 200
+    )
     body = "Sua proposta com link chegou ao WhatsApp."
     env.sql(
         "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, "
@@ -519,31 +525,40 @@ def test_evolution_signed_outbound_receipt_repairs_uncertain(
     assert client.post(url, content=raw, headers=hdr).json()["statuses"] == 1
     assert env.sql(
         "SELECT status,error,provider_message_id FROM messages "
-        "WHERE tenant_id=%s AND direction='out'", (tenant,),
+        "WHERE tenant_id=%s AND direction='out'",
+        (tenant,),
     ) == [("sent", None, "out-reconciled")]
     # Duplicate webhook has no additional side effect or duplicate message.
     assert client.post(url, content=raw, headers=hdr).json()["statuses"] == 0
     # The former worker's late failure must not overwrite provider evidence.
     from fm_seller.channels.outbox import _finish
+
     ids = env.sql(
-        "SELECT id FROM messages WHERE tenant_id=%s AND direction='out'", (tenant,),
+        "SELECT id FROM messages WHERE tenant_id=%s AND direction='out'",
+        (tenant,),
     )
     _finish(db, uuid.UUID(tenant), ids[0][0], "uncertain", "resultado_incerto", None)
     assert env.sql(
-        "SELECT status,provider_message_id FROM messages "
-        "WHERE tenant_id=%s AND direction='out'", (tenant,),
+        "SELECT status,provider_message_id FROM messages WHERE tenant_id=%s AND direction='out'",
+        (tenant,),
     ) == [("sent", "out-reconciled")]
 
 
 def test_evolution_outbound_receipt_never_guesses_between_identical_intents(
-    client: TestClient, env: Env,
+    client: TestClient,
+    env: Env,
 ) -> None:
     tenant, instance, token = _provision(client, env)
     url = f"/v1/webhooks/evolution/{instance}"
     hdr = {"x-fm-evolution-auth": token}
-    assert client.post(
-        url, content=_event(instance, message_id="in-ambiguous"), headers=hdr,
-    ).status_code == 200
+    assert (
+        client.post(
+            url,
+            content=_event(instance, message_id="in-ambiguous"),
+            headers=hdr,
+        ).status_code
+        == 200
+    )
     body = "Mesmo texto para dois envios."
     for _ in range(2):
         env.sql(
@@ -555,9 +570,14 @@ def test_evolution_outbound_receipt_never_guesses_between_identical_intents(
         )
     own = json.loads(_event(instance, message_id="out-ambiguous", from_me=True))
     own["data"]["message"] = {"conversation": body}
-    assert client.post(
-        url, content=json.dumps(own).encode(), headers=hdr,
-    ).json()["statuses"] == 0
+    assert (
+        client.post(
+            url,
+            content=json.dumps(own).encode(),
+            headers=hdr,
+        ).json()["statuses"]
+        == 0
+    )
     assert env.sql(
         "SELECT count(*) FROM messages WHERE tenant_id=%s AND status='uncertain'",
         (tenant,),
@@ -578,7 +598,10 @@ def test_pilot_recovery_sender_is_single_contact_and_opt_in() -> None:
     with pytest.raises(SendError):
         off.send(config, message)
     on = PilotDemoSender(
-        cast(Any, client), tenant_id=tenant, phone=phone, recovery_enabled=True,
+        cast(Any, client),
+        tenant_id=tenant,
+        phone=phone,
+        recovery_enabled=True,
     )
     assert on.send(config, message) == "ABC123"
     with pytest.raises(SendError):
