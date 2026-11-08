@@ -21,6 +21,7 @@ import psycopg
 from fm_seller import privacy
 from fm_seller.ai.model import AiModel, build_ai_model
 from fm_seller.ai.seller import run_ai_replies
+from fm_seller.channels.evolution_reconcile import reconcile_uncertain_sends
 from fm_seller.channels.outbox import flush_outbox
 from fm_seller.channels.social_send import build_social_senders
 from fm_seller.channels.templates_gateway import TemplateGateway, build_template_gateway
@@ -270,6 +271,7 @@ def _cycle(
     excluded = privacy.purge_due_tenants(db)
     redone = reprocess_failed(db, box, handle_event)
     redone_platform = reprocess_platform(db, box)
+    evolution_confirmed = reconcile_uncertain_sends(db, settings) if settings is not None else 0
     if getattr(sender, "pilot_only", False):
         pilot_id = getattr(sender, "pilot_tenant_id", None)
         pilot_phone = getattr(sender, "pilot_phone", None)
@@ -316,6 +318,7 @@ def _cycle(
                 "compras": redone_platform,
                 "conversas_frias": cold,
                 "links_checkout_acompanhados": checkout_links,
+                "evolution_envios_reconciliados": evolution_confirmed,
                 "recuperacao": stats.__dict__,
                 "vendedor": seller.__dict__,
                 "saida": outbox.__dict__,

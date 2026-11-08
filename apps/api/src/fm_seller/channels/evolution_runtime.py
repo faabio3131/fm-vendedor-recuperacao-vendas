@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from fm_seller.channels.evolution import EvolutionClient
+from fm_seller.channels.evolution_delivery import find_confirmed_outbound
 from fm_seller.channels.inbound import record_inbound
 from fm_seller.channels.outbound import enqueue_text
 from fm_seller.channels.voice import AUDIO_UNAVAILABLE_MESSAGE
@@ -301,6 +302,21 @@ class EvolutionSender:
                 time.sleep(delay)
         if state != "open":
             raise SendError("sessão Evolution desconectada")
+        started_at = time.time()
+
+        def recover_read_only() -> str | None:
+            # Evolution v2.3.7 may persist/deliver a message even if sendText
+            # returns no key. Never repeat the write: look up provider evidence.
+            for delay in (0.0, 0.6):
+                if delay:
+                    time.sleep(delay)
+                found = find_confirmed_outbound(
+                    self.client, instance, to_phone, body, sent_at=started_at
+                )
+                if found is not None:
+                    return found
+            return None
+
         try:
             response = self.client._call(
                 "POST",
@@ -308,9 +324,12 @@ class EvolutionSender:
                 body={"number": to_phone, "text": body},
             )
         except AppError as exc:
-            # HTTP/network uncertainty is NOT a definite rejection.
             if exc.code == "evolution_rejected":
                 raise SendError("Evolution recusou envio") from None
+            # A network timeout is ambiguous. Query once or twice; never resend.
+            recovered = recover_read_only()
+            if recovered is not None:
+                return recovered
             raise RuntimeError("resultado do envio Evolution incerto") from None
         key = response.get("key")
         # Evolution releases may nest the provider ACK below "data".
@@ -318,6 +337,9 @@ class EvolutionSender:
             key = response["data"].get("key")
         message_id = key.get("id") if isinstance(key, dict) else None
         if not isinstance(message_id, str) or not 1 <= len(message_id) <= 200:
+            recovered = recover_read_only()
+            if recovered is not None:
+                return recovered
             raise RuntimeError("Evolution não confirmou ID do envio")
         return message_id
 
