@@ -357,9 +357,10 @@ def _claim(
     limit: int,
     *,
     pilot_scope: tuple[uuid.UUID, str] | None = None,
+    pilot_exclusion: tuple[uuid.UUID, str] | None = None,
 ) -> list[_Step]:
     with db.tx(system=True) as conn:
-        if pilot_scope is None:
+        if pilot_scope is None and pilot_exclusion is None:
             statement = (
                 "UPDATE recovery_steps SET status = 'sending', claimed_at = %s WHERE id IN ("
                 "SELECT id FROM recovery_steps WHERE status = 'scheduled' AND scheduled_at <= %s "
@@ -367,6 +368,18 @@ def _claim(
                 "RETURNING id, tenant_id, case_id, template_key"
             )
             params: tuple[Any, ...] = (now, now, limit)
+        elif pilot_scope is None and pilot_exclusion is not None:
+            statement = (
+                "UPDATE recovery_steps SET status = 'sending', claimed_at = %s WHERE id IN ("
+                "SELECT s.id FROM recovery_steps s "
+                "JOIN recovery_cases rc ON rc.id = s.case_id AND rc.tenant_id = s.tenant_id "
+                "JOIN contacts ct ON ct.id = rc.contact_id AND ct.tenant_id = s.tenant_id "
+                "WHERE s.status = 'scheduled' AND s.scheduled_at <= %s "
+                "AND (s.tenant_id <> %s OR ct.phone = %s) "
+                "ORDER BY s.scheduled_at LIMIT %s FOR UPDATE OF s SKIP LOCKED) "
+                "RETURNING id, tenant_id, case_id, template_key"
+            )
+            params = (now, now, pilot_exclusion[0], pilot_exclusion[1], limit)
         else:
             # The demo worker may NEVER claim steps for any other contact or
             # checkout source. It also must not consume their scheduled jobs.
@@ -413,7 +426,21 @@ def run_due_steps(
         log.warning("envio indisponível nesta instalação: nenhum passo foi pego")
         return stats
     stats.reaped = reap_stuck(db, now)
-    for step in _claim(db, now, limit, pilot_scope=pilot_scope):
+    protected_id = getattr(sender, "pilot_tenant_id", None)
+    protected_phone = getattr(sender, "pilot_phone", None)
+    pilot_exclusion = (
+        (protected_id, protected_phone)
+        if (
+            not getattr(sender, "pilot_only", False)
+            and getattr(sender, "pilot_sender", None) is not None
+            and isinstance(protected_id, uuid.UUID)
+            and isinstance(protected_phone, str)
+        )
+        else None
+    )
+    for step in _claim(
+        db, now, limit, pilot_scope=pilot_scope, pilot_exclusion=pilot_exclusion
+    ):
         stats.claimed += 1
         try:
             outcome = _process(db, box, sender, step, now)
