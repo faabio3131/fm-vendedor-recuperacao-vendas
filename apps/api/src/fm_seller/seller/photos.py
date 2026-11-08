@@ -184,9 +184,24 @@ def request_for_photo(question: str) -> bool:
     # "quero ver os planos" as a product-photo request.
     viewing = {"ver", "mostrar", "mostra", "mostre"}
     products = {
-        "esse", "essa", "este", "esta", "aquele", "aquela", "modelo",
-        "produto", "item", "bolsa", "vestido", "sapato", "tenis", "mochila",
-        "camisa", "blusa", "calca", "sandalia",
+        "esse",
+        "essa",
+        "este",
+        "esta",
+        "aquele",
+        "aquela",
+        "modelo",
+        "produto",
+        "item",
+        "bolsa",
+        "vestido",
+        "sapato",
+        "tenis",
+        "mochila",
+        "camisa",
+        "blusa",
+        "calca",
+        "sandalia",
     }
     non_products = {"plano", "planos", "assinatura", "assinaturas", "relatorio", "sistema"}
     return bool(words & viewing and words & products and not words & non_products)

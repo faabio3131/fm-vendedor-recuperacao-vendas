@@ -1,4 +1,5 @@
 """Unit tests for catalog-grounded photo selection without external services."""
+
 from __future__ import annotations
 
 import uuid
@@ -22,12 +23,22 @@ class FakeCatalog:
 
     def fetchall(self) -> list[dict[str, Any]]:
         return [
-            {"offer_id": self.first_offer, "id": self.first_image,
-             "name": "Bolsa Transversal Preta", "brand": "Bella",
-             "description": "Alça ajustável, tecido leve", "price_cents": 14990},
-            {"offer_id": self.second_offer, "id": self.second_image,
-             "name": "Bolsa Tote Marrom", "brand": "Moda",
-             "description": "Bolsa espaçosa", "price_cents": 19900},
+            {
+                "offer_id": self.first_offer,
+                "id": self.first_image,
+                "name": "Bolsa Transversal Preta",
+                "brand": "Bella",
+                "description": "Alça ajustável, tecido leve",
+                "price_cents": 14990,
+            },
+            {
+                "offer_id": self.second_offer,
+                "id": self.second_image,
+                "name": "Bolsa Tote Marrom",
+                "brand": "Moda",
+                "description": "Bolsa espaçosa",
+                "price_cents": 19900,
+            },
         ]
 
 
@@ -37,7 +48,9 @@ def answer(
     return photo_reply(
         cast(Conn, cast(Any, conn)),
         uuid.UUID("00000000-0000-0000-0000-000000000099"),
-        question, [], last_bot_text=last,
+        question,
+        [],
+        last_bot_text=last,
     )
 
 
@@ -55,13 +68,15 @@ def test_explicit_request_selects_real_photo_price_brand_and_details() -> None:
 def test_contextual_request_sends_only_when_unambiguous() -> None:
     db = FakeCatalog()
     selected = answer(
-        db, "Quero ver esse modelo",
+        db,
+        "Quero ver esse modelo",
         "Temos Bolsa Transversal Preta por R$ 149,90.",
     )
     assert selected is not None and selected[1] == db.first_image
 
     ambiguous = answer(
-        db, "Quero ver esse modelo",
+        db,
+        "Quero ver esse modelo",
         "Temos Bolsa Transversal Preta e Bolsa Tote Marrom.",
     )
     assert ambiguous is not None and ambiguous[1] is None

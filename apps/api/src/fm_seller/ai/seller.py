@@ -1312,7 +1312,10 @@ def _handle_conversation(
             (tenant_id, conv_id),
         ).fetchone()
         selected_photo = photo_reply(
-            conn, tenant_id, inbound[-1]["body"], offer_rows,
+            conn,
+            tenant_id,
+            inbound[-1]["body"],
+            offer_rows,
             last_bot_text=str(context["body"]) if context else None,
         )
         if selected_photo is not None:
