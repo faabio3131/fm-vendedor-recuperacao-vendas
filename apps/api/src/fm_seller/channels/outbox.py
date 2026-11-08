@@ -58,7 +58,7 @@ def flush_outbox(
         return stats
     with db.tx(system=True) as conn:
         stats.reaped = conn.execute(
-            "UPDATE messages SET status = 'failed', error = 'resultado_incerto' "
+            "UPDATE messages SET status = 'uncertain', error = 'resultado_incerto' "
             "WHERE direction = 'out' AND status = 'sending' AND claimed_at < %s",
             (now - STUCK_AFTER,),
         ).rowcount
@@ -121,8 +121,9 @@ def _finish(
 ) -> None:
     with db.tx(tenant_id=tenant_id) as conn:
         conn.execute(
-            "UPDATE messages SET status = %s, error = %s, provider_message_id = %s WHERE id = %s",
-            (status, error, provider_id, message_id),
+            "UPDATE messages SET status = %s, error = %s, provider_message_id = %s "
+            "WHERE tenant_id = %s AND id = %s AND status = 'sending'",
+            (status, error, provider_id, tenant_id, message_id),
         )
 
 
@@ -292,7 +293,7 @@ def _send_one(
     except Exception as exc:
         log.exception("envio de texto com resultado incerto")
         _finish(
-            db, tenant_id, message_id, "failed", f"resultado_incerto: {type(exc).__name__}", None
+            db, tenant_id, message_id, "uncertain", f"resultado_incerto: {type(exc).__name__}", None
         )
         if reserved == "reserved":
             trial.finalize(

@@ -493,3 +493,98 @@ def test_state_check_retries_transient_failure_before_sending(
     with pytest.raises(SendError, match="não verificada"):
         EvolutionSender(cast(Any, down)).send_text(config, "5511999991234", "Oi")
     assert down.state_calls == 4 and down.sent == []
+
+
+def test_evolution_signed_outbound_receipt_repairs_uncertain(
+    client: TestClient, env: Env, db: Any,
+) -> None:
+    tenant, instance, token = _provision(client, env)
+    url = f"/v1/webhooks/evolution/{instance}"
+    assert client.post(
+        url, content=_event(instance, message_id="in-reconcile"),
+        headers={"x-fm-evolution-auth": token},
+    ).status_code == 200
+    body = "Sua proposta com link chegou ao WhatsApp."
+    env.sql(
+        "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, "
+        "status, error, claimed_at) "
+        "SELECT %s, id, 'out', 'bot', %s, 'uncertain', 'resultado_incerto: RuntimeError', now() "
+        "FROM conversations WHERE tenant_id = %s",
+        (tenant, body, tenant),
+    )
+    own = json.loads(_event(instance, message_id="out-reconciled", from_me=True))
+    own["data"]["message"] = {"conversation": body}
+    raw = json.dumps(own).encode()
+    hdr = {"x-fm-evolution-auth": token}
+    assert client.post(url, content=raw, headers=hdr).json()["statuses"] == 1
+    assert env.sql(
+        "SELECT status,error,provider_message_id FROM messages "
+        "WHERE tenant_id=%s AND direction='out'", (tenant,),
+    ) == [("sent", None, "out-reconciled")]
+    # Duplicate webhook has no additional side effect or duplicate message.
+    assert client.post(url, content=raw, headers=hdr).json()["statuses"] == 0
+    # The former worker's late failure must not overwrite provider evidence.
+    from fm_seller.channels.outbox import _finish
+    ids = env.sql(
+        "SELECT id FROM messages WHERE tenant_id=%s AND direction='out'", (tenant,),
+    )
+    _finish(db, uuid.UUID(tenant), ids[0][0], "uncertain", "resultado_incerto", None)
+    assert env.sql(
+        "SELECT status,provider_message_id FROM messages "
+        "WHERE tenant_id=%s AND direction='out'", (tenant,),
+    ) == [("sent", "out-reconciled")]
+
+
+def test_evolution_outbound_receipt_never_guesses_between_identical_intents(
+    client: TestClient, env: Env,
+) -> None:
+    tenant, instance, token = _provision(client, env)
+    url = f"/v1/webhooks/evolution/{instance}"
+    hdr = {"x-fm-evolution-auth": token}
+    assert client.post(
+        url, content=_event(instance, message_id="in-ambiguous"), headers=hdr,
+    ).status_code == 200
+    body = "Mesmo texto para dois envios."
+    for _ in range(2):
+        env.sql(
+            "INSERT INTO messages (tenant_id, conversation_id, direction, author, body, "
+            "status, error, claimed_at) "
+            "SELECT %s, id, 'out', 'bot', %s, 'uncertain', 'resultado_incerto', now() "
+            "FROM conversations WHERE tenant_id = %s",
+            (tenant, body, tenant),
+        )
+    own = json.loads(_event(instance, message_id="out-ambiguous", from_me=True))
+    own["data"]["message"] = {"conversation": body}
+    assert client.post(
+        url, content=json.dumps(own).encode(), headers=hdr,
+    ).json()["statuses"] == 0
+    assert env.sql(
+        "SELECT count(*) FROM messages WHERE tenant_id=%s AND status='uncertain'",
+        (tenant,),
+    ) == [(2,)]
+
+
+def test_pilot_recovery_sender_is_single_contact_and_opt_in() -> None:
+    from fm_seller.channels.pilot_greeting import PilotDemoSender
+    from fm_seller.recovery.senders import OutboundMessage
+
+    client = FakeSendClient()
+    tenant = uuid.uuid4()
+    phone = "5511999991234"
+    instance = "fmav-" + hashlib.sha256(tenant.bytes).hexdigest()[:32]
+    config = {"__provider": "evolution", "instance_name": instance}
+    message = OutboundMessage(tenant, phone, "conversa_1", "Oi, seguimos a conversa?")
+    off = PilotDemoSender(cast(Any, client), tenant_id=tenant, phone=phone)
+    with pytest.raises(SendError):
+        off.send(config, message)
+    on = PilotDemoSender(
+        cast(Any, client), tenant_id=tenant, phone=phone, recovery_enabled=True,
+    )
+    assert on.send(config, message) == "ABC123"
+    with pytest.raises(SendError):
+        on.send(config, OutboundMessage(tenant, "5511999998888", "conversa_1", message.body))
+    with pytest.raises(SendError):
+        on.send(config, OutboundMessage(tenant, phone, "pix_1", message.body))
+    with pytest.raises(SendError):
+        on.send(config, OutboundMessage(tenant, phone, "conversa_1", "https://pay.example"))
+    assert len(client.sent) == 1
