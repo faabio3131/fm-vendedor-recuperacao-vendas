@@ -88,3 +88,9 @@ def test_compose_passes_ai_thinking_level_to_existing_api_and_worker() -> None:
     # Default stays conservative until a separately authorized pilot change.
     assert "FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}" in compose
     assert 'FM_WHATSAPP_LIVE: "false"' in compose
+
+
+def test_contabo_compose_maps_pilot_recovery_explicitly_and_defaults_off() -> None:
+    compose = (ROOT / "deploy" / "contabo" / "compose.yml").read_text()
+    assert "FM_PILOT_RECOVERY_ENABLED: ${FM_PILOT_RECOVERY_ENABLED:-false}" in compose
+    assert "FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}" in compose

@@ -355,6 +355,24 @@ def test_cold_conversation_opens_one_case_and_not_again(
     assert detect_cold_conversations(db) == 0  # descansa antes de tentar o mesmo contato
 
 
+def test_pilot_cold_detection_only_creates_case_for_authorized_contact(
+    client: TestClient, env: Env, db: Database
+) -> None:
+    tid = _cold(client, env)
+    unauthorized = "5511988887777"
+    _seed(env, tid, phone=WA_PHONE)
+    _seed(env, tid, phone=unauthorized)
+    assert detect_cold_conversations(db, pilot_scope=(uuid.UUID(tid), WA_PHONE)) == 1
+    found = env.sql(
+        "SELECT ct.phone FROM recovery_cases rc "
+        "JOIN contacts ct ON ct.id = rc.contact_id "
+        "WHERE rc.tenant_id = %s AND rc.trigger_kind = 'conversation_cold'",
+        (tid,),
+    )
+    assert found == [(WA_PHONE,)]
+    assert detect_cold_conversations(db, pilot_scope=(uuid.UUID(tid), WA_PHONE)) == 0
+
+
 @pytest.mark.parametrize(
     "scenario",
     [

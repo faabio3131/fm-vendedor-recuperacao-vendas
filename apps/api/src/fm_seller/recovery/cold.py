@@ -9,6 +9,7 @@ usa template aprovado, que Messenger e Instagram não têm.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import UTC, datetime
 
 from fm_seller.db import Database
@@ -51,20 +52,33 @@ WHERE c.status IN ('bot', 'human') AND c.channel = 'whatsapp' AND c.last_inbound
                   AND sp.identity = ct.phone)
   AND NOT EXISTS (SELECT 1 FROM recovery_sequences rs WHERE rs.tenant_id = c.tenant_id
                   AND rs.trigger_kind = 'conversation_cold' AND NOT rs.enabled)
+  AND (%(pilot_tenant)s::uuid IS NULL OR
+       (c.tenant_id = %(pilot_tenant)s::uuid AND ct.phone = %(pilot_phone)s))
 ORDER BY lm.created_at
 LIMIT %(limit)s
 """
 
 
 def detect_cold_conversations(
-    db: Database, *, now: datetime | None = None, limit: int = 200
+    db: Database,
+    *,
+    now: datetime | None = None,
+    limit: int = 200,
+    pilot_scope: tuple[uuid.UUID, str] | None = None,
 ) -> int:
     """Abre oportunidades para as conversas que esfriaram. Devolve quantas abriu."""
     now = now or datetime.now(UTC)
     with db.tx(system=True) as conn:
         rows = conn.execute(
             _COLD_SQL,
-            {"now": now, "max_age": MAX_COLD_AGE_DAYS, "cool": COOLDOWN_DAYS, "limit": limit},
+            {
+                "now": now,
+                "max_age": MAX_COLD_AGE_DAYS,
+                "cool": COOLDOWN_DAYS,
+                "limit": limit,
+                "pilot_tenant": pilot_scope[0] if pilot_scope else None,
+                "pilot_phone": pilot_scope[1] if pilot_scope else None,
+            },
         ).fetchall()
     opened = 0
     for row in rows:
