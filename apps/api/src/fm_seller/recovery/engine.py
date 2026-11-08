@@ -438,9 +438,7 @@ def run_due_steps(
         )
         else None
     )
-    for step in _claim(
-        db, now, limit, pilot_scope=pilot_scope, pilot_exclusion=pilot_exclusion
-    ):
+    for step in _claim(db, now, limit, pilot_scope=pilot_scope, pilot_exclusion=pilot_exclusion):
         stats.claimed += 1
         try:
             outcome = _process(db, box, sender, step, now)
