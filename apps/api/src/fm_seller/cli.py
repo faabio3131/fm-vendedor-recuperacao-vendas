@@ -286,8 +286,19 @@ def _cycle(
         else:
             checkout_links = cold = 0
     else:
-        checkout_links = scan_confirmed_checkout_links(db)
-        cold = detect_cold_conversations(db)
+        protected_id = getattr(sender, "pilot_tenant_id", None)
+        protected_phone = getattr(sender, "pilot_phone", None)
+        exclusion = (
+            (protected_id, protected_phone)
+            if (
+                getattr(sender, "pilot_sender", None) is not None
+                and isinstance(protected_id, uuid.UUID)
+                and isinstance(protected_phone, str)
+            )
+            else None
+        )
+        checkout_links = scan_confirmed_checkout_links(db, pilot_exclusion=exclusion)
+        cold = detect_cold_conversations(db, pilot_exclusion=exclusion)
     stats = run_due_steps(db, box, sender)
     audios_first = _voice_step(db, box, settings, model, log)
     seller = run_ai_replies(db, model, pilot_settings=settings)
