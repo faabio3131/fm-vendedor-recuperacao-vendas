@@ -28,12 +28,15 @@ x-app-env: &app-env
   FM_FMCOMMAND_MODE: ${FM_FMCOMMAND_MODE:-off}
   # Meta remains separate and disabled by default.
   FM_WHATSAPP_LIVE: "false"
-  # Evolution v2.3.7 is routed through the same API + worker (fail-closed by default).
+  # Approved multi-tenant conversational rollout; per-tenant authenticated connections,
+  # existing customer 24h window, plan/trial gates, opt-out and recovery caps still apply.
   FM_EVOLUTION_ENABLED: ${FM_EVOLUTION_ENABLED:-false}
-  FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}
-  # Single-tenant/single-recipient FM pilot: does not enable production send globally.
+  FM_EVOLUTION_SEND_ENABLED: "true"
+  # Production emergency switch: set true in .env, then recreate API and worker.
+  FM_EVOLUTION_OUTBOUND_PAUSED: ${FM_EVOLUTION_OUTBOUND_PAUSED:-false}
+  # FM own sales demonstration remains restricted to its specific test contact.
   FM_PILOT_GREETING_ENABLED: ${FM_PILOT_GREETING_ENABLED:-false}
-  # Optional single-contact pre-sales demo: never enables global sending.
+  # Optional single-contact pre-sales demo: does not restrict other subscribers.
   FM_PILOT_DEMO_ENABLED: ${FM_PILOT_DEMO_ENABLED:-false}
   FM_PILOT_RECOVERY_ENABLED: ${FM_PILOT_RECOVERY_ENABLED:-false}
   FM_PILOT_GREETING_TENANT_ID: ${FM_PILOT_GREETING_TENANT_ID:-}
