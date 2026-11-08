@@ -23,13 +23,11 @@ def _link(
 ) -> tuple[uuid.UUID, datetime]:
     conv_id = _seed(env, tid, phone=phone, hours_ago=1)
     row = env.sql(
-        "SELECT id, created_at FROM messages WHERE conversation_id = %s "
-        "AND direction = 'out'",
+        "SELECT id, created_at FROM messages WHERE conversation_id = %s AND direction = 'out'",
         (conv_id,),
     )[0]
     env.sql(
-        "UPDATE messages SET body = %s, status = %s, provider_message_id = %s "
-        "WHERE id = %s",
+        "UPDATE messages SET body = %s, status = %s, provider_message_id = %s WHERE id = %s",
         (
             "Perfeito! Plano Essencial, para contratar faça o pagamento neste link seguro:\n"
             "https://pay.example.test/plano-essencial",
@@ -59,22 +57,22 @@ def test_verified_checkout_link_creates_neutral_followup_45_minutes_after_delive
         assert record_confirmed_checkout_link(conn, uuid.UUID(tid), message_id)
     case = env.sql(
         "SELECT source, trigger_kind, product_name, amount_cents, external_ref "
-        "FROM recovery_cases WHERE tenant_id=%s", (tid,)
+        "FROM recovery_cases WHERE tenant_id=%s",
+        (tid,),
     )
     assert case == [
         ("conversa", "conversation_cold", "Plano Essencial", 12990, f"offer-link:{message_id}")
     ]
     step = env.sql(
         "SELECT step_no, template_key, first_scheduled_at FROM recovery_steps "
-        "WHERE tenant_id=%s AND step_no=1", (tid,)
+        "WHERE tenant_id=%s AND step_no=1",
+        (tid,),
     )[0]
     assert step[0] == 1 and step[1] == "conversa_1"
     assert step[2] - created == FIRST_FOLLOWUP
     with db.tx(tenant_id=uuid.UUID(tid)) as conn:
         assert not record_confirmed_checkout_link(conn, uuid.UUID(tid), message_id)
-    assert env.sql(
-        "SELECT count(*) FROM recovery_cases WHERE tenant_id=%s", (tid,)
-    ) == [(1,)]
+    assert env.sql("SELECT count(*) FROM recovery_cases WHERE tenant_id=%s", (tid,)) == [(1,)]
 
 
 def test_unconfirmed_or_answered_link_does_not_claim_unpaid_checkout(
@@ -92,7 +90,8 @@ def test_unconfirmed_or_answered_link_does_not_claim_unpaid_checkout(
     )
     env.sql(
         "UPDATE conversations SET last_inbound_at = now() "
-        "WHERE id=(SELECT conversation_id FROM messages WHERE id=%s)", (message_id,),
+        "WHERE id=(SELECT conversation_id FROM messages WHERE id=%s)",
+        (message_id,),
     )
     with db.tx(tenant_id=uuid.UUID(tid)) as conn:
         assert not record_confirmed_checkout_link(conn, uuid.UUID(tid), message_id)
@@ -109,6 +108,6 @@ def test_pilot_scanner_only_records_authorized_contact(
     scope = (uuid.UUID(tid), WA_PHONE)
     assert scan_confirmed_checkout_links(db, pilot_scope=scope) == 1
     assert scan_confirmed_checkout_links(db, pilot_scope=scope) == 0
-    assert env.sql(
-        "SELECT external_ref FROM recovery_cases WHERE tenant_id=%s", (tid,)
-    ) == [(f"offer-link:{allowed_id}",)]
+    assert env.sql("SELECT external_ref FROM recovery_cases WHERE tenant_id=%s", (tid,)) == [
+        (f"offer-link:{allowed_id}",)
+    ]
