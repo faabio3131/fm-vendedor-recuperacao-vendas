@@ -85,12 +85,13 @@ def test_compose_passes_ai_thinking_level_to_existing_api_and_worker() -> None:
     assert "FM_AI_THINKING_LEVEL: ${FM_AI_THINKING_LEVEL:-low}" in compose
     assert "x-app-env: &app-env" in compose
     assert compose.count("environment: *app-env") >= 2
-    # Default stays conservative until a separately authorized pilot change.
-    assert "FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}" in compose
+    # Director-approved general launch with an independent emergency pause.
+    assert 'FM_EVOLUTION_SEND_ENABLED: "true"' in compose
     assert 'FM_WHATSAPP_LIVE: "false"' in compose
+    assert "FM_EVOLUTION_OUTBOUND_PAUSED: ${FM_EVOLUTION_OUTBOUND_PAUSED:-false}" in compose
 
 
 def test_contabo_compose_maps_pilot_recovery_explicitly_and_defaults_off() -> None:
     compose = (ROOT / "deploy" / "contabo" / "compose.yml").read_text()
     assert "FM_PILOT_RECOVERY_ENABLED: ${FM_PILOT_RECOVERY_ENABLED:-false}" in compose
-    assert "FM_EVOLUTION_SEND_ENABLED: ${FM_EVOLUTION_SEND_ENABLED:-false}" in compose
+    assert 'FM_EVOLUTION_SEND_ENABLED: "true"' in compose
