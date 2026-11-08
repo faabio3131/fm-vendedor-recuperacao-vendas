@@ -22,6 +22,7 @@ from typing import Any
 from fm_seller.ai import usage
 from fm_seller.ai.abbreviations import expand_abbreviations
 from fm_seller.ai.model import AiContext, AiModel, AiReply, OfferView
+from fm_seller.ai.sales_quality import fm_consultative_reply, needs_contextual_answer
 from fm_seller.channels.outbound import HANDOFF_MESSAGE, enqueue_text
 from fm_seller.channels.pilot_greeting import (
     DEMO_PAGE,
@@ -45,7 +46,7 @@ MAX_BOT_REPLIES_PER_HOUR = 10
 # Only the single tenant/contact authorized for the FM pilot gets a longer consultative
 # exchange. General SaaS tenants retain the original strict anti-abuse ceiling.
 MAX_PILOT_DEMO_REPLIES_PER_HOUR = 40
-HISTORY = 10
+HISTORY = 16  # preserve plan/link and recovery context across follow-up turns
 _HUMAN = ("atendente", "humano", "pessoa", "falar com alguem", "gerente", "responsavel")
 MODEL_RETRY_MESSAGE = "Só um instante, já te respondo."
 _FORBIDDEN = re.compile(r"https?://|www\.|r\$|\breais\b|\bpix\b.*\bchave\b", re.IGNORECASE)
@@ -1275,6 +1276,31 @@ def _handle_conversation(
             )
             return "replied"
 
+    # Official FM product explanation: respond to substantive questions using
+    # verified features, not the stale generic paragraph from the FAQ. This is
+    # scoped to the registered FM sales tenant and canonical three-plan catalog;
+    # it never changes the behaviour of any independent subscriber.
+    if not demo and not pilot and pilot_settings is not None:
+        last_bot = conn.execute(
+            "SELECT body FROM messages WHERE conversation_id = %s AND direction = 'out' "
+            "AND author = 'bot' ORDER BY created_at DESC LIMIT 1",
+            (conv_id,),
+        ).fetchone()
+        focused = fm_consultative_reply(
+            inbound[-1]["body"],
+            offer_rows,
+            tenant_id=tenant_id,
+            fm_tenant_id=pilot_settings.pilot_greeting_tenant_id,
+            previous_bot=last_bot["body"] if last_bot else "",
+        )
+        if focused is not None:
+            enqueue_text(conn, tenant_id, conv_id, "bot", focused)
+            conn.execute(
+                "UPDATE conversations SET last_message_at = now() WHERE id = %s",
+                (conv_id,),
+            )
+            return "replied"
+
     # A definite price/link intent and a unique name can be served from registered
     # commercial data at zero model tokens. Preserve the regular plan/tenant guards,
     # opt-out, human handoff and hourly rate limit above this branch.
@@ -1328,7 +1354,7 @@ def _handle_conversation(
             ).fetchall()
         )
     )
-    if knowledge:
+    if knowledge and not needs_contextual_answer(inbound[-1]["body"]):
         known = knowledge_reply(inbound[-1]["body"], knowledge)
         if known is not None:
             enqueue_text(conn, tenant_id, conv_id, "bot", known)
