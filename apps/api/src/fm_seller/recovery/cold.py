@@ -71,9 +71,14 @@ def detect_cold_conversations(
     with db.tx(system=True) as conn:
         rows = conn.execute(
             _COLD_SQL,
-            {"now": now, "max_age": MAX_COLD_AGE_DAYS, "cool": COOLDOWN_DAYS,
-             "limit": limit, "pilot_tenant": pilot_scope[0] if pilot_scope else None,
-             "pilot_phone": pilot_scope[1] if pilot_scope else None},
+            {
+                "now": now,
+                "max_age": MAX_COLD_AGE_DAYS,
+                "cool": COOLDOWN_DAYS,
+                "limit": limit,
+                "pilot_tenant": pilot_scope[0] if pilot_scope else None,
+                "pilot_phone": pilot_scope[1] if pilot_scope else None,
+            },
         ).fetchall()
     opened = 0
     for row in rows:
