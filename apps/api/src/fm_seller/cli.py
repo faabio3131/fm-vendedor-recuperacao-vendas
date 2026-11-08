@@ -35,6 +35,7 @@ from fm_seller.ops.health import check as ops_check
 from fm_seller.ops.health import exit_code, pending_migrations
 from fm_seller.provisioning import lifecycle
 from fm_seller.provisioning.platform import reprocess_platform
+from fm_seller.recovery.checkout_link import scan_confirmed_checkout_links
 from fm_seller.recovery.cold import detect_cold_conversations
 from fm_seller.recovery.engine import handle_event, run_due_steps
 from fm_seller.recovery.senders import MessageSender, build_sender
@@ -279,10 +280,13 @@ def _cycle(
             and pilot_phone.isdecimal()
             and 10 <= len(pilot_phone) <= 15
         ):
-            cold = detect_cold_conversations(db, pilot_scope=(pilot_id, pilot_phone))
+            scope = (pilot_id, pilot_phone)
+            checkout_links = scan_confirmed_checkout_links(db, pilot_scope=scope)
+            cold = detect_cold_conversations(db, pilot_scope=scope)
         else:
-            cold = 0
+            checkout_links = cold = 0
     else:
+        checkout_links = scan_confirmed_checkout_links(db)
         cold = detect_cold_conversations(db)
     stats = run_due_steps(db, box, sender)
     audios_first = _voice_step(db, box, settings, model, log)
@@ -300,6 +304,7 @@ def _cycle(
                 "reprocessados": redone,
                 "compras": redone_platform,
                 "conversas_frias": cold,
+                "links_checkout_acompanhados": checkout_links,
                 "recuperacao": stats.__dict__,
                 "vendedor": seller.__dict__,
                 "saida": outbox.__dict__,
