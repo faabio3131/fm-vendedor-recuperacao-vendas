@@ -67,11 +67,13 @@ def test_photo_crud_private_blob_and_tenant_isolation(
         assert img.getexif() == {}
 
     with db.tx(tenant_id=uuid.UUID(first_tenant)) as conn:
-        assert conn.execute("SELECT count(*) AS n FROM offer_photos").fetchone()["n"] == 1
+        row = conn.execute("SELECT count(*) AS n FROM offer_photos").fetchone()
+        assert row is not None and row["n"] == 1
     other_email = unique_email("photo-isolated")
     other_tenant = env.tenant("Outra loja", other_email)
     with db.tx(tenant_id=uuid.UUID(other_tenant)) as conn:
-        assert conn.execute("SELECT count(*) AS n FROM offer_photos").fetchone()["n"] == 0
+        row = conn.execute("SELECT count(*) AS n FROM offer_photos").fetchone()
+        assert row is not None and row["n"] == 0
     client.post("/v1/auth/logout")
     assert login(client, other_email).status_code == 200
     assert client.get(f"{path}/{photo_id}").status_code == 404
