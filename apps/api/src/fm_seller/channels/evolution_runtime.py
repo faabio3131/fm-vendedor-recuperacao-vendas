@@ -163,6 +163,14 @@ def ingest_evolution(
                                 (provider_id, tenant_id, candidates[0]["id"]),
                             )
                             counts["statuses"] += changed.rowcount
+                            if changed.rowcount:
+                                from fm_seller.recovery.checkout_link import (
+                                    record_confirmed_checkout_link,
+                                )
+
+                                record_confirmed_checkout_link(
+                                    conn, tenant_id, candidates[0]["id"]
+                                )
                 return counts  # Own messages must never create a bot reply.
             if key.get("fromMe") is not False:
                 return counts
