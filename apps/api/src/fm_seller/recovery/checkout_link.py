@@ -10,7 +10,6 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from fm_seller.db import Conn, Database
 from fm_seller.events import normalize as n
@@ -103,7 +102,11 @@ def record_confirmed_checkout_link(
 
 
 def scan_confirmed_checkout_links(
-    db: Database, *, now: datetime | None = None, limit: int = 60
+    db: Database,
+    *,
+    now: datetime | None = None,
+    limit: int = 60,
+    pilot_scope: tuple[uuid.UUID, str] | None = None,
 ) -> int:
     """Reconcile confirmed links even if the webhook arrived before the worker ACK.
 
@@ -115,16 +118,28 @@ def scan_confirmed_checkout_links(
         candidates = conn.execute(
             "SELECT m.tenant_id, m.id FROM messages m "
             "JOIN conversations cv ON cv.id = m.conversation_id AND cv.tenant_id = m.tenant_id "
+            "JOIN contacts ct ON ct.id = cv.contact_id AND ct.tenant_id = m.tenant_id "
+            "JOIN tenant_settings s ON s.tenant_id = m.tenant_id "
+            "AND s.recovery_enabled AND s.consent_declared_at IS NOT NULL "
             "WHERE m.direction = 'out' AND m.author = 'bot' "
             "AND m.status IN ('sent', 'delivered', 'read') "
             "AND m.provider_message_id IS NOT NULL "
             "AND m.created_at BETWEEN %s AND %s "
+            "AND m.body LIKE '%%https://%%' "
             "AND cv.channel = 'whatsapp' AND cv.last_inbound_at <= m.created_at "
+            "AND (%s::uuid IS NULL OR (m.tenant_id = %s AND ct.phone = %s)) "
             "AND NOT EXISTS (SELECT 1 FROM recovery_cases rc "
             "WHERE rc.tenant_id = m.tenant_id AND rc.trigger_kind = 'conversation_cold' "
             "AND rc.external_ref = 'offer-link:' || m.id::text) "
             "ORDER BY m.created_at DESC LIMIT %s",
-            (now - MAX_LOOKBACK, now, limit),
+            (
+                now - MAX_LOOKBACK,
+                now,
+                pilot_scope[0] if pilot_scope else None,
+                pilot_scope[0] if pilot_scope else None,
+                pilot_scope[1] if pilot_scope else None,
+                limit,
+            ),
         ).fetchall()
     opened = 0
     for row in candidates:
