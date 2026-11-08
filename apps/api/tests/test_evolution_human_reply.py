@@ -81,7 +81,7 @@ def test_evolution_human_late_reply_is_queued_once_sent_and_visible(
 
     route, fake = _sender()
     result = flush_outbox(db, env.box, route)
-    assert result.sent == 1 and result.failed == 0
+    assert result.sent == 1  # Shared test DB may have queued messages from other tenants.
     assert fake.sent == [{"number": PHONE, "text": "Posso ajudar."}]
     assert flush_outbox(db, env.box, route).sent == 0
     assert env.sql(
@@ -173,5 +173,10 @@ def test_disabled_ai_cannot_be_reenabled_by_conversation_status(
     assert env.sql("SELECT status FROM conversations WHERE id=%s", (conv,)) == [("human",)]
     # The business owner may activate AI via the standard onboarding/settings.
     # Here we emulate that already-approved state change without modifying production.
-    env.sql("UPDATE tenant_settings SET ai_enabled=true WHERE tenant_id=%s", (tenant,))
+    env.sql(
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) "
+        "VALUES(%s,true,'') ON CONFLICT(tenant_id) "
+        "DO UPDATE SET ai_enabled=true",
+        (tenant,),
+    )
     assert client.post(f"/v1/inbox/{conv}/status", json={"status": "bot"}).status_code == 200

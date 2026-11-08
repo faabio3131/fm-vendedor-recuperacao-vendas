@@ -669,13 +669,16 @@ class SellerService:
             if not human_reply_allowed(
                 conv["channel"], conv["last_inbound_at"], provider, datetime.now(UTC)
             ):
-                raise bad_request(
-                    "window_closed",
-                    "A janela de 24 horas terminou. No WhatsApp Cloud, só é possível "
-                    "usar template aprovado; no Messenger e Instagram, resposta livre "
-                    "não é permitida fora da janela. Evolution exige conexão verificada "
-                    "e mensagem anterior do contato.",
-                )
+                if conv["channel"] != "whatsapp":
+                    message = "A Meta não permite resposta livre fora da janela de 24 horas."
+                elif provider == "whatsapp_cloud":
+                    message = "WhatsApp Cloud: após 24 horas, só é possível usar template aprovado."
+                else:
+                    message = (
+                        "Passaram mais de 24 horas. Para resposta manual pela Evolution, "
+                        "verifique a conexão e se o contato já iniciou a conversa."
+                    )
+                raise bad_request("window_closed", message)
             if conv["channel"] == "whatsapp":
                 blocked = conn.execute(
                     "SELECT 1 FROM suppressions s JOIN conversations cv "

@@ -101,7 +101,12 @@ def test_inbox_reply_window_and_status(client: TestClient, env: Env, db: Databas
     blocked = client.post(f"/v1/inbox/{cid}/status", json={"status": "bot"})
     assert blocked.status_code == 409
     assert blocked.json()["error"]["code"] == "seller_ai_disabled"
-    env.sql("UPDATE tenant_settings SET ai_enabled=true WHERE tenant_id=%s", (tid,))
+    env.sql(
+        "INSERT INTO tenant_settings(tenant_id,ai_enabled,ai_persona) "
+        "VALUES(%s,true,'') ON CONFLICT(tenant_id) "
+        "DO UPDATE SET ai_enabled=true",
+        (tid,),
+    )
     assert client.post(f"/v1/inbox/{cid}/status", json={"status": "bot"}).json() == {
         "status": "bot"
     }
