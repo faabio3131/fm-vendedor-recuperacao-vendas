@@ -38,6 +38,12 @@ TENANT = uuid.UUID("db09b1a0-49e7-408f-8bca-ef6727a9ba31")
         ("Como funciona o pagamento do plano?", "não gera cobranças"),
         ("Aceita Pix?", "plataforma de cobrança"),
         ("Vale a pena usar?", "não existe promessa de vendas garantidas"),
+        ("Como funciona esse relatório e onde vejo?", "menu Relatórios"),
+        (
+            "Eu vendo bolsas de diversas marcas e modelos, o que ela faria pela minha empresa?",
+            "Na sua loja de bolsas",
+        ),
+        ("Trabalho com roupas e sapatos, como ajudaria minha loja?", "Na sua loja"),
     ],
 )
 def test_fm_answers_real_commercial_questions_without_unverified_promises(
@@ -114,6 +120,9 @@ def test_model_prompt_teaches_specific_objection_handling_and_verified_capabilit
     assert "não o pressione" in prompt
     assert "recuperar conversa NÃO prova recuperação financeira" in prompt
     assert "BASE DE CONHECIMENTO" in prompt
+    assert "Não diga que um Pix ficou sem pagamento" in prompt
+    assert "personalize a explicação" in prompt
+    assert "localização de recursos do painel" in prompt
 
 
 def test_real_fm_commercial_flow_uses_safe_explanation_without_model(
@@ -179,3 +188,80 @@ def test_other_subscriber_uses_model_for_contextual_question(env: Env, db: Datab
     assert run_ai_replies(db, model, pilot_settings=settings).replied == 1
     assert len(model.calls) == 1
     assert "Resposta genérica" not in s.outbound()[-1][1]
+
+
+@pytest.mark.parametrize(
+    ("customer", "expected"),
+    [
+        ("Como funciona esse relatório e onde vejo?", "menu Relatórios"),
+        (
+            "Eu vendo bolsas de diversas marcas e modelos, o que ela faria pela minha empresa?",
+            "Na sua loja de bolsas",
+        ),
+    ],
+)
+def test_actual_retail_and_reports_dialogue_uses_grounded_fm_answer(
+    env: Env, db: Database, customer: str, expected: str
+) -> None:
+    s = Setup(env, db)
+    env.sql("DELETE FROM offers WHERE tenant_id = %s", (s.tid,))
+    for offer in FM_OFFERS:
+        env.sql(
+            "INSERT INTO offers (tenant_id,name,description,price_cents,payment_url) "
+            "VALUES (%s,%s,'WhatsApp com ofertas cadastradas',%s,%s)",
+            (
+                s.tid,
+                offer["name"],
+                offer["price_cents"],
+                "https://pay.example.test/atendevendeia",
+            ),
+        )
+    env.sql(
+        "INSERT INTO knowledge_items (tenant_id,question,answer) VALUES (%s,%s,%s)",
+        (s.tid, customer, "Não conheço esse detalhe nem como o relatório funciona."),
+    )
+    model = SimulatedAiModel()
+    settings = Settings.model_construct(
+        pilot_greeting_enabled=False,
+        pilot_demo_enabled=False,
+        pilot_greeting_tenant_id=s.tid,
+    )
+    s.say(customer)
+    assert run_ai_replies(db, model, pilot_settings=settings).replied == 1
+    response = s.outbound()[-1][1]
+    assert expected in response
+    assert "Não conheço esse detalhe" not in response
+    assert "Pix sem pagamento" not in response
+    assert "https://" not in response
+    assert len(response) <= 800
+    assert model.calls == []
+    assert s.conv_state() == ("bot", None)
+
+
+def test_reports_and_retail_answer_never_leaks_to_another_tenant() -> None:
+    for question in (
+        "Como funciona esse relatório e onde vejo?",
+        "Eu vendo bolsas de diversas marcas, como me ajudaria?",
+    ):
+        assert (
+            fm_consultative_reply(
+                question,
+                FM_OFFERS,
+                tenant_id=uuid.uuid4(),
+                fm_tenant_id=str(TENANT),
+            )
+            is None
+        )
+
+
+def test_reports_message_is_specific_and_not_a_financial_confirmation() -> None:
+    answer = fm_consultative_reply(
+        "Como funciona esse relatório e onde vejo?",
+        FM_OFFERS,
+        tenant_id=TENANT,
+        fm_tenant_id=str(TENANT),
+    )
+    assert answer is not None
+    for term in ("período", "entregues", "lidas", "responderam", "CSV", "produto"):
+        assert term in answer
+    assert "Uma resposta no WhatsApp não é, sozinha, uma venda paga" in answer
