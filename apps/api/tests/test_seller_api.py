@@ -97,6 +97,11 @@ def test_inbox_reply_window_and_status(client: TestClient, env: Env, db: Databas
         "VALUES (%s, %s, 'out', 'bot', 'Certo! Vou chamar uma pessoa', 'queued')",
         (tid, cid),
     )
+    # Conversa não pode voltar para um vendedor que está desligado.
+    blocked = client.post(f"/v1/inbox/{cid}/status", json={"status": "bot"})
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "seller_ai_disabled"
+    env.sql("UPDATE tenant_settings SET ai_enabled=true WHERE tenant_id=%s", (tid,))
     assert client.post(f"/v1/inbox/{cid}/status", json={"status": "bot"}).json() == {
         "status": "bot"
     }

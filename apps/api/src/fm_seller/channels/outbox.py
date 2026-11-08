@@ -2,8 +2,9 @@
 
 Mesma garantia dos passos de recuperação: no máximo uma vez. A mensagem vira `sending` antes de
 falar com o canal; resultado incerto vira `failed`, nunca é reenviado. Texto livre só vale dentro
-da janela de 24 h aberta pela última mensagem do cliente (regra de WhatsApp, Messenger e
-Instagram; as exceções por etiqueta da Meta não são usadas).
+da janela de 24 h aberta pela última mensagem do cliente (Cloud API, Messenger e
+Instagram). Exceção só para resposta manual humana no Evolution/WhatsApp Web
+após mensagem anterior do contato, nunca bot, recuperação ou envio em massa.
 
 Cada conversa tem um canal. O WhatsApp usa o remetente principal; Messenger e Instagram usam o
 remetente do próprio canal (`social`). Sem remetente para o canal, a mensagem NÃO sai: nunca se
@@ -21,6 +22,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fm_seller.channels.outbound import HANDOFF_MESSAGE
+from fm_seller.channels.reply_policy import WINDOW as WINDOW
+from fm_seller.channels.reply_policy import human_reply_allowed, window_open
 from fm_seller.channels.social import BY_CHANNEL, identity_of
 from fm_seller.db import Database
 from fm_seller.provisioning import trial
@@ -29,7 +32,6 @@ from fm_seller.recovery.senders import MessageSender, SendError
 from fm_seller.security.crypto import CryptoError, SecretBox
 
 log = logging.getLogger("fm_seller.outbox")
-WINDOW = timedelta(hours=24)
 STUCK_AFTER = timedelta(hours=1)
 
 
@@ -181,8 +183,6 @@ def _send_one(
             reason = "cliente_suspenso"
         elif row["author"] != "system" and blocks_service(ctx["plan_status"]):
             reason = "assinatura_inativa"  # só a confirmação de "SAIR" ainda sai
-        elif ctx["last_inbound_at"] is None or now - ctx["last_inbound_at"] > WINDOW:
-            reason = "janela_24h_fechada"
         elif (
             row["author"] != "system"
             and conn.execute(
@@ -230,6 +230,16 @@ def _send_one(
                         reason = "canal_sem_adaptador"
                 except CryptoError:
                     reason = "credencial_ilegivel"
+        if reason is None and ctx is not None:
+            in_window = window_open(ctx["last_inbound_at"], now)
+            manual_evolution = (
+                row["author"] == "human"
+                and human_reply_allowed(ctx["channel"], ctx["last_inbound_at"], provider, now)
+                and ctx["channel"] == "whatsapp"
+                and provider == "evolution"
+            )
+            if not in_window and not manual_evolution:
+                reason = "janela_24h_fechada"
         route = senders.get("whatsapp")
         demo_sender: Any = getattr(route, "pilot_sender", None) or getattr(route, "evolution", None)
         if (

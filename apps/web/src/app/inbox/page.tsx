@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Shell } from "@/components/Shell";
 import { api, type Channel, type ConversationDetail, type ConversationRow } from "@/lib/api";
 
@@ -114,11 +115,26 @@ function Detail({ id, onChange }: { id: string; onChange: () => void }) {
       {d.status !== "closed" && (
         <>
           <label htmlFor="reply">Responder como equipe</label>
-          <textarea id="reply" value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} disabled={!d.window_open} />
-          {!d.window_open && (
+          <textarea id="reply" value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} disabled={!d.reply_allowed} />
+          {d.evolution_manual_reply && (
             <div className="muted">
-              Passou de 24 h desde a última mensagem do cliente:{" "}
-              {d.channel === "whatsapp" ? "só é possível enviar template aprovado." : "a Meta não permite resposta livre."}
+              WhatsApp Web (Evolution): resposta manual disponível para contato que já escreveu.
+              Não envie mensagens não solicitadas; respeite pedidos de não contato.
+            </div>
+          )}
+          {!d.reply_allowed && (
+            <div className="muted">
+              {d.window_open
+                ? "Este contato não pode receber uma resposta manual no momento."
+                : d.channel === "whatsapp"
+                  ? "Fora da janela de 24 horas: a API oficial exige template aprovado. Na Evolution, confirme a conexão e se o contato já escreveu."
+                  : "A Meta não permite resposta livre fora da janela de 24 horas."}
+            </div>
+          )}
+          {!d.ai_enabled && (
+            <div className="muted">
+              O Vendedor IA está desligado nos ajustes da loja. Para automatizar o atendimento,
+              ative em <Link href="/seller">Vendedor IA &gt; Ajustes</Link>.
             </div>
           )}
         </>
@@ -127,14 +143,18 @@ function Detail({ id, onChange }: { id: string; onChange: () => void }) {
         {d.status !== "closed" && (
           <button
             className="primary"
-            disabled={!d.window_open || text.trim() === ""}
+            disabled={!d.reply_allowed || text.trim() === ""}
             onClick={() => void act(() => api(`/v1/inbox/${id}/reply`, { method: "POST", body: JSON.stringify({ body: text }) }))}
           >
             Enviar
           </button>
         )}
         {d.status !== "bot" && (
-          <button onClick={() => void act(() => api(`/v1/inbox/${id}/status`, { method: "POST", body: JSON.stringify({ status: "bot" }) }))}>
+          <button
+            disabled={!d.ai_enabled}
+            title={!d.ai_enabled ? "Ative o Vendedor IA nos ajustes da loja." : undefined}
+            onClick={() => void act(() => api(`/v1/inbox/${id}/status`, { method: "POST", body: JSON.stringify({ status: "bot" }) }))}
+          >
             Devolver ao vendedor IA
           </button>
         )}
