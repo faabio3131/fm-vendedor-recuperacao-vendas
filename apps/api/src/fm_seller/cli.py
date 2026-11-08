@@ -269,7 +269,21 @@ def _cycle(
     excluded = privacy.purge_due_tenants(db)
     redone = reprocess_failed(db, box, handle_event)
     redone_platform = reprocess_platform(db, box)
-    cold = detect_cold_conversations(db)
+    if getattr(sender, "pilot_only", False):
+        pilot_id = getattr(sender, "pilot_tenant_id", None)
+        pilot_phone = getattr(sender, "pilot_phone", None)
+        if (
+            getattr(sender, "pilot_recovery_enabled", False)
+            and isinstance(pilot_id, uuid.UUID)
+            and isinstance(pilot_phone, str)
+            and pilot_phone.isdecimal()
+            and 10 <= len(pilot_phone) <= 15
+        ):
+            cold = detect_cold_conversations(db, pilot_scope=(pilot_id, pilot_phone))
+        else:
+            cold = 0
+    else:
+        cold = detect_cold_conversations(db)
     stats = run_due_steps(db, box, sender)
     audios_first = _voice_step(db, box, settings, model, log)
     seller = run_ai_replies(db, model, pilot_settings=settings)
