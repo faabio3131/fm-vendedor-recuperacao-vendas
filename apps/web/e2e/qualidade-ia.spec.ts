@@ -58,6 +58,7 @@ test("Conversas: mostra a data e o horário local de cada mensagem", async ({ pa
             preview: "Mensagem de teste",
             last_message_at: timestamp,
             window_open: true,
+            reply_allowed: true,
           },
         ]),
       });
@@ -71,6 +72,9 @@ test("Conversas: mostra a data e o horário local de cada mensagem", async ({ pa
           channel: "whatsapp",
           status: "bot",
           window_open: true,
+          reply_allowed: true,
+          evolution_manual_reply: false,
+          ai_enabled: true,
           messages: [
             {
               id: "message-time-test",

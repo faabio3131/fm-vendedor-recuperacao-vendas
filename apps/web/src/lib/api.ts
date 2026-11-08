@@ -341,6 +341,7 @@ export type ConversationRow = {
   preview: string;
   last_message_at: string;
   window_open: boolean;
+  reply_allowed: boolean;
 };
 
 export type ChatMessage = {
@@ -359,6 +360,9 @@ export type ConversationDetail = {
   name: string;
   phone: string;
   window_open: boolean;
+  reply_allowed: boolean;
+  evolution_manual_reply: boolean;
+  ai_enabled: boolean;
   messages: ChatMessage[];
 };
 

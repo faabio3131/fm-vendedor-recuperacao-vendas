@@ -12,7 +12,11 @@ from fm_seller.ai import usage
 from fm_seller.ai.model import AiContext, OfferView, SimulatedAiModel
 from fm_seller.ai.seller import asks_for_human, propose
 from fm_seller.channels.outbound import enqueue_text
-from fm_seller.channels.outbox import WINDOW
+from fm_seller.channels.reply_policy import (
+    connected_whatsapp_provider,
+    human_reply_allowed,
+    window_open,
+)
 from fm_seller.db import Database
 from fm_seller.errors import AppError, bad_request, forbidden, not_found
 from fm_seller.money import format_brl
@@ -559,6 +563,7 @@ class SellerService:
                 "ORDER BY (cv.status = 'human') DESC, cv.last_message_at DESC LIMIT %s",
                 (status, status, max(1, min(limit, 100))),
             ).fetchall()
+            provider = connected_whatsapp_provider(conn, p.tenant_id)
         now = datetime.now(UTC)
         return [
             {
@@ -570,8 +575,10 @@ class SellerService:
                 "phone": person_label(r["channel"], r["phone"], r["external_id"]),
                 "preview": (r["preview"] or "")[:160],
                 "last_message_at": r["last_message_at"],
-                "window_open": r["last_inbound_at"] is not None
-                and now - r["last_inbound_at"] <= WINDOW,
+                "window_open": window_open(r["last_inbound_at"], now),
+                "reply_allowed": human_reply_allowed(
+                    r["channel"], r["last_inbound_at"], provider, now
+                ),
             }
             for r in rows
         ]
@@ -589,6 +596,23 @@ class SellerService:
             ).fetchone()
             if conv is None:
                 raise not_found("Conversa não encontrada.")
+            provider = (
+                connected_whatsapp_provider(conn, p.tenant_id)
+                if conv["channel"] == "whatsapp"
+                else None
+            )
+            settings = conn.execute(
+                "SELECT ai_enabled FROM tenant_settings WHERE tenant_id=%s",
+                (p.tenant_id,),
+            ).fetchone()
+            suppressed = bool(
+                conv["channel"] == "whatsapp"
+                and conv["phone"]
+                and conn.execute(
+                    "SELECT 1 FROM suppressions WHERE tenant_id=%s AND identity=%s",
+                    (p.tenant_id, conv["phone"]),
+                ).fetchone()
+            )
             rows = conn.execute(
                 "SELECT id, direction, author, body, status, error, created_at FROM messages "
                 "WHERE conversation_id = %s ORDER BY created_at DESC LIMIT 100",
@@ -600,8 +624,17 @@ class SellerService:
             "channel": conv["channel"],
             "name": conv["name"],
             "phone": person_label(conv["channel"], conv["phone"], conv["external_id"]),
-            "window_open": conv["last_inbound_at"] is not None
-            and now - conv["last_inbound_at"] <= WINDOW,
+            "window_open": window_open(conv["last_inbound_at"], now),
+            "reply_allowed": not suppressed
+            and human_reply_allowed(conv["channel"], conv["last_inbound_at"], provider, now),
+            "evolution_manual_reply": (
+                not suppressed
+                and conv["channel"] == "whatsapp"
+                and provider == "evolution"
+                and conv["last_inbound_at"] is not None
+                and not window_open(conv["last_inbound_at"], now)
+            ),
+            "ai_enabled": bool(settings and settings["ai_enabled"]),
             "messages": [
                 {
                     "id": str(r["id"]),
@@ -628,18 +661,34 @@ class SellerService:
             ).fetchone()
             if conv is None:
                 raise not_found("Conversa não encontrada.")
-            if conv["last_inbound_at"] is None or datetime.now(UTC) - conv[
-                "last_inbound_at"
-            ] > timedelta(hours=24):
-                raise bad_request(
-                    "window_closed",
-                    "Passaram mais de 24 h desde a última mensagem do cliente: "
-                    + (
-                        "só template aprovado."
-                        if conv["channel"] == "whatsapp"
-                        else "a Meta não permite resposta livre fora dessa janela."
-                    ),
-                )
+            provider = (
+                connected_whatsapp_provider(conn, p.tenant_id)
+                if conv["channel"] == "whatsapp"
+                else None
+            )
+            if not human_reply_allowed(
+                conv["channel"], conv["last_inbound_at"], provider, datetime.now(UTC)
+            ):
+                if conv["channel"] != "whatsapp":
+                    message = "A Meta não permite resposta livre fora da janela de 24 horas."
+                elif provider == "whatsapp_cloud":
+                    message = "WhatsApp Cloud: após 24 horas, só é possível usar template aprovado."
+                else:
+                    message = (
+                        "Passaram mais de 24 horas. Para resposta manual pela Evolution, "
+                        "verifique a conexão e se o contato já iniciou a conversa."
+                    )
+                raise bad_request("window_closed", message)
+            if conv["channel"] == "whatsapp":
+                blocked = conn.execute(
+                    "SELECT 1 FROM suppressions s JOIN conversations cv "
+                    "ON cv.tenant_id=s.tenant_id JOIN contacts ct "
+                    "ON ct.id=cv.contact_id AND ct.tenant_id=cv.tenant_id "
+                    "WHERE cv.id=%s AND s.tenant_id=%s AND s.identity=ct.phone",
+                    (conv_id, p.tenant_id),
+                ).fetchone()
+                if blocked:
+                    raise forbidden("Contato optou por não receber mensagens.")
             enqueue_text(conn, p.tenant_id, conv_id, "human", body)
             conn.execute(
                 "UPDATE conversations SET status = 'human', last_message_at = now() WHERE id = %s",
@@ -657,6 +706,17 @@ class SellerService:
             ).fetchone()
             if before is None:
                 raise not_found("Conversa não encontrada.")
+            if status == "bot" and before["status"] != "bot":
+                enabled = conn.execute(
+                    "SELECT ai_enabled FROM tenant_settings WHERE tenant_id=%s",
+                    (p.tenant_id,),
+                ).fetchone()
+                if not enabled or not enabled["ai_enabled"]:
+                    raise AppError(
+                        409,
+                        "seller_ai_disabled",
+                        "Ative o Vendedor IA nos Ajustes antes de devolver esta conversa.",
+                    )
             conn.execute(
                 "UPDATE conversations SET status = %s, handoff_reason = CASE WHEN %s = 'bot' "
                 "THEN NULL ELSE handoff_reason END WHERE id = %s",
