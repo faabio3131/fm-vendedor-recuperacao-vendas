@@ -587,6 +587,17 @@ def _check(conn: Conn, box: SecretBox, step: _Step, now: datetime) -> _Decision 
         reason = "canal_ambiguo" if choices else "canal_nao_conectado"
         return ("skipped", "skipped", reason, None)
     provider = choices[0]["provider"]
+    if provider == "evolution":
+        # Evolution text cannot initiate unsolicited conversations. The
+        # contact must have messaged this exact tenant within the last 24h.
+        recent_inbound = conn.execute(
+            "SELECT 1 FROM conversations cv WHERE cv.tenant_id = %s "
+            "AND cv.contact_id = %s AND cv.channel = 'whatsapp' "
+            "AND cv.last_inbound_at >= %s LIMIT 1",
+            (step.tenant_id, ctx["contact_id"], now - timedelta(hours=24)),
+        ).fetchone()
+        if recent_inbound is None:
+            return ("skipped", "skipped", "janela_24h_fechada", None)
     if tpl is None or (provider == "whatsapp_cloud" and tpl["meta_status"] != "approved"):
         return ("skipped", "skipped", "template_nao_aprovado", None)
     try:
