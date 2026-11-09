@@ -27,8 +27,11 @@ recebe credenciais, não decide valores e não aprova pagamento.
   A notificação não é prova de pagamento; o worker consulta o Asaas por API
   com as credenciais do estabelecimento e verifica ID, referência e valor.
 - CONFIRMED marca pago, mas não dinheiro disponível; RECEIVED confirma
-  liquidação; REFUNDED marca estorno; chargeback marca disputa; parcial ou
-  inconsistência exige revisão. Estado financeiro terminal não retrocede.
+  liquidação apenas quando se trata de recebimento processado pelo gateway.
+  RECEIVED com billingType=RECEIVED_IN_CASH é uma baixa manual sem prova de
+  crédito no Asaas e exige revisão financeira, sem paid_at ou settled_at.
+  REFUNDED marca estorno; chargeback marca disputa; parcial ou inconsistência
+  exige revisão. Estado financeiro terminal não retrocede.
 - Webhooks são at least once. Worker usa lease com retomada e tarefas de
   conferência, sem retry cego de cobrança externa. Não há envio de dinheiro
   para FM Tecnologia nem mecanismo de split neste módulo.

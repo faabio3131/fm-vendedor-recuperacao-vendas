@@ -669,7 +669,10 @@ class MerchantService:
             previous = order["status"]
             if previous in ("refunded", "disputed", "review", "canceled"):
                 return "terminal"
-            if actual in PROVIDER_REFUND:
+            if actual in PROVIDER_PAID and data.get("billingType") == "RECEIVED_IN_CASH":
+                # Manually marked cash receipts are not proof of funds at Asaas.
+                target = "review"
+            elif actual in PROVIDER_REFUND:
                 target = "refunded"
             elif actual in PROVIDER_DISPUTE:
                 target = "disputed"
@@ -684,9 +687,10 @@ class MerchantService:
             conn.execute(
                 "UPDATE merchant_orders SET status=%s,"
                 "paid_at=CASE WHEN %s='paid' THEN COALESCE(paid_at,now()) ELSE paid_at END,"
-                "settled_at=CASE WHEN %s='RECEIVED' THEN COALESCE(settled_at,now()) "
+                "settled_at=CASE WHEN %s='paid' AND %s='RECEIVED' "
+                "THEN COALESCE(settled_at,now()) "
                 "ELSE settled_at END, updated_at=now() WHERE id=%s",
-                (target, target, actual, charge["order_id"]),
+                (target, target, target, actual, charge["order_id"]),
             )
             conn.execute(
                 "UPDATE merchant_charges SET status=%s,updated_at=now() WHERE id=%s",

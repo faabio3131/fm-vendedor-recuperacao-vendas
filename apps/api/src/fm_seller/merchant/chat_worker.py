@@ -63,6 +63,10 @@ def process_chat_charge_jobs(
                     "WHERE o.tenant_id=%s AND o.id=%s",
                     (cid, tenant, oid),
                 ).fetchone()
+                tenant_settings = conn.execute(
+                    "SELECT ai_enabled FROM tenant_settings WHERE tenant_id=%s",
+                    (tenant,),
+                ).fetchone()
                 allowed = bool(
                     row
                     and row["tenant_status"] == "active"
@@ -70,10 +74,8 @@ def process_chat_charge_jobs(
                     and row["last_inbound_at"] is not None
                     and datetime.now(UTC) - row["last_inbound_at"] <= timedelta(hours=24)
                     and connected_whatsapp_provider(conn, tenant) is not None
-                    and conn.execute(
-                        "SELECT ai_enabled FROM tenant_settings WHERE tenant_id=%s",
-                        (tenant,),
-                    ).fetchone()
+                    and tenant_settings is not None
+                    and tenant_settings["ai_enabled"] is True
                     and not conn.execute(
                         "SELECT 1 FROM suppressions WHERE tenant_id=%s AND identity=%s",
                         (tenant, row["phone"] if row else ""),
