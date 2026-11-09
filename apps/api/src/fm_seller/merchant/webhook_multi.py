@@ -6,15 +6,15 @@ import hashlib
 import hmac
 import json
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Mapping
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from fm_seller.errors import AppError, bad_request, not_found
-from fm_seller.merchant.gateways import HostedGateway, PROVIDERS
+from fm_seller.merchant.gateways import PROVIDERS, HostedGateway
 from fm_seller.merchant.service import MerchantService
 
 
