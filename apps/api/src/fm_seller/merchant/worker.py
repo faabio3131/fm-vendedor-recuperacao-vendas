@@ -102,3 +102,55 @@ def process_payment_events(
             else:
                 stats.processed += 1
     return stats
+
+
+
+def reconcile_open_charges(
+    db: Database, box: SecretBox, settings: Settings,
+    *, limit: int = 20,
+) -> dict[str, int]:
+    """Bounded read-only provider polling to recover missed notifications.
+
+    Never sends a second charge. Historical provider credentials are retained
+    per tenant/provider, including after the merchant switches active gateway.
+    """
+    service = MerchantService(db, box, settings)
+    stats = {"checked": 0, "review": 0, "deferred": 0}
+    for _ in range(max(0, min(limit, 50))):
+        with db.tx(system=True) as conn:
+            row = conn.execute(
+                "SELECT id,tenant_id,provider,mode,provider_payment_id,order_id "
+                "FROM merchant_charges WHERE provider_payment_id IS NOT NULL "
+                "AND status IN ('pending','paid') "
+                "AND (last_reconciled_at IS NULL OR last_reconciled_at < "
+                "now() - CASE WHEN status='paid' THEN interval '30 minutes' "
+                "ELSE interval '3 minutes' END) "
+                "ORDER BY last_reconciled_at NULLS FIRST,created_at "
+                "FOR UPDATE SKIP LOCKED LIMIT 1"
+            ).fetchone()
+            if row is None:
+                break
+            conn.execute(
+                "UPDATE merchant_charges SET last_reconciled_at=now() WHERE id=%s",
+                (row["id"],),
+            )
+        try:
+            with db.tx(tenant_id=row["tenant_id"]) as conn:
+                account, keys = service._account(
+                    conn, row["tenant_id"], row["provider"],
+                )
+                if row["mode"] != account["mode"]:
+                    raise ValueError("Stored gateway environment mismatched")
+                key = str(keys["access_token"])
+            gateway = service._client(row["provider"])
+            actual = gateway.get_charge(row["mode"], key, row["provider_payment_id"])
+            status = service.apply_status(
+                row["tenant_id"], actual, expected_oid=row["order_id"],
+            )
+            stats["checked"] += 1
+            if status == "review":
+                stats["review"] += 1
+        except Exception as exc:
+            log.warning("Merchant charge reconciliation deferred: %s", type(exc).__name__)
+            stats["deferred"] += 1
+    return stats
