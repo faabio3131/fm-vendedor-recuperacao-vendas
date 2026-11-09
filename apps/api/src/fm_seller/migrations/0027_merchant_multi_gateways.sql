@@ -21,3 +21,9 @@ ALTER TABLE merchant_payment_events ADD CONSTRAINT merchant_payment_events_tenan
   UNIQUE(tenant_id,provider,external_event_id);
 CREATE INDEX merchant_charges_provider_lookup
   ON merchant_charges(tenant_id,provider,provider_payment_id);
+
+-- Reconcile even when provider notification is missing or does not carry a checkout id.
+ALTER TABLE merchant_charges ADD COLUMN last_reconciled_at timestamptz;
+CREATE INDEX merchant_charges_reconcile_due
+  ON merchant_charges(last_reconciled_at,created_at)
+  WHERE status IN ('pending','paid') AND provider_payment_id IS NOT NULL;
