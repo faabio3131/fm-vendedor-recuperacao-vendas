@@ -384,3 +384,23 @@ def provider_client(
     if name == "asaas":
         return asaas or AsaasClient(transport=transport)
     return HostedGateway(name, transport=transport, webhook_url=webhook_url)
+
+
+def verified_provider_charge(
+    provider: str, data: dict[str, Any], reference: str, cents: int,
+    expected_id: str | None = None,
+) -> str:
+    """Verify ownership, exact immutable amount and provider ID before any state mutation."""
+    if provider == "asaas":
+        from fm_seller.merchant.asaas import verify_charge
+        return verify_charge(data, reference, cents, expected_id)
+    payment_id = _id(data.get("id"))
+    if expected_id is not None and payment_id != expected_id:
+        from fm_seller.errors import AppError
+        raise AppError(409, "finance_mismatch", "Identificador divergente.")
+    if data.get("externalReference") != gateway_ref(reference, provider) or (
+        amount_cents(data.get("value")) != cents
+    ):
+        from fm_seller.errors import AppError
+        raise AppError(409, "finance_mismatch", "Valor ou pedido divergente.")
+    return payment_id
