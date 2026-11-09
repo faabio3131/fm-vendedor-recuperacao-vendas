@@ -4,10 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Shell, useMe } from "@/components/Shell";
 import { api, brl, type Offer } from "@/lib/api";
 
+type PaymentProvider = "asaas" | "mercadopago" | "pagbank" | "pagarme" | "picpay";
+const PAYMENT_LABELS: Record<PaymentProvider, string> = {
+  asaas: "Asaas", mercadopago: "Mercado Pago", pagbank: "PagBank",
+  pagarme: "Pagar.me", picpay: "PicPay",
+};
 type Account = {
-  provider: "asaas"; configured: boolean; verified: boolean;
+  provider: PaymentProvider; configured: boolean; verified: boolean;
   mode?: "sandbox" | "production"; delivery_fee_cents?: number;
   webhook_url?: string;
+  accounts?: {provider: PaymentProvider; mode: string; verified: boolean; active: boolean}[];
 };
 type Zone = {
   id: string; name: string; start: string; end: string;
@@ -54,7 +60,8 @@ function Orders() {
   const [address, setAddress] = useState<DeliveryAddress>(EMPTY_ADDRESS);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<"sandbox" | "production">("sandbox");
+  const [mode, setMode] = useState<"sandbox" | "production">("production");
+  const [provider, setProvider] = useState<PaymentProvider>("asaas");
   const [apiKey, setApiKey] = useState("");
   const [webhookToken, setWebhookToken] = useState("");
   const [fee, setFee] = useState("0,00");
@@ -90,12 +97,12 @@ function Orders() {
       await api<Account>("/v1/merchant/account", {
         method: "PUT",
         body: JSON.stringify({
-          mode, access_token: apiKey.trim(), webhook_token: webhookToken.trim(),
+          provider, mode, access_token: apiKey.trim(), webhook_token: webhookToken.trim(),
           delivery_fee_cents: delivery,
         }),
       });
       setApiKey(""); setWebhookToken("");
-      setFeedback("Conta verificada. Configure o webhook no painel Asaas antes de cobrar.");
+      setFeedback("Conta verificada. Confira as instruções de webhook no painel do provedor antes de cobrar.");
     });
   }
   const items = Object.entries(selected).filter(([, quantity]) => quantity > 0)
@@ -177,35 +184,53 @@ function Orders() {
 
   return <>
     <h1>Pedidos e pagamentos</h1>
-    <p className="muted">O estabelecimento recebe diretamente em sua própria conta Asaas. O AtendeVendeIA não recebe nem movimenta os valores. O estado financeiro só muda após confirmação consultada no provedor.</p>
+    <p className="muted">Escolha o provedor de recebimento da sua loja: Asaas, Mercado Pago, PagBank, Pagar.me ou PicPay. O dinheiro vai diretamente para a conta do estabelecimento; o AtendeVendeIA não recebe nem movimenta valores. Pagamentos são confirmados somente pela API oficial do provedor.</p>
     {feedback && <div className="alert" role="status">{feedback}</div>}
     <section className="card">
       <h2>1. Conta de recebimento</h2>
       <p className="muted">{account?.verified
-        ? `Asaas verificado — ambiente ${account.mode === "production" ? "produção real" : "sandbox de testes"}.`
-        : "Ainda não há uma conta Asaas verificada para gerar cobranças."}</p>
+        ? `${PAYMENT_LABELS[account.provider]} verificado — ambiente ${account.mode === "production" ? "produção real" : "sandbox de testes"}.`
+        : "Ainda não há uma conta de pagamentos verificada para gerar cobranças."}</p>
+      {account?.accounts && account.accounts.length > 0 && (
+        <p className="muted">Contas vinculadas: {account.accounts.map((a) =>
+          `${PAYMENT_LABELS[a.provider]} (${a.active ? "ativa" : "preservada para conciliação"})`).join(" · ")}</p>
+      )}
       {account?.webhook_url && (
-        <label>URL de webhook (cadastrar no Asaas com os eventos de cobrança)
+        <label>URL de webhook do provedor ativo
           <input readOnly value={account.webhook_url} />
         </label>
       )}
-      <p className="muted">O token de webhook é diferente da chave da API. Cadastre exatamente o mesmo token no Asaas. A confirmação nunca usa comprovantes enviados no WhatsApp.</p>
+      <p className="muted">Use credenciais de seu estabelecimento, nunca de terceiros. As chaves são criptografadas e não aparecem aqui após o cadastro. Configure o webhook conforme o provedor; a confirmação não aceita comprovantes ou prints.</p>
       {canEdit && (
         <div className="card" style={{ padding: 12 }}>
+          <label>Provedor de pagamento
+            <select value={provider} disabled={busy}
+              onChange={(e) => { setProvider(e.target.value as PaymentProvider); setApiKey(""); setWebhookToken(""); }}>
+              {Object.entries(PAYMENT_LABELS).map(([id, name]) =>
+                <option key={id} value={id}>{name}</option>)}
+            </select>
+          </label>
           <label>Ambiente
             <select value={mode} disabled={busy} onChange={(e) => setMode(e.target.value as "sandbox" | "production")}>
               <option value="sandbox">Sandbox — testes sem dinheiro real</option>
               <option value="production">Produção — cobranças reais</option>
             </select>
           </label>
-          <label>Chave de API Asaas
+          <label>{provider === "picpay" ? "Credenciais PicPay (client_id:client_secret)" : "Chave de API do estabelecimento"}
             <input type="password" autoComplete="off" value={apiKey} disabled={busy}
-              onChange={(e) => setApiKey(e.target.value)} placeholder="Chave da conta do estabelecimento" />
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={provider === "picpay" ? "client_id:client_secret" : "Chave privada da conta do lojista"} />
           </label>
-          <label>Token independente do webhook
+          <label>{provider === "mercadopago" ? "Assinatura secreta do webhook Mercado Pago" :
+            provider === "picpay" ? "API Key de notificação PicPay" : "Token de webhook independente"}
             <input type="password" autoComplete="off" value={webhookToken} disabled={busy}
               onChange={(e) => setWebhookToken(e.target.value)} placeholder="32 caracteres ou mais" />
           </label>
+          <p className="muted">{provider === "pagbank"
+            ? "No PagBank, ative a chave pública de webhook para validação ECDSA. O processamento usa também consulta à API oficial."
+            : provider === "pagarme"
+              ? "No Pagar.me, cadastre a URL individual e secreta no painel. O evento é apenas um aviso: o pagamento é verificado na API."
+              : "O webhook só dispara a verificação. A confirmação financeira ocorre após consultar o provedor."}</p>
           <label>Taxa legada (entregas novas usam áreas de CEP) — R$
             <input inputMode="decimal" value={fee} disabled={busy}
               onChange={(e) => setFee(e.target.value)} placeholder="0,00" />
@@ -314,10 +339,10 @@ function Orders() {
             ? `Entrega: ${o.fulfillment.street}, ${o.fulfillment.street_number} — ${o.fulfillment.neighborhood}, ${o.fulfillment.city}/${o.fulfillment.state} · CEP ${o.fulfillment.postal_code} · frete ${brl(o.delivery_fee_cents)}`
             : "Retirada no estabelecimento"}</p>
           <div className="muted">{o.items.map((it) => `${it.quantity}× ${it.name}`).join(" · ")}</div>
-          {o.status === "paid" && <p role="status">Pagamento confirmado pelo provedor. {o.settled_at ? "Valor recebido pela conta Asaas." : "Liquidação ainda pendente."}</p>}
+          {o.status === "paid" && <p role="status">Pagamento confirmado pelo provedor. {o.settled_at ? "Liquidação registrada pelo gateway." : "Disponibilidade do saldo sujeita aos prazos do provedor."}</p>}
           {["disputed", "refunded", "review"].includes(o.status) && <p role="alert">Atenção: revisão financeira obrigatória antes da entrega.</p>}
           {o.charge?.invoice_url && (
-            <p>Link individual: <a href={o.charge.invoice_url} target="_blank" rel="noopener noreferrer">Abrir cobrança Asaas</a>{" "}
+            <p>Link individual: <a href={o.charge.invoice_url} target="_blank" rel="noopener noreferrer">Abrir cobrança {PAYMENT_LABELS[o.charge.provider as PaymentProvider] ?? o.charge.provider}</a>{" "}
               <button disabled={busy} onClick={() => void navigator.clipboard.writeText(o.charge?.invoice_url ?? "")}>Copiar link</button>
             </p>
           )}
@@ -333,7 +358,7 @@ function Orders() {
           )}
           {canEdit && o.charge && (
             <button disabled={busy} onClick={() => void reconcile(o.id)}>
-              Consultar pagamento no Asaas
+              Consultar pagamento no provedor
             </button>
           )}
           {o.status === "charging" && <p className="muted">A criação está incerta. Não gere outra cobrança; consulte a conciliação.</p>}
