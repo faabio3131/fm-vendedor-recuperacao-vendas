@@ -15,6 +15,7 @@ from fm_seller.channels.reply_policy import connected_whatsapp_provider
 from fm_seller.config import Settings
 from fm_seller.db import Database
 from fm_seller.merchant.asaas import AsaasClient
+from fm_seller.merchant.gateways import LABELS
 from fm_seller.merchant.service import MerchantService
 from fm_seller.security.crypto import SecretBox
 
@@ -53,7 +54,7 @@ def process_chat_charge_jobs(
         try:
             with db.tx(tenant_id=tenant) as conn:
                 row = conn.execute(
-                    "SELECT o.status,c.invoice_url,cv.status AS conv_status,"
+                    "SELECT o.status,c.invoice_url,c.provider,cv.status AS conv_status,"
                     "cv.last_inbound_at,ct.phone,t.status AS tenant_status "
                     "FROM merchant_orders o "
                     "LEFT JOIN merchant_charges c ON c.order_id=o.id AND c.tenant_id=o.tenant_id "
@@ -97,7 +98,9 @@ def process_chat_charge_jobs(
                     if row["status"] == "paid"
                     else "Seu pedido está registrado. Pague somente neste link seguro:\n"
                     + str(row["invoice_url"])
-                    + "\nAguardaremos a confirmação do Asaas."
+                    + "\nAguardaremos a confirmação do "
+                    + LABELS.get(str(row["provider"]), "provedor")
+                    + "."
                 )
                 status = "done"
             elif row is not None and row["status"] == "pending":
@@ -112,7 +115,7 @@ def process_chat_charge_jobs(
                     service._charge_for_tenant(tenant, oid, str(protected["cpf"]))
                     with db.tx(tenant_id=tenant) as conn:
                         charged = conn.execute(
-                            "SELECT o.status,c.invoice_url FROM merchant_orders o "
+                            "SELECT o.status,c.invoice_url,c.provider FROM merchant_orders o "
                             "JOIN merchant_charges c ON c.tenant_id=o.tenant_id "
                             "AND c.order_id=o.id WHERE o.tenant_id=%s AND o.id=%s",
                             (tenant, oid),
@@ -131,7 +134,9 @@ def process_chat_charge_jobs(
                             if charged["status"] == "paid"
                             else "Seu pedido está registrado. Pague somente neste link seguro:\n"
                             + str(charged["invoice_url"])
-                            + "\nAguardaremos a confirmação do Asaas."
+                            + "\nAguardaremos a confirmação do "
+                            + LABELS.get(str(charged["provider"]), "provedor")
+                            + "."
                         )
                         status = "done"
         except Exception as exc:

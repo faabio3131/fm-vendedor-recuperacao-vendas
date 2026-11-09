@@ -314,6 +314,7 @@ def test_only_known_modules_call_out_to_the_network() -> None:
         "channels/meta_api.py",  # FM_META_GRAPH_BASE, da plataforma
         "channels/evolution.py",  # Evolution HTTPS e chave da plataforma (ADR-0006)
         "merchant/asaas.py",  # allowlist hosts Asaas, sem redirecionar; pagamentos dos tenants
+        "merchant/gateways.py",  # hosts/rotas fixas PSPs por tenant; sem redirects e SSRF
         # API de licenças do Command: FM_FMCOMMAND_API_BASE_URL, da plataforma; só https, sem
         # redirecionamento, só GET e desligada por padrão (ADR-0005).
         "licensing/reconcile.py",
