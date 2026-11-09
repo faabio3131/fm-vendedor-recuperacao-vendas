@@ -1,4 +1,4 @@
-"""Merchant-owned sales: orders, payment link and authentic Asaas notifications."""
+"""Merchant-owned sales: hosted checkout links and verified payment notifications."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from fm_seller.api.deps import get_db, get_principal
 from fm_seller.merchant.service import MerchantService
+from fm_seller.merchant.webhook_multi import receive_gateway_event
 from fm_seller.services import Principal
 
 router = APIRouter(prefix="/merchant", tags=["pedidos e pagamentos"])
@@ -30,6 +31,7 @@ Svc = Annotated[MerchantService, Depends(service)]
 
 
 class AccountIn(BaseModel):
+    provider: Literal["asaas", "mercadopago", "pagbank", "pagarme", "picpay"] = "asaas"
     mode: Literal["sandbox", "production"]
     access_token: str = Field(min_length=20, max_length=512)
     webhook_token: str = Field(min_length=32, max_length=255)
@@ -86,6 +88,7 @@ def put_account(body: AccountIn, s: Svc, p: Who) -> dict[str, Any]:
         body.access_token,
         body.webhook_token,
         body.delivery_fee_cents,
+        body.provider,
     )
 
 
@@ -156,5 +159,17 @@ async def receive_asaas(public_id: str, request: Request) -> dict[str, str]:
         public_id,
         request.headers.get("asaas-access-token", ""),
         raw,
+    )
+    return {"status": result}
+
+
+@webhook_router.post("/{provider}/{public_id}")
+async def receive_merchant_gateway(
+    provider: str, public_id: str, request: Request,
+) -> dict[str, str]:
+    raw = await request.body()
+    result = receive_gateway_event(
+        service(request), provider, public_id, request.headers,
+        request.query_params, raw,
     )
     return {"status": result}
