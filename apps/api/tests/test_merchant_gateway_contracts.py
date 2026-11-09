@@ -52,7 +52,7 @@ def test_hosted_checkout_requires_exact_provider_order_and_server_payment(
                 },
             )
         if provider == "mercadopago":
-            payload = {
+            mp_payload = {
                 "id": "ORDTEST123",
                 "external_reference": REF,
                 "total_amount": "12.34",
@@ -66,9 +66,9 @@ def test_hosted_checkout_requires_exact_provider_order_and_server_payment(
                 assert sent["processing_mode"] == "manual"
                 assert sent["total_amount"] == "12.34"
                 assert request.headers.get("x-idempotency-key")
-            return httpx.Response(200, json=payload)
+            return httpx.Response(200, json=mp_payload)
         if provider == "pagbank":
-            payload: dict[str, Any] = {
+            pag_payload: dict[str, Any] = {
                 "id": "CHEC_123456789",
                 "reference_id": REF,
                 "items": [{"name": "Teste", "quantity": 1, "unit_amount": AMOUNT}],
@@ -92,9 +92,9 @@ def test_hosted_checkout_requires_exact_provider_order_and_server_payment(
             if request.method == "POST":
                 sent = json.loads(request.content)
                 assert sent["items"][0]["unit_amount"] == AMOUNT
-            return httpx.Response(200, json=payload)
+            return httpx.Response(200, json=pag_payload)
         if provider == "pagarme":
-            payload = {
+            pagar_payload = {
                 "id": "pl_123456789",
                 "order_code": REF,
                 "type": "order",
@@ -109,7 +109,7 @@ def test_hosted_checkout_requires_exact_provider_order_and_server_payment(
                 sent = json.loads(request.content)
                 assert sent["max_paid_sessions"] == 1
                 assert sent["cart_settings"]["items"][0]["amount"] == AMOUNT
-            return httpx.Response(200, json=payload)
+            return httpx.Response(200, json=pagar_payload)
         sent = json.loads(request.content) if request.method == "POST" else {}
         if request.method == "POST":
             assert sent["charge"]["order_number"] == gateway_ref(REF, "picpay")
