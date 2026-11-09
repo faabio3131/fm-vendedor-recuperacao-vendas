@@ -447,9 +447,10 @@ def test_manually_recorded_cash_is_not_gateway_settlement(
     fake.payments[payment_id]["status"] = "RECEIVED"
     fake.payments[payment_id]["billingType"] = "RECEIVED_IN_CASH"
     account = client.get("/v1/merchant/account").json()
-    assert event(
-        client, account, "evt_manual_cash_01", payment_id, "PAYMENT_RECEIVED"
-    ).status_code == 200
+    assert (
+        event(client, account, "evt_manual_cash_01", payment_id, "PAYMENT_RECEIVED").status_code
+        == 200
+    )
 
     stats = process_payment_events(db, env.box, env.settings(), client=fake)
     assert stats.review == 1
