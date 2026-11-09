@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from typing import Any
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
@@ -59,7 +61,7 @@ def _pagbank_signature(
         row = client._request(mode, key, "GET", "/public-keys", params={"type": "webhook"})
         der = base64.b64decode(row["public_key"], validate=True)
         public = serialization.load_der_public_key(der)
-    except (ValueError, KeyError, TypeError, base64.binascii.Error):
+    except (ValueError, KeyError, TypeError, binascii.Error):
         return False
     if not isinstance(public, ec.EllipticCurvePublicKey):
         return False
@@ -69,7 +71,7 @@ def _pagbank_signature(
                 base64.b64decode(signature, validate=True), raw, ec.ECDSA(hashes.SHA256())
             )
             return True
-        except (InvalidSignature, ValueError, base64.binascii.Error):
+        except (InvalidSignature, ValueError, binascii.Error):
             continue
     return False
 
@@ -109,7 +111,8 @@ def receive_gateway_event(
         raise bad_request("invalid_payment_event", "Evento inválido.") from None
     if not isinstance(body, dict):
         raise bad_request("invalid_payment_event", "Evento inválido.")
-    payload = body.get("data") if isinstance(body.get("data"), dict) else {}
+    raw_payload = body.get("data")
+    payload: dict[str, Any] = raw_payload if isinstance(raw_payload, dict) else {}
     pid: str | None = None
     reference: str | None = None
     if provider == "mercadopago":
@@ -131,13 +134,15 @@ def receive_gateway_event(
         token = headers.get("authorization", "").removeprefix("Bearer ").strip()
         if not hmac.compare_digest(secret, token):
             raise AppError(401, "invalid_payment_webhook", "Autenticação PicPay inválida.")
-        charge = payload.get("charge") if isinstance(payload.get("charge"), dict) else {}
+        raw_charge = payload.get("charge")
+        charge: dict[str, Any] = raw_charge if isinstance(raw_charge, dict) else {}
         pid = str(charge.get("paymentLinkId") or "") or None
     else:
         # Pagar.me v5 has no documented signed webhook contract on this endpoint.
         # The 192-bit, unguessable account URL is only an event hint. The worker
         # ALWAYS re-queries the merchant's Pagar.me API; never trust body status.
-        row = payload.get("payment_link") if isinstance(payload.get("payment_link"), dict) else {}
+        raw_link = payload.get("payment_link")
+        row: dict[str, Any] = raw_link if isinstance(raw_link, dict) else {}
         pid = str(row.get("id") or payload.get("payment_link_id") or "") or None
         reference = payload.get("order_code") or body.get("order_code")
     if pid and not re.fullmatch(r"[a-zA-Z0-9_-]{3,100}", pid):
