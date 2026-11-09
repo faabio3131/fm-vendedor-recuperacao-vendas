@@ -135,8 +135,8 @@ def receive_gateway_event(
         if not hmac.compare_digest(secret, token):
             raise AppError(401, "invalid_payment_webhook", "Autenticação PicPay inválida.")
         raw_charge = payload.get("charge")
-        charge: dict[str, Any] = raw_charge if isinstance(raw_charge, dict) else {}
-        pid = str(charge.get("paymentLinkId") or "") or None
+        hint_charge: dict[str, Any] = raw_charge if isinstance(raw_charge, dict) else {}
+        pid = str(hint_charge.get("paymentLinkId") or "") or None
     else:
         # Pagar.me v5 has no documented signed webhook contract on this endpoint.
         # The 192-bit, unguessable account URL is only an event hint. The worker
