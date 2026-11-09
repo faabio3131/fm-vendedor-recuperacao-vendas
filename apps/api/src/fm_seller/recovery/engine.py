@@ -29,6 +29,11 @@ from fm_seller.provisioning import trial
 from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.cases import close_case as _close_case
 from fm_seller.recovery.defaults import default_steps
+from fm_seller.recovery.followups import (
+    CLOUD_TEMPLATE_UNAVAILABLE,
+    EVOLUTION_OUTSIDE_WINDOW,
+    enqueue_review,
+)
 from fm_seller.recovery.senders import MessageSender, OutboundMessage, SendError
 from fm_seller.recovery.templates import to_meta
 from fm_seller.recovery.timing import (
@@ -243,10 +248,13 @@ def _close_on_purchase(conn: Conn, tenant_id: uuid.UUID, ev: CheckoutEvent, now:
     if not ev.phone and not ev.email:
         return
     rows = conn.execute(
-        "SELECT rc.id, rc.product_name FROM recovery_cases rc "
+        "SELECT rc.id, rc.product_name, rc.closed_at FROM recovery_cases rc "
         "JOIN contacts ct ON ct.id = rc.contact_id "
         "WHERE rc.tenant_id = %s AND (ct.phone = %s OR lower(ct.email) = %s) "
-        "AND (rc.status = 'open' OR (rc.status = 'exhausted' AND rc.closed_at > %s))",
+        "AND (rc.status = 'open' OR (rc.status = 'exhausted' AND "
+        "(rc.closed_at > %s OR EXISTS "
+        "(SELECT 1 FROM recovery_followups f WHERE f.case_id=rc.id "
+        "AND f.tenant_id=rc.tenant_id AND f.status='pending'))))",
         (tenant_id, ev.phone, ev.email, now - timedelta(days=ATTRIBUTION_DAYS)),
     ).fetchall()
     for row in rows:
@@ -259,7 +267,10 @@ def _close_on_purchase(conn: Conn, tenant_id: uuid.UUID, ev: CheckoutEvent, now:
             (row["id"],),
         ).fetchone()
         assert sent is not None
-        recovered = sent["c"] > 0
+        attributable = row["closed_at"] is None or row["closed_at"] > now - timedelta(
+            days=ATTRIBUTION_DAYS
+        )
+        recovered = sent["c"] > 0 and attributable
         _close_case(
             conn,
             row["id"],
@@ -624,8 +635,25 @@ def _check(conn: Conn, box: SecretBox, step: _Step, now: datetime) -> _Decision 
             (step.tenant_id, ctx["contact_id"], now - timedelta(hours=24)),
         ).fetchone()
         if recent_inbound is None:
+            enqueue_review(
+                conn,
+                tenant_id=step.tenant_id,
+                case_id=step.case_id,
+                step_id=step.id,
+                reason=EVOLUTION_OUTSIDE_WINDOW,
+                at=now,
+            )
             return ("skipped", "skipped", "janela_24h_fechada", None)
     if tpl is None or (provider == "whatsapp_cloud" and tpl["meta_status"] != "approved"):
+        if provider == "whatsapp_cloud":
+            enqueue_review(
+                conn,
+                tenant_id=step.tenant_id,
+                case_id=step.case_id,
+                step_id=step.id,
+                reason=CLOUD_TEMPLATE_UNAVAILABLE,
+                at=now,
+            )
         return ("skipped", "skipped", "template_nao_aprovado", None)
     try:
         config = box.decrypt(
