@@ -31,7 +31,7 @@ from fm_seller.merchant.asaas import (
 
 from fm_seller.merchant.fulfillment import create_order_in_tx, set_zone
 from fm_seller.merchant.gateways import (
-    PROVIDERS, HostedGateway, payment_url, provider_client, verified_provider_charge,
+    LABELS, PROVIDERS, HostedGateway, payment_url, provider_client, verified_provider_charge,
 )
 from fm_seller.recovery.engine import handle_event
 from fm_seller.security.crypto import SecretBox
@@ -191,12 +191,17 @@ def _notify_paid_for_chat(conn: Conn, tenant: uuid.UUID, oid: uuid.UUID) -> None
     ).fetchone():
         return
     # No price or additional content comes from an LLM or webhook payload.
+    result = conn.execute(
+        "SELECT provider FROM merchant_charges WHERE tenant_id=%s AND order_id=%s",
+        (tenant, oid),
+    ).fetchone()
+    brand = LABELS.get(result["provider"], "provedor") if result else "provedor"
     enqueue_text(
         conn,
         tenant,
         row["conversation_id"],
         "bot",
-        "Pagamento confirmado pelo Asaas. Seu pedido foi registrado como pago. "
+        f"Pagamento confirmado pelo {brand}. Seu pedido foi registrado como pago. "
         "O estabelecimento dará continuidade ao atendimento. Obrigado!",
     )
 
@@ -797,14 +802,14 @@ class MerchantService:
             inserted = conn.execute(
                 "INSERT INTO merchant_payment_events(tenant_id,provider,external_event_id,"
                 "provider_payment_id,event_type,payload_sha256) "
-                "VALUES(%s,'asaas',%s,%s,%s,%s) ON CONFLICT(tenant_id,external_event_id) "
+                "VALUES(%s,'asaas',%s,%s,%s,%s) ON CONFLICT(tenant_id,provider,external_event_id) "
                 "DO NOTHING RETURNING id",
                 (tenant_id, event_id, payment["id"], kind, fingerprint),
             ).fetchone()
             if inserted is None:
                 old = conn.execute(
                     "SELECT payload_sha256 FROM merchant_payment_events "
-                    "WHERE tenant_id=%s AND external_event_id=%s",
+                    "WHERE tenant_id=%s AND provider='asaas' AND external_event_id=%s",
                     (tenant_id, event_id),
                 ).fetchone()
                 if old is None or old["payload_sha256"] != fingerprint:
