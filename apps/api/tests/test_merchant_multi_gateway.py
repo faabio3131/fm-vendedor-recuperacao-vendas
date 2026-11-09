@@ -77,6 +77,7 @@ def test_provider_switch_keeps_historical_account_and_verifies_mp_webhook(
     fake = FakeHosted()
     from fm_seller.merchant import service as service_module
     from fm_seller.merchant.gateways import provider_client as factory
+
     monkeypatch.setattr(
         service_module,
         "provider_client",
