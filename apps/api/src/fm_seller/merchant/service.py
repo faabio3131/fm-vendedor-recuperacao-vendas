@@ -687,7 +687,7 @@ class MerchantService:
             conn.execute(
                 "UPDATE merchant_orders SET status=%s,"
                 "paid_at=CASE WHEN %s='paid' THEN COALESCE(paid_at,now()) ELSE paid_at END,"
-                "settled_at=CASE WHEN %s='paid' AND %s='RECEIVED' " 
+                "settled_at=CASE WHEN %s='paid' AND %s='RECEIVED' "
                 "THEN COALESCE(settled_at,now()) "
                 "ELSE settled_at END, updated_at=now() WHERE id=%s",
                 (target, target, target, actual, charge["order_id"]),
