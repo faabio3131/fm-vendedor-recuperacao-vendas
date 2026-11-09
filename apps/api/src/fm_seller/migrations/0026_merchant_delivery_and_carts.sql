@@ -39,14 +39,12 @@ CREATE TABLE merchant_order_fulfillment (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS conversations_tenant_id_unique_for_cart ON conversations(tenant_id,id);
 
-CREATE UNIQUE INDEX IF NOT EXISTS conversations_tenant_id_unique_for_cart ON conversations(tenant_id,id);
-
 CREATE TABLE merchant_conversation_carts (
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   conversation_id uuid NOT NULL,
   stage text NOT NULL CHECK(stage IN (
-    'method','postal_code','street','street_number','neighborhood',
-    'city','state','complement','confirm','tax_id','queued','finished'
+    'items','method','postal_code','street','street_number','neighborhood',
+    'city','state','complement','name','confirm','tax_id','queued','finished'
   )),
   items jsonb NOT NULL CHECK (jsonb_typeof(items)='array'),
   draft jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(draft)='object'),

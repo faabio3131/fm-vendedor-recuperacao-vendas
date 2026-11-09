@@ -350,6 +350,12 @@ def handle_cart(
             )
             stage = "tax_id"
     elif stage == "tax_id":
+        # Sanitize the raw incoming message even if encryption/provider is unavailable.
+        conn.execute(
+            "UPDATE messages SET body='[DOCUMENTO FISCAL PROTEGIDO]' "
+            "WHERE tenant_id=%s AND conversation_id=%s AND id=%s",
+            (tenant, conv_id, msg_id),
+        )
         if box is None:
             return "Cobrança indisponível. Nossa equipe deverá concluir o pagamento."
         try:

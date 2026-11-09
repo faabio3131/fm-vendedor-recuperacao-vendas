@@ -109,7 +109,7 @@ function Orders() {
     const offer = offers.find((o) => o.id === item.offer_id);
     return total + (offer?.price_cents ?? 0) * item.quantity;
   }, 0) + (method === "delivery" && matchingZones.length === 1
-    ? matchingZones[0].fee_cents : 0);
+    ? (matchingZones[0]?.fee_cents ?? 0) : 0);
   const addressComplete = method === "pickup" || (
     Boolean(address.street.trim() && address.street_number.trim() &&
       address.neighborhood.trim() && address.city.trim()) &&
@@ -206,7 +206,7 @@ function Orders() {
             <input type="password" autoComplete="off" value={webhookToken} disabled={busy}
               onChange={(e) => setWebhookToken(e.target.value)} placeholder="32 caracteres ou mais" />
           </label>
-          <label>Taxa de entrega padrão (R$)
+          <label>Taxa legada (entregas novas usam áreas de CEP) — R$
             <input inputMode="decimal" value={fee} disabled={busy}
               onChange={(e) => setFee(e.target.value)} placeholder="0,00" />
           </label>

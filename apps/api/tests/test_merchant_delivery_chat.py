@@ -252,5 +252,5 @@ def test_chat_rejects_unsupported_postal_and_ambiguous_products(
     assert "entrega ou retirada" in (step("Pizza Calabresa Broto") or "")
     assert "CEP" in (step("entrega") or "")
     assert "não consta" in (step("99999999") or "")
-    assert "CEP" in (step("retirada") or "") or "não consta" in (step("retirada") or "")
+    assert "nome" in (step("retirada") or "").lower()
     assert env.sql("SELECT count(*) FROM merchant_orders WHERE tenant_id=%s", (tenant,)) == [(0,)]
