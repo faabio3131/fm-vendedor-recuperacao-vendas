@@ -52,7 +52,9 @@ HOSTS = {
 
 def gateway_ref(reference: str, provider: str) -> str:
     """PicPay accepts only 15 chars as order_number."""
-    return hashlib.sha256(reference.encode()).hexdigest()[:15] if provider == "picpay" else reference
+    if provider == "picpay":
+        return hashlib.sha256(reference.encode()).hexdigest()[:15]
+    return reference
 
 
 def payment_url(provider: str, raw: Any) -> str:
@@ -62,7 +64,12 @@ def payment_url(provider: str, raw: Any) -> str:
         url = httpx.URL(raw)
     except (ValueError, httpx.InvalidURL) as exc:
         raise ProviderUncertain("Invalid checkout URL") from exc
-    if url.scheme != "https" or url.userinfo or url.port not in (None, 443) or url.host not in PAY_HOSTS[provider]:
+    if (
+        url.scheme != "https"
+        or url.userinfo
+        or url.port not in (None, 443)
+        or url.host not in PAY_HOSTS[provider]
+    ):
         raise ProviderUncertain("Checkout URL host not approved")
     return raw
 
@@ -105,7 +112,9 @@ class HostedGateway:
             "pagarme": ("/paymentlinks",),
             "picpay": ("/oauth2/token", "/v1/paymentlink", "/sandbox/v1/paymentlink"),
         }[self.provider]
-        if not path.startswith(allowed) or (method == "POST" and self.provider == "pagbank" and path != "/checkouts"):
+        if not path.startswith(allowed) or (
+            method == "POST" and self.provider == "pagbank" and path != "/checkouts"
+        ):
             raise ProviderRejected("Provider operation not permitted")
         if self.provider == "pagarme":
             raw = base64.b64encode((key + ":").encode()).decode()
@@ -327,8 +336,8 @@ class HostedGateway:
                 canonical = "PENDING" if not charges or statuses <= {
                     "WAITING", "AUTHORIZED", "IN_ANALYSIS", "DECLINED", "CANCELED"} else "REVIEW"
             links = row.get("links") or []
-            href = next((l.get("href") for l in links
-                         if isinstance(l, dict) and l.get("rel") == "PAY"), None)
+            href = next((item.get("href") for item in links
+                         if isinstance(item, dict) and item.get("rel") == "PAY"), None)
             return {"id": pid, "externalReference": row.get("reference_id"),
                     "value": _money(sum_cents), "status": canonical, "invoiceUrl": href}
         if p == "pagarme":
@@ -353,7 +362,11 @@ class HostedGateway:
         if not pid:
             # PicPay returns link but may omit id. Extract only a strict final /p/ token.
             url = row.get("link", "")
-            match = re.fullmatch(r"https://(?:link\.picpay\.com|link\.ppay\.me)/p/([a-zA-Z0-9_-]{3,100})", url)
+            match = re.fullmatch(
+                r"https://(?:link\.picpay\.com|link\.ppay\.me)/p/"
+                r"([a-zA-Z0-9_-]{3,100})",
+                url,
+            )
             pid = match.group(1) if match else None
         pid = _id(pid)
         details = row.get("details") or {}
