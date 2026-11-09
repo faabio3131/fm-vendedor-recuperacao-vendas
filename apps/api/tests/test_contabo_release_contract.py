@@ -60,8 +60,11 @@ def test_workflow_requires_main_exact_sha_manual_trigger_and_private_repo_safe_t
     text = WORKFLOW.read_text()
     assert "workflow_dispatch:" in text
     assert "pull_request:" in text
-    assert "push:" in text and "branches: [main]" in text
-    assert "approve_migrations" not in text and "confirmation" not in text
+    assert "  push:" not in text  # merges must NEVER auto-deploy to Contabo
+    assert "if: github.event_name == 'workflow_dispatch'" in text
+    assert "inputs.operation == 'deploy'" in text
+    assert "inputs.director_approved" in text
+    assert "Production requires explicit director approval" in text
     assert "Waiting for CI gates" in text
     assert "environment: contabo-pilot" in text
     assert "refs/heads/main" in text
