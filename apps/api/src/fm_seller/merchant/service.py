@@ -27,9 +27,12 @@ from fm_seller.merchant.asaas import (
     ProviderRejected,
     ProviderUncertain,
     safe_invoice_url,
-    verify_charge,
 )
+
 from fm_seller.merchant.fulfillment import create_order_in_tx, set_zone
+from fm_seller.merchant.gateways import (
+    PROVIDERS, HostedGateway, payment_url, provider_client, verified_provider_charge,
+)
 from fm_seller.recovery.engine import handle_event
 from fm_seller.security.crypto import SecretBox
 from fm_seller.services import EDIT_ROLES, Principal, audit, tenant_features
@@ -209,6 +212,9 @@ class MerchantService:
         self.db, self.box, self.settings = db, box, settings
         self.provider = provider or AsaasClient()
 
+    def _client(self, name: str, *, webhook_url: str | None = None) -> AsaasClient | HostedGateway:
+        return provider_client(name, asaas=self.provider, webhook_url=webhook_url)
+
     def guard(self, p: Principal, *, edit: bool = False) -> None:
         _, _, features = tenant_features(self.db, p)
         if "ai.seller" not in features:
@@ -216,14 +222,25 @@ class MerchantService:
         if edit and p.role not in EDIT_ROLES:
             raise forbidden("Só proprietário e administrador podem operar cobranças.")
 
-    def _account(self, conn: Conn, tenant_id: uuid.UUID) -> tuple[dict[str, Any], dict[str, Any]]:
-        row = conn.execute(
-            "SELECT * FROM merchant_accounts WHERE tenant_id=%s", (tenant_id,)
-        ).fetchone()
+    def _account(
+        self, conn: Conn, tenant_id: uuid.UUID, provider: str | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if provider is None:
+            row = conn.execute(
+                "SELECT * FROM merchant_accounts WHERE tenant_id=%s AND active=true",
+                (tenant_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM merchant_accounts WHERE tenant_id=%s AND provider=%s",
+                (tenant_id, provider),
+            ).fetchone()
         if row is None or row["verified_at"] is None:
-            raise AppError(409, "merchant_not_ready", "Conecte e verifique sua conta Asaas.")
+            raise AppError(409, "merchant_not_ready", "Conecte e verifique sua conta de pagamentos.")
         credentials = self.box.decrypt(
-            row["credentials_encrypted"], tenant_id=str(tenant_id), provider="merchant:asaas"
+            row["credentials_encrypted"],
+            tenant_id=str(tenant_id),
+            provider="merchant:" + row["provider"],
         )
         return row, credentials
 
@@ -231,21 +248,29 @@ class MerchantService:
         self.guard(p)
         with self.db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
             row = conn.execute(
-                "SELECT mode,public_id,verified_at,delivery_fee_cents "
-                "FROM merchant_accounts WHERE tenant_id=%s",
+                "SELECT provider,mode,public_id,verified_at,delivery_fee_cents "
+                "FROM merchant_accounts WHERE tenant_id=%s AND active=true",
                 (p.tenant_id,),
             ).fetchone()
+            accounts = conn.execute(
+                "SELECT provider,mode,verified_at,active FROM merchant_accounts "
+                "WHERE tenant_id=%s ORDER BY provider", (p.tenant_id,),
+            ).fetchall()
+        entries = [
+            {"provider": x["provider"], "mode": x["mode"],
+             "verified": bool(x["verified_at"]), "active": x["active"]}
+            for x in accounts
+        ]
         if not row:
-            return {"provider": "asaas", "configured": False, "verified": False}
+            return {"provider": "asaas", "configured": False, "verified": False, "accounts": entries}
         return {
-            "provider": "asaas",
-            "configured": True,
-            "verified": bool(row["verified_at"]),
+            "provider": row["provider"], "configured": True,
+            "verified": bool(row["verified_at"]), "accounts": entries,
             "mode": row["mode"],
             "delivery_fee_cents": row["delivery_fee_cents"],
             "webhook_url": self.settings.public_base_url.rstrip("/")
-            + "/v1/webhooks/merchant/asaas/"
-            + row["public_id"],
+            + "/v1/webhooks/merchant/"
+            + row["provider"] + "/" + row["public_id"],
         }
 
     def configure(
@@ -255,8 +280,11 @@ class MerchantService:
         access_token: str,
         webhook_token: str,
         delivery_fee_cents: int,
+        provider: str = "asaas",
     ) -> dict[str, Any]:
         self.guard(p, edit=True)
+        if provider not in PROVIDERS:
+            raise bad_request("merchant_provider", "Provedor de pagamento inválido.")
         if mode not in ("sandbox", "production"):
             raise bad_request("payment_mode", "Ambiente financeiro inválido.")
         if len(access_token) < 20 or len(access_token) > 512:
@@ -269,7 +297,7 @@ class MerchantService:
             raise bad_request("webhook_token", "Webhook precisa de um segredo diferente da API.")
         # Verification cannot be claimed from a simulated or failed response.
         try:
-            verified = self.provider.verify_account(mode, access_token)
+            verified = self._client(provider).verify_account(mode, access_token)
         except (ProviderRejected, ProviderUncertain):
             raise AppError(
                 503, "provider_not_verified", "Não foi possível verificar a conta Asaas."
@@ -278,12 +306,12 @@ class MerchantService:
             raise AppError(
                 409,
                 "merchant_unapproved",
-                "A conta Asaas ainda não está aprovada para receber cobranças.",
+                "A conta de pagamentos não foi validada pelo provedor.",
             )
         encrypted = self.box.encrypt(
             {"access_token": access_token, "webhook_token": webhook_token},
             tenant_id=str(p.tenant_id),
-            provider="merchant:asaas",
+            provider="merchant:" + provider,
         )
         with self.db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
             conn.execute(
@@ -293,9 +321,9 @@ class MerchantService:
             active = conn.execute(
                 "SELECT count(*) AS count FROM merchant_charges ch "
                 "JOIN merchant_orders o ON o.id=ch.order_id "
-                "WHERE ch.tenant_id=%s AND o.status IN "
+                "WHERE ch.tenant_id=%s AND ch.provider=%s AND o.status IN "
                 "('charging','awaiting_payment','paid','disputed')",
-                (p.tenant_id,),
+                (p.tenant_id, provider),
             ).fetchone()
             if active and active["count"]:
                 raise AppError(
@@ -304,20 +332,26 @@ class MerchantService:
                     "Não altere credenciais enquanto houver cobranças ou pagamentos vinculados.",
                 )
             conn.execute(
-                "INSERT INTO merchant_accounts(tenant_id,mode,credentials_encrypted,public_id,"
-                "verified_at,delivery_fee_cents) VALUES(%s,%s,%s,%s,now(),%s) "
-                "ON CONFLICT(tenant_id) DO UPDATE SET mode=excluded.mode, "
+                "UPDATE merchant_accounts SET active=false WHERE tenant_id=%s",
+                (p.tenant_id,),
+            )
+            conn.execute(
+                "INSERT INTO merchant_accounts(tenant_id,provider,mode,credentials_encrypted,"
+                "public_id,verified_at,delivery_fee_cents,active) "
+                "VALUES(%s,%s,%s,%s,%s,now(),%s,true) "
+                "ON CONFLICT(tenant_id,provider) DO UPDATE SET mode=excluded.mode, "
                 "credentials_encrypted=excluded.credentials_encrypted, "
-                "verified_at=now(), delivery_fee_cents=excluded.delivery_fee_cents, "
-                "updated_at=now()",
-                (p.tenant_id, mode, encrypted, secrets.token_urlsafe(24), delivery_fee_cents),
+                "verified_at=now(),delivery_fee_cents=excluded.delivery_fee_cents,"
+                "active=true,updated_at=now()",
+                (p.tenant_id, provider, mode, encrypted, secrets.token_urlsafe(24),
+                 delivery_fee_cents),
             )
             audit(
                 conn,
                 tenant_id=p.tenant_id,
                 actor=p.user_id,
                 action="merchant.account.configured",
-                target="asaas",
+                target=provider,
                 detail={"mode": mode},
             )
         return self.get_account(p)
@@ -457,20 +491,22 @@ class MerchantService:
     ) -> None:
         with self.db.tx(tenant_id=tenant_id, user_id=actor) as conn:
             row = conn.execute(
-                "SELECT id,external_reference,amount_cents,provider_payment_id "
+                "SELECT id,provider,external_reference,amount_cents,provider_payment_id "
                 "FROM merchant_charges WHERE tenant_id=%s AND order_id=%s FOR UPDATE",
                 (tenant_id, oid),
             ).fetchone()
             if row is None:
                 raise not_found("Cobrança reservada não encontrada.")
             try:
-                payment_id = verify_charge(
-                    data,
-                    row["external_reference"],
-                    row["amount_cents"],
-                    row["provider_payment_id"],
+                payment_id = verified_provider_charge(
+                    row["provider"], data, row["external_reference"],
+                    row["amount_cents"], row["provider_payment_id"],
                 )
-                invoice = safe_invoice_url(data.get("invoiceUrl"))
+                invoice = (
+                    safe_invoice_url(data.get("invoiceUrl"))
+                    if row["provider"] == "asaas"
+                    else payment_url(row["provider"], data.get("invoiceUrl"))
+                )
             except (AppError, ProviderUncertain):
                 payment_id = None
                 invoice = None
@@ -537,18 +573,24 @@ class MerchantService:
             ref = "av-" + str(oid)
             conn.execute(
                 "INSERT INTO merchant_charges(tenant_id,order_id,provider,mode,"
-                "external_reference,amount_cents) VALUES(%s,%s,'asaas',%s,%s,%s)",
-                (tenant_id, oid, account["mode"], ref, order["total_cents"]),
+                "external_reference,amount_cents) VALUES(%s,%s,%s,%s,%s,%s)",
+                (tenant_id, oid, account["provider"], account["mode"], ref,
+                 order["total_cents"]),
             )
             conn.execute(
                 "UPDATE merchant_orders SET status='charging',updated_at=now() WHERE id=%s",
                 (oid,),
             )
             mode, token = account["mode"], str(config["access_token"])
+            gateway = self._client(
+                account["provider"],
+                webhook_url=self.settings.public_base_url.rstrip("/")
+                + "/v1/webhooks/merchant/" + account["provider"] + "/" + account["public_id"],
+            )
             name, cents = order["customer_name"], order["total_cents"]
         try:
-            customer = self.provider.customer(mode, token, name, tax_id, ref)
-            data = self.provider.create_charge(
+            customer = gateway.customer(mode, token, name, tax_id, ref)
+            data = gateway.create_charge(
                 mode,
                 token,
                 customer,
@@ -579,16 +621,17 @@ class MerchantService:
             ).fetchone()
             if charge is None:
                 raise not_found("Cobrança não encontrada.")
-            account, config = self._account(conn, p.tenant_id)
+            account, config = self._account(conn, p.tenant_id, charge["provider"])
             if charge["mode"] != account["mode"]:
                 raise AppError(409, "provider_mismatch", "Ambiente de cobrança divergente.")
             mode, key = account["mode"], str(config["access_token"])
+            gateway = self._client(account["provider"])
         try:
             actual: dict[str, Any] | None
             if charge["provider_payment_id"]:
-                actual = self.provider.get_charge(mode, key, charge["provider_payment_id"])
+                actual = gateway.get_charge(mode, key, charge["provider_payment_id"])
             else:
-                actual = self.provider.find_charge(mode, key, charge["external_reference"])
+                actual = gateway.find_charge(mode, key, charge["external_reference"])
             if actual is None:
                 raise ProviderUncertain("Charge not found: cannot safely retry")
             if not charge["provider_payment_id"]:
@@ -627,11 +670,9 @@ class MerchantService:
             if expected_oid is not None and charge["order_id"] != expected_oid:
                 raise AppError(409, "finance_mismatch", "Cobrança pertence a outro pedido.")
             try:
-                verified_payment_id = verify_charge(
-                    data,
-                    charge["external_reference"],
-                    charge["amount_cents"],
-                    charge["provider_payment_id"],
+                verified_payment_id = verified_provider_charge(
+                    charge["provider"], data, charge["external_reference"],
+                    charge["amount_cents"], charge["provider_payment_id"],
                 )
             except (AppError, ProviderUncertain):
                 conn.execute(
@@ -669,7 +710,8 @@ class MerchantService:
             previous = order["status"]
             if previous in ("refunded", "disputed", "review", "canceled"):
                 return "terminal"
-            if actual in PROVIDER_PAID and data.get("billingType") == "RECEIVED_IN_CASH":
+            if (charge["provider"] == "asaas" and actual in PROVIDER_PAID
+                    and data.get("billingType") == "RECEIVED_IN_CASH"):
                 # Manually marked cash receipts are not proof of funds at Asaas.
                 target = "review"
             elif actual in PROVIDER_REFUND:
@@ -716,7 +758,7 @@ class MerchantService:
         with self.db.tx(system=True) as conn:
             account = conn.execute(
                 "SELECT tenant_id,credentials_encrypted FROM merchant_accounts "
-                "WHERE public_id=%s AND verified_at IS NOT NULL",
+                "WHERE public_id=%s AND provider='asaas' AND verified_at IS NOT NULL",
                 (public_id,),
             ).fetchone()
         if account is None:
