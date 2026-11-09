@@ -1,11 +1,6 @@
 name: Contabo pilot release (governed)
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
   pull_request:
     paths:
       - ".github/workflows/contabo-pilot-release.yml"
@@ -15,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "inspect ou deploy (push na main faz deploy automático; autorização = sim do Fábio no chat antes do merge)"
+        description: "Somente execução manual: inspect ou deploy com autorização explícita do Diretor"
         required: true
         type: choice
         options: [inspect, deploy]
@@ -23,6 +18,11 @@ on:
         description: "SHA de 40 caracteres, HEAD certificado da main"
         required: true
         type: string
+      director_approved:
+        description: "Declaro autorização expressa do Diretor para migrar e publicar a produção"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,7 +61,7 @@ jobs:
           PY
 
   release:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -72,19 +72,26 @@ jobs:
           persist-credentials: false
       - name: Confirm exact main SHA and kill switch
         env:
-          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
+          TARGET_SHA: ${{ inputs.target_sha }}
           FM_DEPLOY_ENABLED: ${{ secrets.CONTABO_DEPLOY_ENABLED }}
+          DEPLOY_OPERATION: ${{ inputs.operation }}
+          DIRECTOR_APPROVED: ${{ inputs.director_approved }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "::error::Only main may be released"; exit 1; }
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid SHA"; exit 1; }
           [[ "$(git rev-parse HEAD)" == "$TARGET_SHA" ]] || { echo "::error::SHA is not current main"; exit 1; }
           [[ "$FM_DEPLOY_ENABLED" == "FM-PILOTO-ATIVO" ]] || { echo "::error::Protected environment not enabled"; exit 1; }
+          if [[ "$DEPLOY_OPERATION" == "deploy" ]]; then
+            [[ "$DIRECTOR_APPROVED" == "true" ]] || {
+              echo "::error::Production requires explicit director approval"; exit 1;
+            }
+          fi
 
       - name: Verify CI gates for the exact commit
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
+          TARGET_SHA: ${{ inputs.target_sha }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -105,9 +112,9 @@ jobs:
           echo "::error::Timed out waiting for CI gates"; exit 1
 
       - name: Prepare immutable commit archive
-        if: (github.event_name == 'push' || inputs.operation == 'deploy')
+        if: inputs.operation == 'deploy'
         env:
-          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
+          TARGET_SHA: ${{ inputs.target_sha }}
         run: |
           set -euo pipefail
           git archive --format=tar HEAD | gzip -n > "$RUNNER_TEMP/source.tar.gz"
@@ -137,7 +144,7 @@ jobs:
           }
 
       - name: Inspect live installation (read only)
-        if: (github.event_name != 'push' && inputs.operation == 'inspect')
+        if: inputs.operation == 'inspect'
         env:
           DEPLOY_HOST: ${{ vars.CONTABO_DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.CONTABO_DEPLOY_USER }}
@@ -149,11 +156,11 @@ jobs:
             "sudo -n /usr/local/sbin/fm-contabo-deploy inspect"
 
       - name: Stage checked SHA and publish only after backup/restore
-        if: (github.event_name == 'push' || inputs.operation == 'deploy')
+        if: inputs.operation == 'deploy'
         env:
           DEPLOY_HOST: ${{ vars.CONTABO_DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.CONTABO_DEPLOY_USER }}
-          TARGET_SHA: ${{ github.event_name == 'push' && github.sha || inputs.target_sha }}
+          TARGET_SHA: ${{ inputs.target_sha }}
         run: |
           set -euo pipefail
           remote="$DEPLOY_USER@$DEPLOY_HOST"
