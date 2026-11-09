@@ -29,6 +29,7 @@ from fm_seller.merchant.asaas import (
     safe_invoice_url,
 )
 
+from fm_seller.merchant.fulfillment import create_order_in_tx, set_zone
 from fm_seller.merchant.gateways import (
     LABELS,
     PROVIDERS,
@@ -37,7 +38,6 @@ from fm_seller.merchant.gateways import (
     provider_client,
     verified_provider_charge,
 )
-from fm_seller.merchant.fulfillment import create_order_in_tx, set_zone
 from fm_seller.recovery.engine import handle_event
 from fm_seller.security.crypto import SecretBox
 from fm_seller.services import EDIT_ROLES, Principal, audit, tenant_features
