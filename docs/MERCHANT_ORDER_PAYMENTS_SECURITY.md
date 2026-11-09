@@ -55,3 +55,13 @@ Documentação oficial:
 - https://docs.asaas.com/docs/webhook-para-cobrancas
 - https://docs.asaas.com/docs/receba-eventos-do-asaas-no-seu-endpoint-de-webhook
 - https://docs.asaas.com/reference/recuperar-informacoes-de-pagamento-de-uma-cobranca
+
+## Atualização 2026-11-08: carrinho conversacional e entrega
+- API de zonas CEP configuráveis pelo assinante. Faixas não podem se sobrepor; somente o backend calcula a taxa de entrega. CEP válido na faixa não comprova existência do endereço; o cliente precisa confirmar todos os campos e o estabelecimento deve verificar qualquer dúvida.
+- O pedido contém modalidade (entrega ou retirada), endereço confirmado e snapshot financeiro imutável; retirada tem frete zero. Pedido de entrega exige CEP, rua, número, bairro, cidade e UF. Dados de endereço ficam em tabelas RLS tenant-aware.
+- O atendimento WhatsApp utiliza uma máquina de estados determinística no motor de IA existente, sem outro bot, sem preço/endereço calculado por LLM. A conversa só monta o pedido a partir de ofertas registradas e o cliente precisa confirmar o resumo antes de criar o pedido.
+- Antes de gerar cobrança, o pagador fornece CPF/CNPJ válido. O dado é cifrado temporariamente em fila com validade de 24h, o texto original da mensagem é substituído por marcador protegido, e a fila é apagada de segredo após tentativa. Não coletar cartão no WhatsApp.
+- O worker financeiro emite cobrança por referência única somente após consentimento, com proteção contra respostas incertas; o envio do link usa o outbox WhatsApp existente, com opt-out/janela/tenant/limites, sem forçar mensagens após 24h.
+- A oferta representa uma variante vendável: tamanhos, sabores e adicionais que tenham preços diferentes devem ser registrados como ofertas separadas. Meio a meio, peso variável, cálculo por distância e geolocalização ainda exigem motores especializados; não alegar suporte completo sem implementação.
+- O mesmo carrinho não deve ser reaproveitado para outros compradores; não há reutilização de endereço entre conversas sem consentimento. Dados pessoais devem ser tratados na política LGPD do SaaS.
+- A migração adicional 0026 depende das migrations 0024 e 0025. A atualização permanece em PR e não foi promovida à Contabo. Conta Asaas real e webhook real ainda exigem homologação externa.

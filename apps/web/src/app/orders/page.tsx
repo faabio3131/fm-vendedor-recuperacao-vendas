@@ -9,6 +9,19 @@ type Account = {
   mode?: "sandbox" | "production"; delivery_fee_cents?: number;
   webhook_url?: string;
 };
+type Zone = {
+  id: string; name: string; start: string; end: string;
+  fee_cents: number; active: boolean;
+};
+type DeliveryAddress = {
+  postal_code: string; street: string; street_number: string;
+  neighborhood: string; city: string; state: string;
+  complement: string; reference: string;
+};
+const EMPTY_ADDRESS: DeliveryAddress = {
+  postal_code: "", street: "", street_number: "",
+  neighborhood: "", city: "", state: "", complement: "", reference: "",
+};
 type Order = {
   id: string;
   status: "pending" | "charging" | "awaiting_payment" | "paid" | "refunded" | "disputed" | "review" | "canceled";
@@ -16,6 +29,7 @@ type Order = {
   items_cents: number; delivery_fee_cents: number; total_cents: number;
   created_at: string; paid_at: string | null; settled_at: string | null;
   items: { name: string; quantity: number; unit_price_cents: number; line_cents: number }[];
+  fulfillment: (DeliveryAddress & { method: "pickup" | "delivery" }) | null;
   charge: { status: string; provider: string; mode: string; invoice_url: string | null } | null;
 };
 const LABELS: Record<Order["status"], string> = {
@@ -31,6 +45,13 @@ function Orders() {
   const [account, setAccount] = useState<Account | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [zoneName, setZoneName] = useState("");
+  const [zoneStart, setZoneStart] = useState("");
+  const [zoneEnd, setZoneEnd] = useState("");
+  const [zoneFee, setZoneFee] = useState("0,00");
+  const [method, setMethod] = useState<"pickup" | "delivery">("pickup");
+  const [address, setAddress] = useState<DeliveryAddress>(EMPTY_ADDRESS);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"sandbox" | "production">("sandbox");
@@ -46,6 +67,7 @@ function Orders() {
   const load = useCallback(() => {
     api<Account>("/v1/merchant/account").then(setAccount).catch(() => undefined);
     api<Order[]>("/v1/merchant/orders").then(setOrders).catch(() => undefined);
+    api<Zone[]>("/v1/merchant/delivery/zones").then(setZones).catch(() => undefined);
     api<Offer[]>("/v1/seller/offers").then(setOffers).catch(() => undefined);
   }, []);
   useEffect(load, [load]);
@@ -78,10 +100,42 @@ function Orders() {
   }
   const items = Object.entries(selected).filter(([, quantity]) => quantity > 0)
     .map(([offer_id, quantity]) => ({ offer_id, quantity }));
+  const matchingZones = zones.filter((zone) =>
+    zone.active && /^[0-9]{8}$/.test(address.postal_code.replace(/\D/g, "")) &&
+    Number(address.postal_code.replace(/\D/g, "")) >= Number(zone.start) &&
+    Number(address.postal_code.replace(/\D/g, "")) <= Number(zone.end));
+  const deliveryCovered = method === "pickup" || matchingZones.length === 1;
   const estimated = items.reduce((total, item) => {
     const offer = offers.find((o) => o.id === item.offer_id);
     return total + (offer?.price_cents ?? 0) * item.quantity;
-  }, 0) + (account?.delivery_fee_cents ?? 0);
+  }, 0) + (method === "delivery" && matchingZones.length === 1
+    ? matchingZones[0].fee_cents : 0);
+  const addressComplete = method === "pickup" || (
+    Boolean(address.street.trim() && address.street_number.trim() &&
+      address.neighborhood.trim() && address.city.trim()) &&
+    /^[A-Za-z]{2}$/.test(address.state.trim()) && deliveryCovered);
+  async function createZone() {
+    const cents = parseMoney(zoneFee);
+    if (cents === null) { setFeedback("Taxa da região inválida."); return; }
+    await action(async () => {
+      await api("/v1/merchant/delivery/zones", {
+        method: "POST",
+        body: JSON.stringify({
+          name: zoneName.trim(),
+          start: zoneStart.replace(/\D/g, ""),
+          end: zoneEnd.replace(/\D/g, ""), fee_cents: cents,
+        }),
+      });
+      setZoneName(""); setZoneStart(""); setZoneEnd(""); setZoneFee("0,00");
+      setFeedback("Região cadastrada. O frete será calculado no servidor.");
+    });
+  }
+  async function disableZone(id: string) {
+    await action(async () => {
+      await api(`/v1/merchant/delivery/zones/${id}`, { method: "DELETE" });
+      setFeedback("Região desativada para novos pedidos.");
+    });
+  }
   async function createOrder() {
     if (!keyRef.current) keyRef.current = crypto.randomUUID();
     await action(async () => {
@@ -90,10 +144,12 @@ function Orders() {
         body: JSON.stringify({
           idempotency_key: keyRef.current, customer_name: customerName,
           customer_phone: phone, customer_email: email, items,
+          method, address: method === "delivery" ? address : EMPTY_ADDRESS,
         }),
       });
       keyRef.current = "";
       setCustomerName(""); setPhone(""); setEmail(""); setSelected({});
+      setMethod("pickup"); setAddress(EMPTY_ADDRESS);
       setFeedback("Pedido criado. Gere sua cobrança individual antes de enviar ao cliente.");
     });
   }
@@ -159,6 +215,29 @@ function Orders() {
         </div>
       )}
     </section>
+    <section className="card" aria-label="Áreas de entrega">
+      <h2>Áreas de entrega e frete</h2>
+      <p className="muted">Cadastre faixas de CEP sem sobreposição. Fora das regiões cadastradas, a cobrança com entrega fica bloqueada; a IA não inventa taxas.</p>
+      {zones.length === 0 && <p className="muted">Nenhuma área cadastrada. Retirada continua disponível.</p>}
+      {zones.map((z) => (
+        <div className="row" key={z.id} style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+          <span>{z.name}: {z.start}–{z.end} · {brl(z.fee_cents)} {z.active ? "" : "(inativa)"}</span>
+          {canEdit && z.active && <button disabled={busy} onClick={() => void disableZone(z.id)}>Desativar</button>}
+        </div>
+      ))}
+      {canEdit && <div className="row" style={{ flexWrap: "wrap", alignItems: "end" }}>
+        <label>Nome da região<input value={zoneName} maxLength={100} disabled={busy}
+          onChange={(e) => setZoneName(e.target.value)} placeholder="Bairro / Zona" /></label>
+        <label>CEP inicial<input inputMode="numeric" value={zoneStart} maxLength={9} disabled={busy}
+          onChange={(e) => setZoneStart(e.target.value)} placeholder="01001000" /></label>
+        <label>CEP final<input inputMode="numeric" value={zoneEnd} maxLength={9} disabled={busy}
+          onChange={(e) => setZoneEnd(e.target.value)} placeholder="01099999" /></label>
+        <label>Taxa em R$<input inputMode="decimal" value={zoneFee} disabled={busy}
+          onChange={(e) => setZoneFee(e.target.value)} /></label>
+        <button className="primary" disabled={busy || !zoneName.trim() || !zoneStart || !zoneEnd}
+          onClick={() => void createZone()}>Cadastrar área</button>
+      </div>}
+    </section>
     <section className="card">
       <h2>2. Novo pedido</h2>
       <p className="muted">O total é calculado novamente no servidor, com o preço real do catálogo. Não há campo para alterar o preço manualmente.</p>
@@ -175,6 +254,31 @@ function Orders() {
               <input value={email} disabled={busy} maxLength={254} onChange={(e) => setEmail(e.target.value)} />
             </label>
           </div>
+          <h3>Modalidade de atendimento</h3>
+          <label>Entrega ou retirada
+            <select value={method} disabled={busy} onChange={(e) => setMethod(e.target.value as "pickup" | "delivery")}>
+              <option value="pickup">Retirada no estabelecimento — sem frete</option>
+              <option value="delivery">Entrega — conforme CEP da área atendida</option>
+            </select>
+          </label>
+          {method === "delivery" && (
+            <div className="card" style={{ padding: 12 }}>
+              <h3>Endereço de entrega</h3>
+              <p className="muted">Confirme todos os campos com o cliente. A correspondência por CEP é uma regra comercial e não prova que o endereço físico existe.</p>
+              {(Object.keys(EMPTY_ADDRESS) as Array<keyof DeliveryAddress>).map((key) => (
+                <label key={key}>{({
+                  postal_code: "CEP", street: "Rua ou avenida", street_number: "Número",
+                  neighborhood: "Bairro", city: "Cidade", state: "UF",
+                  complement: "Complemento (opcional)", reference: "Referência (opcional)",
+                } as Record<keyof DeliveryAddress, string>)[key]}
+                  <input value={address[key]} disabled={busy} maxLength={key === "state" ? 2 : 150}
+                    onChange={(e) => setAddress((before) => ({ ...before, [key]: e.target.value }))} />
+                </label>
+              ))}
+              {!deliveryCovered && <p role="alert">CEP não coberto por uma única região de entrega.</p>}
+              {deliveryCovered && <p>Frete para este CEP: {brl(matchingZones[0]?.fee_cents ?? 0)}</p>}
+            </div>
+          )}
           <h3>Produtos</h3>
           {offers.filter((o) => o.active && o.price_cents > 0).map((o) => (
             <div className="row" key={o.id} style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
@@ -190,7 +294,7 @@ function Orders() {
             </div>
           ))}
           <p><strong>Total estimado: {brl(estimated)}</strong> (será conferido no servidor)</p>
-          <button className="primary" disabled={busy || !customerName.trim() || items.length === 0}
+          <button className="primary" disabled={busy || !customerName.trim() || items.length === 0 || !addressComplete}
             onClick={() => void createOrder()}>Criar pedido</button>
         </>
       ) : <p className="muted">Configure uma conta de pagamento verificada para registrar pedidos cobrados pelo aplicativo.</p>}
@@ -206,6 +310,9 @@ function Orders() {
             <span>{LABELS[o.status]}</span>
           </div>
           <p className="muted">Pedido {o.id.slice(0, 8)} · {new Date(o.created_at).toLocaleString("pt-BR")}</p>
+          <p className="muted">{o.fulfillment?.method === "delivery"
+            ? `Entrega: ${o.fulfillment.street}, ${o.fulfillment.street_number} — ${o.fulfillment.neighborhood}, ${o.fulfillment.city}/${o.fulfillment.state} · CEP ${o.fulfillment.postal_code} · frete ${brl(o.delivery_fee_cents)}`
+            : "Retirada no estabelecimento"}</p>
           <div className="muted">{o.items.map((it) => `${it.quantity}× ${it.name}`).join(" · ")}</div>
           {o.status === "paid" && <p role="status">Pagamento confirmado pelo provedor. {o.settled_at ? "Valor recebido pela conta Asaas." : "Liquidação ainda pendente."}</p>}
           {["disputed", "refunded", "review"].includes(o.status) && <p role="alert">Atenção: revisão financeira obrigatória antes da entrega.</p>}

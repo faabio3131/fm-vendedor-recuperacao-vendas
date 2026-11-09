@@ -27,6 +27,7 @@ from fm_seller.merchant.asaas import (
     safe_invoice_url,
     verify_charge,
 )
+from fm_seller.merchant.fulfillment import create_order_in_tx, set_zone
 from fm_seller.recovery.engine import handle_event
 from fm_seller.security.crypto import SecretBox
 from fm_seller.services import EDIT_ROLES, Principal, audit, tenant_features
@@ -294,94 +295,87 @@ class MerchantService:
         customer_phone: str,
         customer_email: str,
         lines: list[tuple[uuid.UUID, int]],
+        *,
+        method: str = "pickup",
+        address: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self.guard(p, edit=True)
-        key = _text(idempotency_key, 100)
-        if len(key) < 12 or not re.fullmatch(r"[A-Za-z0-9_-]+", key):
-            raise bad_request("idempotency_key", "Identificador de operação inválido.")
-        name = _text(customer_name, 120)
         phone = re.sub(r"\D", "", customer_phone)
-        if phone and not (10 <= len(phone) <= 15):
-            raise bad_request("phone", "Telefone inválido.")
-        email = customer_email.strip().lower()
-        if email and (len(email) > 254 or "@" not in email):
-            raise bad_request("email", "E-mail inválido.")
-        if not 1 <= len(lines) <= MAX_ITEMS:
-            raise bad_request("items", "Selecione de 1 a 20 itens.")
-        products = [(str(offer_id), qty) for offer_id, qty in lines]
-        if len({k for k, _ in products}) != len(products):
-            raise bad_request("duplicate_item", "Produto repetido; utilize quantidade.")
-        if any(qty < 1 or qty > 99 for _, qty in products):
-            raise bad_request("quantity", "Quantidade deve ser de 1 a 99.")
-        raw = json.dumps(
-            {"name": name, "phone": phone, "email": email, "items": sorted(products)},
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        fingerprint = hashlib.sha256(raw.encode()).hexdigest()
         with self.db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
-            conn.execute(
-                "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
-                ("merchant-order:" + str(p.tenant_id) + ":" + key,),
+            oid = create_order_in_tx(
+                conn,
+                tenant=p.tenant_id,
+                actor=p.user_id,
+                key=idempotency_key,
+                name=customer_name,
+                phone=phone,
+                email=customer_email.strip().lower(),
+                items=lines,
+                method=method,
+                address=address or {},
             )
-            existing = conn.execute(
-                "SELECT id,request_hash FROM merchant_orders "
-                "WHERE tenant_id=%s AND idempotency_key=%s",
-                (p.tenant_id, key),
-            ).fetchone()
-            if existing:
-                if existing["request_hash"] != fingerprint:
-                    raise AppError(
-                        409, "idempotency_conflict", "A mesma chave foi usada em outro pedido."
-                    )
-                return self.order(p, existing["id"])
-            account, _ = self._account(conn, p.tenant_id)
-            items = []
-            sum_cents = 0
-            for offer_id, qty in lines:
-                row = conn.execute(
-                    "SELECT id,name,price_cents FROM offers "
-                    "WHERE tenant_id=%s AND id=%s AND active=true FOR SHARE",
-                    (p.tenant_id, offer_id),
-                ).fetchone()
-                if row is None or row["price_cents"] <= 0:
-                    raise bad_request("offer_invalid", "Produto não disponível ou sem preço.")
-                sum_cents += row["price_cents"] * qty
-                items.append((offer_id, row["name"], row["price_cents"], qty))
-            if sum_cents <= 0 or sum_cents + account["delivery_fee_cents"] > MAX_TOTAL_CENTS:
-                raise bad_request("order_total", "Valor fora do limite de segurança.")
-            inserted = conn.execute(
-                "INSERT INTO merchant_orders(tenant_id,idempotency_key,request_hash,"
-                "customer_name,customer_phone,customer_email,items_cents,delivery_fee_cents)"
-                "VALUES(%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-                (
-                    p.tenant_id,
-                    key,
-                    fingerprint,
-                    name,
-                    phone,
-                    email,
-                    sum_cents,
-                    account["delivery_fee_cents"],
-                ),
-            ).fetchone()
-            assert inserted is not None
-            oid = inserted["id"]
-            for offer_id, product_name, price, qty in items:
-                conn.execute(
-                    "INSERT INTO merchant_order_items(tenant_id,order_id,offer_id,"
-                    "product_name,unit_price_cents,quantity) VALUES(%s,%s,%s,%s,%s,%s)",
-                    (p.tenant_id, oid, offer_id, product_name, price, qty),
-                )
+        return self.order(p, oid)
+
+    def delivery_zones(self, p: Principal) -> list[dict[str, Any]]:
+        self.guard(p)
+        with self.db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
+            rows = conn.execute(
+                "SELECT id,name,cep_start,cep_end,fee_cents,active "
+                "FROM merchant_delivery_zones WHERE tenant_id=%s "
+                "ORDER BY cep_start LIMIT 100",
+                (p.tenant_id,),
+            ).fetchall()
+        return [
+            {
+                "id": str(x["id"]),
+                "name": x["name"],
+                "start": f"{x['cep_start']:08d}",
+                "end": f"{x['cep_end']:08d}",
+                "fee_cents": x["fee_cents"],
+                "active": x["active"],
+            }
+            for x in rows
+        ]
+
+    def save_delivery_zone(
+        self,
+        p: Principal,
+        name: str,
+        first: str,
+        last: str,
+        cents: int,
+        zone_id: uuid.UUID | None = None,
+    ) -> dict[str, str]:
+        self.guard(p, edit=True)
+        with self.db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
+            result = set_zone(conn, p.tenant_id, name, first, last, cents, zone_id=zone_id)
             audit(
                 conn,
                 tenant_id=p.tenant_id,
                 actor=p.user_id,
-                action="merchant.order.created",
-                target=str(oid),
-                detail={"total_cents": sum_cents + account["delivery_fee_cents"]},
+                action="merchant.delivery.zone_saved",
+                target=str(result),
             )
-        return self.order(p, oid)
+        return {"id": str(result)}
+
+    def disable_delivery_zone(self, p: Principal, zone_id: uuid.UUID) -> dict[str, str]:
+        self.guard(p, edit=True)
+        with self.db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
+            row = conn.execute(
+                "UPDATE merchant_delivery_zones SET active=false "
+                "WHERE tenant_id=%s AND id=%s RETURNING id",
+                (p.tenant_id, zone_id),
+            ).fetchone()
+            if not row:
+                raise not_found("Área de entrega não encontrada.")
+            audit(
+                conn,
+                tenant_id=p.tenant_id,
+                actor=p.user_id,
+                action="merchant.delivery.zone_disabled",
+                target=str(zone_id),
+            )
+        return {"status": "disabled"}
 
     def order(self, p: Principal, oid: uuid.UUID) -> dict[str, Any]:
         self.guard(p)
@@ -400,7 +394,15 @@ class MerchantService:
                 "ORDER BY product_name",
                 (p.tenant_id, oid),
             ).fetchall()
-        return _order_data(row, items)
+            fulfillment = conn.execute(
+                "SELECT method,postal_code,street,street_number,neighborhood,city,"
+                "state,complement,reference,confirmed_at FROM merchant_order_fulfillment "
+                "WHERE tenant_id=%s AND order_id=%s",
+                (p.tenant_id, oid),
+            ).fetchone()
+        result = _order_data(row, items)
+        result["fulfillment"] = dict(fulfillment) if fulfillment is not None else None
+        return result
 
     def orders(self, p: Principal) -> list[dict[str, Any]]:
         self.guard(p)
@@ -413,11 +415,16 @@ class MerchantService:
         return [self.order(p, x["id"]) for x in ids]
 
     def _bind_charge(self, p: Principal, oid: uuid.UUID, data: dict[str, Any]) -> None:
-        with self.db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
+        self._bind_charge_internal(p.tenant_id, p.user_id, oid, data)
+
+    def _bind_charge_internal(
+        self, tenant_id: uuid.UUID, actor: uuid.UUID | None, oid: uuid.UUID, data: dict[str, Any]
+    ) -> None:
+        with self.db.tx(tenant_id=tenant_id, user_id=actor) as conn:
             row = conn.execute(
                 "SELECT id,external_reference,amount_cents,provider_payment_id "
                 "FROM merchant_charges WHERE tenant_id=%s AND order_id=%s FOR UPDATE",
-                (p.tenant_id, oid),
+                (tenant_id, oid),
             ).fetchone()
             if row is None:
                 raise not_found("Cobrança reservada não encontrada.")
@@ -443,8 +450,8 @@ class MerchantService:
                 )
                 audit(
                     conn,
-                    tenant_id=p.tenant_id,
-                    actor=p.user_id,
+                    tenant_id=tenant_id,
+                    actor=actor,
                     action="merchant.charge.mismatch",
                     target=str(oid),
                 )
@@ -462,30 +469,41 @@ class MerchantService:
             )
             audit(
                 conn,
-                tenant_id=p.tenant_id,
-                actor=p.user_id,
+                tenant_id=tenant_id,
+                actor=actor,
                 action="merchant.charge.linked",
                 target=str(oid),
             )
 
     def charge(self, p: Principal, oid: uuid.UUID, cpf_cnpj: str) -> dict[str, Any]:
         self.guard(p, edit=True)
+        self._charge_for_tenant(p.tenant_id, oid, cpf_cnpj, actor=p.user_id)
+        return self.order(p, oid)
+
+    def _charge_for_tenant(
+        self,
+        tenant_id: uuid.UUID,
+        oid: uuid.UUID,
+        cpf_cnpj: str,
+        *,
+        actor: uuid.UUID | None = None,
+    ) -> None:
         tax_id = _only_tax_id(cpf_cnpj)  # Never stored, never included in audit.
-        with self.db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
+        with self.db.tx(tenant_id=tenant_id, user_id=actor) as conn:
             order = conn.execute(
                 "SELECT * FROM merchant_orders WHERE tenant_id=%s AND id=%s FOR UPDATE",
-                (p.tenant_id, oid),
+                (tenant_id, oid),
             ).fetchone()
             if order is None:
                 raise not_found("Pedido não encontrado.")
             if order["status"] != "pending":
                 raise AppError(409, "charge_exists", "Pedido já possui cobrança ou está encerrado.")
-            account, config = self._account(conn, p.tenant_id)
+            account, config = self._account(conn, tenant_id)
             ref = "av-" + str(oid)
             conn.execute(
                 "INSERT INTO merchant_charges(tenant_id,order_id,provider,mode,"
                 "external_reference,amount_cents) VALUES(%s,%s,'asaas',%s,%s,%s)",
-                (p.tenant_id, oid, account["mode"], ref, order["total_cents"]),
+                (tenant_id, oid, account["mode"], ref, order["total_cents"]),
             )
             conn.execute(
                 "UPDATE merchant_orders SET status='charging',updated_at=now() WHERE id=%s",
@@ -503,20 +521,19 @@ class MerchantService:
                 cents,
                 (datetime.now(UTC) + timedelta(days=2)).date().isoformat(),
             )
-            self._bind_charge(p, oid, data)
+            self._bind_charge_internal(tenant_id, actor, oid, data)
         except (ProviderRejected, ProviderUncertain):
-            with self.db.tx(tenant_id=p.tenant_id, user_id=p.user_id) as conn:
+            with self.db.tx(tenant_id=tenant_id, user_id=actor) as conn:
                 conn.execute(
                     "UPDATE merchant_charges SET status='unknown',updated_at=now() "
                     "WHERE tenant_id=%s AND order_id=%s AND status='creating'",
-                    (p.tenant_id, oid),
+                    (tenant_id, oid),
                 )
             raise AppError(
                 503,
                 "charge_uncertain",
                 "Criação não confirmada. Não repita: consulte a conciliação do pedido.",
             ) from None
-        return self.order(p, oid)
 
     def reconcile(self, p: Principal, oid: uuid.UUID) -> dict[str, Any]:
         self.guard(p, edit=True)

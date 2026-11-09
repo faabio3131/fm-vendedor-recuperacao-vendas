@@ -31,6 +31,7 @@ from fm_seller.events import capture as captures
 from fm_seller.events import compare as event_compare
 from fm_seller.events.ingest import reprocess_failed
 from fm_seller.logging_setup import setup_logging
+from fm_seller.merchant.chat_worker import process_chat_charge_jobs
 from fm_seller.merchant.worker import process_payment_events
 from fm_seller.migrate import apply_migrations
 from fm_seller.ops.health import check as ops_check
@@ -307,7 +308,8 @@ def _cycle(
         cold = detect_cold_conversations(db, pilot_exclusion=exclusion)
     stats = run_due_steps(db, box, sender)
     audios_first = _voice_step(db, box, settings, model, log)
-    seller = run_ai_replies(db, model, pilot_settings=settings)
+    seller = run_ai_replies(db, model, pilot_settings=settings, box=box)
+    merchant_chat = process_chat_charge_jobs(db, box, settings) if settings is not None else {}
     outbox = flush_outbox(db, box, sender, social=social)
     templates = sync_all(db, box, gateway)
     licencas = _license_step(db, box, settings, log)
@@ -321,6 +323,7 @@ def _cycle(
                 "reprocessados": redone,
                 "compras": redone_platform,
                 "pagamentos_lojas": merchant_payments.__dict__ if merchant_payments else None,
+                "carrinhos_financeiros": merchant_chat,
                 "conversas_frias": cold,
                 "links_checkout_acompanhados": checkout_links,
                 "evolution_envios_reconciliados": evolution_confirmed,

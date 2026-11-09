@@ -38,7 +38,7 @@ test("Pedidos: preço canônico, cobrança exclusiva e status financeiro", async
     const newOrder = {
       id, customer_name: "Cliente de teste", customer_phone: "",
       customer_email: "", items_cents: 11980, delivery_fee_cents: 500,
-      total_cents: 12480, status: "pending", paid_at: null, settled_at: null,
+      total_cents: 11980, status: "pending", paid_at: null, settled_at: null,
       charge: null, created_at: "2026-11-08T14:00:00Z",
       items: [{ name: "Pizza Calabresa", quantity: 2,
         unit_price_cents: 5990, line_cents: 11980 }],
@@ -61,7 +61,7 @@ test("Pedidos: preço canônico, cobrança exclusiva e status financeiro", async
   await expect(page.getByRole("heading", { name: "Pedidos e pagamentos" })).toBeVisible();
   await page.getByLabel("Nome do comprador").fill("Cliente de teste");
   await page.getByLabel("Quantidade").fill("2");
-  await expect(page.getByText("Total estimado: R$ 124,80")).toBeVisible();
+  await expect(page.getByText("Total estimado: R$ 119,80")).toBeVisible();
   await page.getByRole("button", { name: "Criar pedido" }).click();
   await expect(page.getByText("Pedido criado. Gere sua cobrança individual")).toBeVisible();
   expect(created).toBe(1);

@@ -41,12 +41,32 @@ class OrderItemIn(BaseModel):
     quantity: int = Field(ge=1, le=99)
 
 
+class AddressIn(BaseModel):
+    postal_code: str = Field(default="", max_length=9)
+    street: str = Field(default="", max_length=150)
+    street_number: str = Field(default="", max_length=25)
+    neighborhood: str = Field(default="", max_length=100)
+    city: str = Field(default="", max_length=100)
+    state: str = Field(default="", max_length=2)
+    complement: str = Field(default="", max_length=120)
+    reference: str = Field(default="", max_length=120)
+
+
 class OrderIn(BaseModel):
     idempotency_key: str = Field(min_length=12, max_length=100)
     customer_name: str = Field(min_length=1, max_length=120)
     customer_phone: str = Field(default="", max_length=25)
     customer_email: str = Field(default="", max_length=254)
     items: list[OrderItemIn] = Field(min_length=1, max_length=20)
+    method: Literal["pickup", "delivery"] = "pickup"
+    address: AddressIn = Field(default_factory=AddressIn)
+
+
+class DeliveryZoneIn(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    start: str = Field(min_length=8, max_length=8)
+    end: str = Field(min_length=8, max_length=8)
+    fee_cents: int = Field(ge=0, le=100_000)
 
 
 class ChargeIn(BaseModel):
@@ -69,6 +89,26 @@ def put_account(body: AccountIn, s: Svc, p: Who) -> dict[str, Any]:
     )
 
 
+@router.get("/delivery/zones")
+def delivery_zones(s: Svc, p: Who) -> list[dict[str, Any]]:
+    return s.delivery_zones(p)
+
+
+@router.post("/delivery/zones")
+def add_zone(body: DeliveryZoneIn, s: Svc, p: Who) -> dict[str, str]:
+    return s.save_delivery_zone(p, body.name, body.start, body.end, body.fee_cents)
+
+
+@router.put("/delivery/zones/{zone_id}")
+def edit_zone(zone_id: uuid.UUID, body: DeliveryZoneIn, s: Svc, p: Who) -> dict[str, str]:
+    return s.save_delivery_zone(p, body.name, body.start, body.end, body.fee_cents, zone_id)
+
+
+@router.delete("/delivery/zones/{zone_id}")
+def disable_zone(zone_id: uuid.UUID, s: Svc, p: Who) -> dict[str, str]:
+    return s.disable_delivery_zone(p, zone_id)
+
+
 @router.get("/orders")
 def orders(s: Svc, p: Who) -> list[dict[str, Any]]:
     return s.orders(p)
@@ -88,6 +128,8 @@ def create_order(body: OrderIn, s: Svc, p: Who) -> dict[str, Any]:
         body.customer_phone,
         body.customer_email,
         [(x.offer_id, x.quantity) for x in body.items],
+        method=body.method,
+        address=body.address.model_dump(),
     )
 
 

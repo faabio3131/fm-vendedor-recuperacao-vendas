@@ -154,7 +154,7 @@ def test_finance_price_snapshot_duplicate_key_and_tenant_role(
     _, _fake = scope
     pizza = new_offer(client, "Calabresa", 5990)
     first = order(client, pizza)
-    assert first["total_cents"] == 12480
+    assert first["total_cents"] == 11980
     assert first["items"][0]["unit_price_cents"] == 5990
     assert order(client, pizza)["id"] == first["id"]
     changed = client.post(
@@ -168,9 +168,9 @@ def test_finance_price_snapshot_duplicate_key_and_tenant_role(
     assert changed.status_code == 409
     # A catalog change cannot rewrite historical order values.
     env.sql("UPDATE offers SET price_cents=9999 WHERE id=%s", (pizza,))
-    assert client.get(f"{ORDER_BASE}/{first['id']}").json()["total_cents"] == 12480
+    assert client.get(f"{ORDER_BASE}/{first['id']}").json()["total_cents"] == 11980
     two = order(client, pizza, key="pedido-novo-345678123456", qty=1)
-    assert two["total_cents"] == 10499
+    assert two["total_cents"] == 9999
     second_user = unique_email("merchant-other")
     other_tenant = env.tenant("Outra Loja", second_user)
     assert login(client, second_user).status_code == 200
@@ -382,7 +382,7 @@ def test_provider_webhook_before_link_binds_identity_and_preserves_paid(
     response = {
         "id": pid,
         "externalReference": reference,
-        "value": 124.80,
+        "value": 119.80,
         "status": "CONFIRMED",
         "invoiceUrl": "https://sandbox.asaas.com/i/race",
     }
@@ -390,7 +390,7 @@ def test_provider_webhook_before_link_binds_identity_and_preserves_paid(
     env.sql(
         "INSERT INTO merchant_charges(tenant_id,order_id,provider,mode,"
         "external_reference,amount_cents,status) VALUES(%s,%s,'asaas','sandbox',%s,%s,'creating')",
-        (tenant, oid, reference, 12480),
+        (tenant, oid, reference, 11980),
     )
     env.sql("UPDATE merchant_orders SET status='charging' WHERE id=%s", (oid,))
     account = client.get("/v1/merchant/account").json()
