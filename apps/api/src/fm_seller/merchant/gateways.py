@@ -478,8 +478,8 @@ class HostedGateway:
                 "status": status,
                 "invoiceUrl": row.get("url"),
             }
-        pid = payment_id or row.get("id") or row.get("paymentLinkId")
-        if not pid:
+        picpay_pid_candidate = payment_id or row.get("id") or row.get("paymentLinkId")
+        if not picpay_pid_candidate:
             # PicPay returns link but may omit id. Extract only a strict final /p/ token.
             url = row.get("link", "")
             match = re.fullmatch(
@@ -487,8 +487,8 @@ class HostedGateway:
                 r"([a-zA-Z0-9_-]{3,100})",
                 url,
             )
-            pid = match.group(1) if match else None
-        pid = _id(pid)
+            picpay_pid_candidate = match.group(1) if match else None
+        pid = _id(picpay_pid_candidate)
         details = row.get("details") or {}
         cents = int(row.get("amount") or 0)
         txs = row.get("_validated_transactions", [])
