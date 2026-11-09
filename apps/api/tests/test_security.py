@@ -313,6 +313,7 @@ def test_only_known_modules_call_out_to_the_network() -> None:
         "auth/google.py",  # certificados do Google, endereço fixo
         "channels/meta_api.py",  # FM_META_GRAPH_BASE, da plataforma
         "channels/evolution.py",  # Evolution HTTPS e chave da plataforma (ADR-0006)
+        "merchant/asaas.py",  # allowlist hosts Asaas, sem redirecionar; pagamentos dos tenants
         # API de licenças do Command: FM_FMCOMMAND_API_BASE_URL, da plataforma; só https, sem
         # redirecionamento, só GET e desligada por padrão (ADR-0005).
         "licensing/reconcile.py",

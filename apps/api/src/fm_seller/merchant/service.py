@@ -19,6 +19,7 @@ from typing import Any
 from fm_seller.config import Settings
 from fm_seller.db import Conn, Database
 from fm_seller.errors import AppError, bad_request, forbidden, not_found
+from fm_seller.events.normalize import PURCHASE_APPROVED, CheckoutEvent, normalize_phone_br
 from fm_seller.merchant.asaas import (
     AsaasClient,
     ProviderRejected,
@@ -26,6 +27,7 @@ from fm_seller.merchant.asaas import (
     safe_invoice_url,
     verify_charge,
 )
+from fm_seller.recovery.engine import handle_event
 from fm_seller.security.crypto import SecretBox
 from fm_seller.services import EDIT_ROLES, Principal, audit, tenant_features
 
@@ -114,6 +116,50 @@ def _order_data(row: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, A
             else None
         ),
     }
+
+
+def _close_recovery_after_paid(
+    conn: Conn, tenant_id: uuid.UUID, oid: uuid.UUID, now: datetime
+) -> None:
+    """Only verified Asaas payment can close matched recovery cases.
+
+    Match by buyer identity AND product, never by checkout link or model text.
+    No separate notifications are enqueued here.
+    """
+    purchase = conn.execute(
+        "SELECT customer_name,customer_phone,customer_email FROM merchant_orders "
+        "WHERE tenant_id=%s AND id=%s",
+        (tenant_id, oid),
+    ).fetchone()
+    if purchase is None:
+        return
+    phone = normalize_phone_br(purchase["customer_phone"])
+    email = purchase["customer_email"] or None
+    if not phone and not email:
+        return
+    items = conn.execute(
+        "SELECT offer_id,product_name,line_cents FROM merchant_order_items "
+        "WHERE tenant_id=%s AND order_id=%s",
+        (tenant_id, oid),
+    ).fetchall()
+    for item in items:
+        handle_event(
+            conn,
+            tenant_id,
+            CheckoutEvent(
+                kind=PURCHASE_APPROVED,
+                source_event="merchant.asaas.confirmed",
+                external_ref="av-" + str(oid),
+                name=purchase["customer_name"],
+                email=email,
+                phone=phone,
+                product_id=str(item["offer_id"]),
+                product_name=item["product_name"],
+                amount_cents=item["line_cents"],
+                payment_url=None,
+            ),
+            now=now,
+        )
 
 
 class MerchantService:
@@ -405,7 +451,8 @@ class MerchantService:
                 return
             conn.execute(
                 "UPDATE merchant_charges SET provider_payment_id=%s,invoice_url=%s,"
-                "status='pending',updated_at=now() WHERE id=%s",
+                "status=CASE WHEN status IN ('paid','refunded','disputed','review') "
+                "THEN status ELSE 'pending' END,updated_at=now() WHERE id=%s",
                 (payment_id, invoice, row["id"]),
             )
             conn.execute(
@@ -528,7 +575,7 @@ class MerchantService:
             if expected_oid is not None and charge["order_id"] != expected_oid:
                 raise AppError(409, "finance_mismatch", "Cobrança pertence a outro pedido.")
             try:
-                verify_charge(
+                verified_payment_id = verify_charge(
                     data,
                     charge["external_reference"],
                     charge["amount_cents"],
@@ -551,6 +598,15 @@ class MerchantService:
                     target=str(charge["order_id"]),
                 )
                 return "review"
+            # A webhook can arrive between POST /payments and _bind_charge().
+            # Bind its verified provider ID before applying the financial state;
+            # the later bind must not regress an already confirmed payment.
+            if charge["provider_payment_id"] is None:
+                conn.execute(
+                    "UPDATE merchant_charges SET provider_payment_id=%s,updated_at=now() "
+                    "WHERE id=%s AND provider_payment_id IS NULL",
+                    (verified_payment_id, charge["id"]),
+                )
             order = conn.execute(
                 "SELECT status FROM merchant_orders WHERE tenant_id=%s AND id=%s FOR UPDATE",
                 (tenant_id, charge["order_id"]),
@@ -584,6 +640,8 @@ class MerchantService:
                 "UPDATE merchant_charges SET status=%s,updated_at=now() WHERE id=%s",
                 ("pending" if target == "awaiting_payment" else target, charge["id"]),
             )
+            if target == "paid" and previous != "paid":
+                _close_recovery_after_paid(conn, tenant_id, charge["order_id"], datetime.now(UTC))
             if target != previous:
                 audit(
                     conn,

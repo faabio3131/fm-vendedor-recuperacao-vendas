@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Any, cast
 
 import pytest
@@ -171,10 +172,21 @@ def test_finance_price_snapshot_duplicate_key_and_tenant_role(
     two = order(client, pizza, key="pedido-novo-345678123456", qty=1)
     assert two["total_cents"] == 10499
     second_user = unique_email("merchant-other")
-    env.tenant("Outra Loja", second_user)
+    other_tenant = env.tenant("Outra Loja", second_user)
     assert login(client, second_user).status_code == 200
     assert client.get(f"{ORDER_BASE}/{first['id']}").status_code == 404
     assert client.get(ORDER_BASE).json() == []
+    assert other_tenant != scope[0]
+    second = client.put(
+        "/v1/merchant/account",
+        json={
+            "mode": "sandbox",
+            "access_token": KEY,
+            "webhook_token": WEBHOOK + "Z",
+            "delivery_fee_cents": 0,
+        },
+    )
+    assert second.status_code == 200, second.text
     assert client.post(
         ORDER_BASE,
         json={
@@ -352,3 +364,69 @@ def test_provider_unapproved_does_not_save_credentials(
     )
     assert r.status_code == 409
     assert client.get("/v1/merchant/account").json()["configured"] is False
+
+
+def test_provider_webhook_before_link_binds_identity_and_preserves_paid(
+    client: TestClient,
+    env: Env,
+    db: Database,
+    scope: tuple[str, FakeAsaas],
+) -> None:
+    """A confirmed event can race POST /payments response; payment must not regress."""
+    tenant, fake = scope
+    pizza = new_offer(client, "Pizza antecipada", 5990)
+    created = order(client, pizza, key="race-1234567890123456")
+    oid = created["id"]
+    reference = "av-" + oid
+    pid = "pay_race_synthetic_001"
+    response = {
+        "id": pid,
+        "externalReference": reference,
+        "value": 124.80,
+        "status": "CONFIRMED",
+        "invoiceUrl": "https://sandbox.asaas.com/i/race",
+    }
+    fake.payments[pid] = response
+    env.sql(
+        "INSERT INTO merchant_charges(tenant_id,order_id,provider,mode,"
+        "external_reference,amount_cents,status) VALUES(%s,%s,'asaas','sandbox',%s,%s,'creating')",
+        (tenant, oid, reference, 12480),
+    )
+    env.sql("UPDATE merchant_orders SET status='charging' WHERE id=%s", (oid,))
+    account = client.get("/v1/merchant/account").json()
+    assert event(client, account, "evt_race_001", pid, "PAYMENT_CONFIRMED").status_code == 200
+    process_payment_events(db, env.box, env.settings(), client=fake)
+    assert client.get(f"{ORDER_BASE}/{oid}").json()["status"] == "paid"
+    assert env.sql(
+        "SELECT provider_payment_id,status FROM merchant_charges "
+        "WHERE tenant_id=%s AND order_id=%s",
+        (tenant, oid),
+    ) == [(pid, "paid")]
+    # A late POST response may attach invoice URL, but not regress paid to pending.
+    from fm_seller.merchant.service import MerchantService
+    from fm_seller.services import resolve_principal
+
+    principal = resolve_principal(db, client.cookies.get("fm_session"), None)
+    MerchantService(db, env.box, env.settings(), fake)._bind_charge(
+        principal, uuid.UUID(oid), response
+    )
+    assert client.get(f"{ORDER_BASE}/{oid}").json()["status"] == "paid"
+    assert env.sql(
+        "SELECT status FROM merchant_charges WHERE tenant_id=%s AND order_id=%s",
+        (tenant, oid),
+    ) == [("paid",)]
+
+
+def test_financial_duplicate_event_id_with_modified_payload_is_rejected(
+    client: TestClient,
+    scope: tuple[str, FakeAsaas],
+) -> None:
+    _, fake = scope
+    pizza = new_offer(client, "Pizza duplicada", 3000)
+    order_created = charge(client, order(client, pizza, key="replay-123456789012")["id"])
+    pid = next(iter(fake.payments))
+    account = client.get("/v1/merchant/account").json()
+    assert event(client, account, "evt_same_001", pid, "PAYMENT_CONFIRMED").status_code == 200
+    conflict = event(client, account, "evt_same_001", pid, "PAYMENT_REFUNDED")
+    assert conflict.status_code == 409
+    assert client.get(f"{ORDER_BASE}/{order_created['id']}").json()["status"] == "awaiting_payment"
