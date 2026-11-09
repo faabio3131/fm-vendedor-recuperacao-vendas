@@ -281,3 +281,69 @@ def test_chat_rejects_unsupported_postal_and_ambiguous_products(
     assert "não consta" in (step("99999999") or "")
     assert "nome" in (step("retirada") or "").lower()
     assert env.sql("SELECT count(*) FROM merchant_orders WHERE tenant_id=%s", (tenant,)) == [(0,)]
+
+
+def test_disabled_ai_cancels_queued_checkout_without_charging(
+    client: TestClient,
+    env: Env,
+    db: Database,
+    scope: tuple[str, FakeAsaas],
+) -> None:
+    """Disabling the bot after consent must block a pending external charge."""
+    tenant_str, fake = scope
+    tenant = uuid.UUID(tenant_str)
+    pizza = new_offer(client, "Pizza sem cobrança", 3990)
+    connect_whatsapp(client, env, tenant_str)
+    created = client.post(
+        "/v1/merchant/orders",
+        json={
+            "idempotency_key": "ai-disabled-queued-123456",
+            "customer_name": "Cliente",
+            "customer_phone": PHONE,
+            "items": [{"offer_id": pizza, "quantity": 1}],
+        },
+    )
+    assert created.status_code == 200, created.text
+    order_id = created.json()["id"]
+
+    with db.tx(tenant_id=tenant) as conn:
+        _, conversation_id = upsert_conversation(conn, tenant, PHONE, "Cliente")
+        conn.execute(
+            "UPDATE conversations SET last_inbound_at=now(),status='bot' "
+            "WHERE tenant_id=%s AND id=%s",
+            (tenant, conversation_id),
+        )
+        conn.execute(
+            "INSERT INTO tenant_settings(tenant_id,ai_enabled) VALUES(%s,false) "
+            "ON CONFLICT(tenant_id) DO UPDATE SET ai_enabled=false",
+            (tenant,),
+        )
+        protected = env.box.encrypt(
+            {"cpf": FAKE_CPF},
+            tenant_id=str(tenant),
+            provider="merchant:chat-tax",
+        )
+        conn.execute(
+            "INSERT INTO merchant_chat_charge_jobs("
+            "tenant_id,order_id,conversation_id,tax_id_encrypted) "
+            "VALUES(%s,%s,%s,%s)",
+            (tenant, order_id, conversation_id, protected),
+        )
+
+    stats = process_chat_charge_jobs(db, env.box, env.settings(), provider=fake)
+    assert stats["expired"] == 1
+    assert fake.customer_calls == 0
+    assert fake.charge_calls == 0
+    assert env.sql(
+        "SELECT state,tax_id_encrypted IS NULL "
+        "FROM merchant_chat_charge_jobs WHERE tenant_id=%s AND order_id=%s",
+        (tenant, order_id),
+    ) == [("canceled", True)]
+    assert env.sql(
+        "SELECT status FROM merchant_orders WHERE tenant_id=%s AND id=%s",
+        (tenant, order_id),
+    ) == [("pending",)]
+    assert env.sql(
+        "SELECT count(*) FROM merchant_charges WHERE tenant_id=%s AND order_id=%s",
+        (tenant, order_id),
+    ) == [(0,)]
