@@ -29,10 +29,15 @@ from fm_seller.merchant.asaas import (
     safe_invoice_url,
 )
 
-from fm_seller.merchant.fulfillment import create_order_in_tx, set_zone
 from fm_seller.merchant.gateways import (
-    LABELS, PROVIDERS, HostedGateway, payment_url, provider_client, verified_provider_charge,
+    LABELS,
+    PROVIDERS,
+    HostedGateway,
+    payment_url,
+    provider_client,
+    verified_provider_charge,
 )
+from fm_seller.merchant.fulfillment import create_order_in_tx, set_zone
 from fm_seller.recovery.engine import handle_event
 from fm_seller.security.crypto import SecretBox
 from fm_seller.services import EDIT_ROLES, Principal, audit, tenant_features
@@ -241,7 +246,9 @@ class MerchantService:
                 (tenant_id, provider),
             ).fetchone()
         if row is None or row["verified_at"] is None:
-            raise AppError(409, "merchant_not_ready", "Conecte e verifique sua conta de pagamentos.")
+            raise AppError(
+                409, "merchant_not_ready", "Conecte e verifique sua conta de pagamentos."
+            )
         credentials = self.box.decrypt(
             row["credentials_encrypted"],
             tenant_id=str(tenant_id),
@@ -267,7 +274,12 @@ class MerchantService:
             for x in accounts
         ]
         if not row:
-            return {"provider": "asaas", "configured": False, "verified": False, "accounts": entries}
+            return {
+                "provider": "asaas",
+                "configured": False,
+                "verified": False,
+                "accounts": entries,
+            }
         return {
             "provider": row["provider"], "configured": True,
             "verified": bool(row["verified_at"]), "accounts": entries,
