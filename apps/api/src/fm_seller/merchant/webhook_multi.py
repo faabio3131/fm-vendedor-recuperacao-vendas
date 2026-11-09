@@ -1,4 +1,5 @@
 """Authentic multi-gateway webhook intake. Webhook is a signal, never payment proof."""
+
 from __future__ import annotations
 
 import base64
@@ -19,7 +20,9 @@ from fm_seller.merchant.service import MerchantService
 
 
 def _mercadopago_signature(
-    secret: str, headers: Mapping[str, str], query: Mapping[str, str],
+    secret: str,
+    headers: Mapping[str, str],
+    query: Mapping[str, str],
     data_id: str,
 ) -> bool:
     parts = {}
@@ -43,16 +46,17 @@ def _mercadopago_signature(
 
 
 def _pagbank_signature(
-    client: HostedGateway, mode: str, key: str,
-    headers: Mapping[str, str], raw: bytes,
+    client: HostedGateway,
+    mode: str,
+    key: str,
+    headers: Mapping[str, str],
+    raw: bytes,
 ) -> bool:
-    signatures = [p.strip() for p in headers.get("x-payload-signature", "").split(",")
-                  if p.strip()]
+    signatures = [p.strip() for p in headers.get("x-payload-signature", "").split(",") if p.strip()]
     if not signatures:
         return False
     try:
-        row = client._request(mode, key, "GET", "/public-keys",
-                              params={"type": "webhook"})
+        row = client._request(mode, key, "GET", "/public-keys", params={"type": "webhook"})
         der = base64.b64decode(row["public_key"], validate=True)
         public = serialization.load_der_public_key(der)
     except (ValueError, KeyError, TypeError, base64.binascii.Error):
@@ -61,8 +65,9 @@ def _pagbank_signature(
         return False
     for signature in signatures:
         try:
-            public.verify(base64.b64decode(signature, validate=True),
-                          raw, ec.ECDSA(hashes.SHA256()))
+            public.verify(
+                base64.b64decode(signature, validate=True), raw, ec.ECDSA(hashes.SHA256())
+            )
             return True
         except (InvalidSignature, ValueError, base64.binascii.Error):
             continue
@@ -70,8 +75,12 @@ def _pagbank_signature(
 
 
 def receive_gateway_event(
-    service: MerchantService, provider: str, public_id: str,
-    headers: Mapping[str, str], query: Mapping[str, str], raw: bytes,
+    service: MerchantService,
+    provider: str,
+    public_id: str,
+    headers: Mapping[str, str],
+    query: Mapping[str, str],
+    raw: bytes,
 ) -> str:
     if provider not in PROVIDERS or provider == "asaas":
         raise not_found("Webhook financeiro não encontrado.")
@@ -111,8 +120,9 @@ def receive_gateway_event(
             return "ignored"
     elif provider == "pagbank":
         client = HostedGateway(provider)
-        if not _pagbank_signature(client, account["mode"],
-                                  str(credentials["access_token"]), headers, raw):
+        if not _pagbank_signature(
+            client, account["mode"], str(credentials["access_token"]), headers, raw
+        ):
             raise AppError(401, "invalid_payment_webhook", "Assinatura PagBank inválida.")
         candidate = headers.get("x-product-id") or body.get("id") or ""
         pid = str(candidate) if str(candidate).startswith("CHEC_") else None

@@ -1,4 +1,5 @@
 """Transport contracts against synthetic HTTP providers, without charging money."""
+
 from __future__ import annotations
 
 import json
@@ -42,13 +43,20 @@ def test_hosted_checkout_requires_exact_provider_order_and_server_payment(
         if path == "/v1/orders" and request.method == "GET":
             return httpx.Response(200, json={"data": []})
         if path.endswith("/transactions"):
-            return httpx.Response(200, json={
-                "transactions": [{"transactionId": "tx123", "status": "PAYED", "amount": AMOUNT}],
-            })
+            return httpx.Response(
+                200,
+                json={
+                    "transactions": [
+                        {"transactionId": "tx123", "status": "PAYED", "amount": AMOUNT}
+                    ],
+                },
+            )
         if provider == "mercadopago":
             payload = {
-                "id": "ORDTEST123", "external_reference": REF,
-                "total_amount": "12.34", "total_paid_amount": "12.34",
+                "id": "ORDTEST123",
+                "external_reference": REF,
+                "total_amount": "12.34",
+                "total_paid_amount": "12.34",
                 "status": "processed" if request.method == "GET" else "created",
                 "status_detail": "accredited" if request.method == "GET" else "created",
                 "checkout_url": "https://www.mercadopago.com.br/checkout/v1/redirect?order_id=ORDTEST123",
@@ -61,14 +69,25 @@ def test_hosted_checkout_requires_exact_provider_order_and_server_payment(
             return httpx.Response(200, json=payload)
         if provider == "pagbank":
             payload: dict[str, Any] = {
-                "id": "CHEC_123456789", "reference_id": REF,
+                "id": "CHEC_123456789",
+                "reference_id": REF,
                 "items": [{"name": "Teste", "quantity": 1, "unit_amount": AMOUNT}],
-                "links": [{"rel": "PAY",
-                           "href": "https://pagamento.pagbank.com.br/pagamento?code=ABC"}],
-                "orders": [{"charges": [{
-                    "id": "CHAR_123", "status": "PAID",
-                    "amount": {"value": AMOUNT, "summary": {"paid": AMOUNT}},
-                }]}] if request.method == "GET" else [],
+                "links": [
+                    {"rel": "PAY", "href": "https://pagamento.pagbank.com.br/pagamento?code=ABC"}
+                ],
+                "orders": [
+                    {
+                        "charges": [
+                            {
+                                "id": "CHAR_123",
+                                "status": "PAID",
+                                "amount": {"value": AMOUNT, "summary": {"paid": AMOUNT}},
+                            }
+                        ]
+                    }
+                ]
+                if request.method == "GET"
+                else [],
             }
             if request.method == "POST":
                 sent = json.loads(request.content)
@@ -76,7 +95,9 @@ def test_hosted_checkout_requires_exact_provider_order_and_server_payment(
             return httpx.Response(200, json=payload)
         if provider == "pagarme":
             payload = {
-                "id": "pl_123456789", "order_code": REF, "type": "order",
+                "id": "pl_123456789",
+                "order_code": REF,
+                "type": "order",
                 "status": "active",
                 "total_paid_sessions": 1 if request.method == "GET" else 0,
                 "cart_settings": {
@@ -93,17 +114,26 @@ def test_hosted_checkout_requires_exact_provider_order_and_server_payment(
         if request.method == "POST":
             assert sent["charge"]["order_number"] == gateway_ref(REF, "picpay")
             assert sent["charge"]["amounts"]["product"] == AMOUNT
-        return httpx.Response(200, json={
-            "id": "pplink123", "amount": AMOUNT,
-            "details": {"orderNumber": gateway_ref(REF, "picpay")},
-            "link": "https://link.picpay.com/p/pplink123",
-        })
+        return httpx.Response(
+            200,
+            json={
+                "id": "pplink123",
+                "amount": AMOUNT,
+                "details": {"orderNumber": gateway_ref(REF, "picpay")},
+                "link": "https://link.picpay.com/p/pplink123",
+            },
+        )
 
     key = "clientid123:secret123456789" if provider == "picpay" else "fake_merchant_key_123456"
     gateway = HostedGateway(provider, transport=httpx.MockTransport(handler))
     assert gateway.verify_account("sandbox", key)
     before = gateway.create_charge(
-        "sandbox", key, "00000000000", REF, AMOUNT, "2026-11-20",
+        "sandbox",
+        key,
+        "00000000000",
+        REF,
+        AMOUNT,
+        "2026-11-20",
     )
     assert before["status"] == "PENDING"
     assert verified_provider_charge(provider, before, REF, AMOUNT) == before["id"]

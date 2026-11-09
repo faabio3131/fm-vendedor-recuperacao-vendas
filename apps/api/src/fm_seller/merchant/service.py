@@ -28,7 +28,6 @@ from fm_seller.merchant.asaas import (
     ProviderUncertain,
     safe_invoice_url,
 )
-
 from fm_seller.merchant.fulfillment import create_order_in_tx, set_zone
 from fm_seller.merchant.gateways import (
     LABELS,
@@ -266,11 +265,16 @@ class MerchantService:
             ).fetchone()
             accounts = conn.execute(
                 "SELECT provider,mode,verified_at,active FROM merchant_accounts "
-                "WHERE tenant_id=%s ORDER BY provider", (p.tenant_id,),
+                "WHERE tenant_id=%s ORDER BY provider",
+                (p.tenant_id,),
             ).fetchall()
         entries = [
-            {"provider": x["provider"], "mode": x["mode"],
-             "verified": bool(x["verified_at"]), "active": x["active"]}
+            {
+                "provider": x["provider"],
+                "mode": x["mode"],
+                "verified": bool(x["verified_at"]),
+                "active": x["active"],
+            }
             for x in accounts
         ]
         if not row:
@@ -281,13 +285,17 @@ class MerchantService:
                 "accounts": entries,
             }
         return {
-            "provider": row["provider"], "configured": True,
-            "verified": bool(row["verified_at"]), "accounts": entries,
+            "provider": row["provider"],
+            "configured": True,
+            "verified": bool(row["verified_at"]),
+            "accounts": entries,
             "mode": row["mode"],
             "delivery_fee_cents": row["delivery_fee_cents"],
             "webhook_url": self.settings.public_base_url.rstrip("/")
             + "/v1/webhooks/merchant/"
-            + row["provider"] + "/" + row["public_id"],
+            + row["provider"]
+            + "/"
+            + row["public_id"],
         }
 
     def configure(
@@ -360,8 +368,14 @@ class MerchantService:
                 "credentials_encrypted=excluded.credentials_encrypted, "
                 "verified_at=now(),delivery_fee_cents=excluded.delivery_fee_cents,"
                 "active=true,updated_at=now()",
-                (p.tenant_id, provider, mode, encrypted, secrets.token_urlsafe(24),
-                 delivery_fee_cents),
+                (
+                    p.tenant_id,
+                    provider,
+                    mode,
+                    encrypted,
+                    secrets.token_urlsafe(24),
+                    delivery_fee_cents,
+                ),
             )
             audit(
                 conn,
@@ -516,8 +530,11 @@ class MerchantService:
                 raise not_found("Cobrança reservada não encontrada.")
             try:
                 payment_id = verified_provider_charge(
-                    row["provider"], data, row["external_reference"],
-                    row["amount_cents"], row["provider_payment_id"],
+                    row["provider"],
+                    data,
+                    row["external_reference"],
+                    row["amount_cents"],
+                    row["provider_payment_id"],
                 )
                 invoice = (
                     safe_invoice_url(data.get("invoiceUrl"))
@@ -591,8 +608,7 @@ class MerchantService:
             conn.execute(
                 "INSERT INTO merchant_charges(tenant_id,order_id,provider,mode,"
                 "external_reference,amount_cents) VALUES(%s,%s,%s,%s,%s,%s)",
-                (tenant_id, oid, account["provider"], account["mode"], ref,
-                 order["total_cents"]),
+                (tenant_id, oid, account["provider"], account["mode"], ref, order["total_cents"]),
             )
             conn.execute(
                 "UPDATE merchant_orders SET status='charging',updated_at=now() WHERE id=%s",
@@ -602,7 +618,10 @@ class MerchantService:
             gateway = self._client(
                 account["provider"],
                 webhook_url=self.settings.public_base_url.rstrip("/")
-                + "/v1/webhooks/merchant/" + account["provider"] + "/" + account["public_id"],
+                + "/v1/webhooks/merchant/"
+                + account["provider"]
+                + "/"
+                + account["public_id"],
             )
             name, cents = order["customer_name"], order["total_cents"]
         try:
@@ -688,8 +707,11 @@ class MerchantService:
                 raise AppError(409, "finance_mismatch", "Cobrança pertence a outro pedido.")
             try:
                 verified_payment_id = verified_provider_charge(
-                    charge["provider"], data, charge["external_reference"],
-                    charge["amount_cents"], charge["provider_payment_id"],
+                    charge["provider"],
+                    data,
+                    charge["external_reference"],
+                    charge["amount_cents"],
+                    charge["provider_payment_id"],
                 )
             except (AppError, ProviderUncertain):
                 conn.execute(
@@ -727,8 +749,11 @@ class MerchantService:
             previous = order["status"]
             if previous in ("refunded", "disputed", "review", "canceled"):
                 return "terminal"
-            if (charge["provider"] == "asaas" and actual in PROVIDER_PAID
-                    and data.get("billingType") == "RECEIVED_IN_CASH"):
+            if (
+                charge["provider"] == "asaas"
+                and actual in PROVIDER_PAID
+                and data.get("billingType") == "RECEIVED_IN_CASH"
+            ):
                 # Manually marked cash receipts are not proof of funds at Asaas.
                 target = "review"
             elif actual in PROVIDER_REFUND:

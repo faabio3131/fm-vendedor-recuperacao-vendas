@@ -104,10 +104,12 @@ def process_payment_events(
     return stats
 
 
-
 def reconcile_open_charges(
-    db: Database, box: SecretBox, settings: Settings,
-    *, limit: int = 20,
+    db: Database,
+    box: SecretBox,
+    settings: Settings,
+    *,
+    limit: int = 20,
 ) -> dict[str, int]:
     """Bounded read-only provider polling to recover missed notifications.
 
@@ -137,7 +139,9 @@ def reconcile_open_charges(
         try:
             with db.tx(tenant_id=row["tenant_id"]) as conn:
                 account, keys = service._account(
-                    conn, row["tenant_id"], row["provider"],
+                    conn,
+                    row["tenant_id"],
+                    row["provider"],
                 )
                 if row["mode"] != account["mode"]:
                     raise ValueError("Stored gateway environment mismatched")
@@ -145,7 +149,9 @@ def reconcile_open_charges(
             gateway = service._client(row["provider"])
             actual = gateway.get_charge(row["mode"], key, row["provider_payment_id"])
             status = service.apply_status(
-                row["tenant_id"], actual, expected_oid=row["order_id"],
+                row["tenant_id"],
+                actual,
+                expected_oid=row["order_id"],
             )
             stats["checked"] += 1
             if status == "review":

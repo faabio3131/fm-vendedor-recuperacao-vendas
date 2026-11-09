@@ -165,11 +165,17 @@ async def receive_asaas(public_id: str, request: Request) -> dict[str, str]:
 
 @webhook_router.post("/{provider}/{public_id}")
 async def receive_merchant_gateway(
-    provider: str, public_id: str, request: Request,
+    provider: str,
+    public_id: str,
+    request: Request,
 ) -> dict[str, str]:
     raw = await request.body()
     result = receive_gateway_event(
-        service(request), provider, public_id, request.headers,
-        request.query_params, raw,
+        service(request),
+        provider,
+        public_id,
+        request.headers,
+        request.query_params,
+        raw,
     )
     return {"status": result}

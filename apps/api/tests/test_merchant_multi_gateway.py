@@ -1,4 +1,5 @@
 """Multi-provider merchant acceptance: tenant isolation and server-side payment authority."""
+
 from __future__ import annotations
 
 import hashlib
@@ -29,23 +30,28 @@ class FakeHosted:
     def verify_account(self, mode: str, key: str) -> bool:
         return mode in ("sandbox", "production") and key == OTHER_KEY
 
-    def customer(
-        self, mode: str, key: str, name: str, cpf_cnpj: str, reference: str
-    ) -> str:
+    def customer(self, mode: str, key: str, name: str, cpf_cnpj: str, reference: str) -> str:
         assert key == OTHER_KEY
         return cpf_cnpj
 
     def create_charge(
-        self, mode: str, key: str, customer: str,
-        reference: str, cents: int, due: str,
+        self,
+        mode: str,
+        key: str,
+        customer: str,
+        reference: str,
+        cents: int,
+        due: str,
     ) -> dict[str, Any]:
         assert key == OTHER_KEY and customer == FAKE_CPF
         self.charge_calls += 1
         pid = "ORDTEST" + reference[-12:].replace("-", "")
         row: dict[str, Any] = {
-            "id": pid, "value": cents / 100, "externalReference": reference,
-            "status": "PENDING", "invoiceUrl":
-                "https://www.mercadopago.com.br/checkout/v1/redirect?order_id=" + pid,
+            "id": pid,
+            "value": cents / 100,
+            "externalReference": reference,
+            "status": "PENDING",
+            "invoiceUrl": "https://www.mercadopago.com.br/checkout/v1/redirect?order_id=" + pid,
         }
         self.rows[pid] = row
         return row
@@ -56,16 +62,16 @@ class FakeHosted:
         row["status"] = self.status
         return row
 
-    def find_charge(
-        self, mode: str, key: str, reference: str
-    ) -> dict[str, Any] | None:
-        return next((x for x in self.rows.values()
-                     if x["externalReference"] == reference), None)
+    def find_charge(self, mode: str, key: str, reference: str) -> dict[str, Any] | None:
+        return next((x for x in self.rows.values() if x["externalReference"] == reference), None)
 
 
 def test_provider_switch_keeps_historical_account_and_verifies_mp_webhook(
-    client: TestClient, env: Env, db: Database,
-    scope: tuple[str, FakeAsaas], monkeypatch: Any,
+    client: TestClient,
+    env: Env,
+    db: Database,
+    scope: tuple[str, FakeAsaas],
+    monkeypatch: Any,
 ) -> None:
     tenant, old_asaas = scope
     fake = FakeHosted()
@@ -73,17 +79,20 @@ def test_provider_switch_keeps_historical_account_and_verifies_mp_webhook(
 
     factory = service_module.provider_client
     monkeypatch.setattr(
-        service_module, "provider_client",
-        lambda name, asaas=None, webhook_url=None:
-            fake if name == "mercadopago"
-            else factory(name, asaas=asaas, webhook_url=webhook_url),
+        service_module,
+        "provider_client",
+        lambda name, asaas=None, webhook_url=None: (
+            fake if name == "mercadopago" else factory(name, asaas=asaas, webhook_url=webhook_url)
+        ),
     )
 
     account = client.put(
         "/v1/merchant/account",
         json={
-            "provider": "mercadopago", "mode": "production",
-            "access_token": OTHER_KEY, "webhook_token": OTHER_SECRET,
+            "provider": "mercadopago",
+            "mode": "production",
+            "access_token": OTHER_KEY,
+            "webhook_token": OTHER_SECRET,
             "delivery_fee_cents": 500,
         },
     )
@@ -96,16 +105,20 @@ def test_provider_switch_keeps_historical_account_and_verifies_mp_webhook(
     assert OTHER_SECRET not in str(info)
 
     offer = new_offer(client, "Pizza multi PSP", 5000)
-    created = client.post("/v1/merchant/orders", json={
-        "idempotency_key": "multi-merchant-order-12345",
-        "customer_name": "Comprador Sintético",
-        "customer_phone": "5511999888777",
-        "items": [{"offer_id": offer, "quantity": 2}],
-    })
+    created = client.post(
+        "/v1/merchant/orders",
+        json={
+            "idempotency_key": "multi-merchant-order-12345",
+            "customer_name": "Comprador Sintético",
+            "customer_phone": "5511999888777",
+            "items": [{"offer_id": offer, "quantity": 2}],
+        },
+    )
     assert created.status_code == 200, created.text
     oid = created.json()["id"]
-    response = client.post(f"/v1/merchant/orders/{oid}/charge",
-                           json={"customer_cpf_cnpj": FAKE_CPF})
+    response = client.post(
+        f"/v1/merchant/orders/{oid}/charge", json={"customer_cpf_cnpj": FAKE_CPF}
+    )
     assert response.status_code == 200, response.text
     assert response.json()["charge"]["provider"] == "mercadopago"
     pid = next(iter(fake.rows))
@@ -117,17 +130,19 @@ def test_provider_switch_keeps_historical_account_and_verifies_mp_webhook(
     digest = hmac.new(OTHER_SECRET.encode(), manifest.encode(), hashlib.sha256).hexdigest()
     webhook = info["webhook_url"].removeprefix("https://api.example.test")
     body = {"id": "event_123", "type": "order", "data": {"id": pid}}
-    bad = client.post(webhook + "?data.id=" + pid,
-                      headers={"x-signature": "ts=" + ts + ",v1=" + "0"*64,
-                               "x-request-id": request_id},
-                      content=json.dumps(body))
+    bad = client.post(
+        webhook + "?data.id=" + pid,
+        headers={"x-signature": "ts=" + ts + ",v1=" + "0" * 64, "x-request-id": request_id},
+        content=json.dumps(body),
+    )
     assert bad.status_code == 401
     assert client.get(f"/v1/merchant/orders/{oid}").json()["status"] == "awaiting_payment"
 
-    good = client.post(webhook + "?data.id=" + pid,
-                       headers={"x-signature": f"ts={ts},v1={digest}",
-                                "x-request-id": request_id},
-                       content=json.dumps(body))
+    good = client.post(
+        webhook + "?data.id=" + pid,
+        headers={"x-signature": f"ts={ts},v1={digest}", "x-request-id": request_id},
+        content=json.dumps(body),
+    )
     assert good.status_code == 200, good.text
     assert good.json() == {"status": "accepted"}
     fake.status = "CONFIRMED"
@@ -138,10 +153,15 @@ def test_provider_switch_keeps_historical_account_and_verifies_mp_webhook(
 
     # Active provider may be switched, but old provider credentials remain usable
     # for historical reconciliations and refunds.
-    back = client.put("/v1/merchant/account", json={
-        "provider": "asaas", "mode": "sandbox",
-        "access_token": KEY, "webhook_token": WEBHOOK,
-    })
+    back = client.put(
+        "/v1/merchant/account",
+        json={
+            "provider": "asaas",
+            "mode": "sandbox",
+            "access_token": KEY,
+            "webhook_token": WEBHOOK,
+        },
+    )
     assert back.status_code == 200, back.text
     assert back.json()["provider"] == "asaas"
     assert len(back.json()["accounts"]) == 2
