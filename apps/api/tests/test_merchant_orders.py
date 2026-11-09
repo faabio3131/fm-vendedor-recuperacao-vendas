@@ -430,3 +430,30 @@ def test_financial_duplicate_event_id_with_modified_payload_is_rejected(
     conflict = event(client, account, "evt_same_001", pid, "PAYMENT_REFUNDED")
     assert conflict.status_code == 409
     assert client.get(f"{ORDER_BASE}/{order_created['id']}").json()["status"] == "awaiting_payment"
+
+
+def test_manually_recorded_cash_is_not_gateway_settlement(
+    client: TestClient,
+    env: Env,
+    db: Database,
+    scope: tuple[str, FakeAsaas],
+) -> None:
+    """A manual cash receipt in Asaas is not externally settled funds."""
+    _tenant, fake = scope
+    pizza = new_offer(client, "Pizza dinheiro manual", 4990)
+    created = order(client, pizza, key="manual-cash-12345678901")
+    charged = charge(client, created["id"])
+    payment_id = next(iter(fake.payments))
+    fake.payments[payment_id]["status"] = "RECEIVED"
+    fake.payments[payment_id]["billingType"] = "RECEIVED_IN_CASH"
+    account = client.get("/v1/merchant/account").json()
+    assert event(
+        client, account, "evt_manual_cash_01", payment_id, "PAYMENT_RECEIVED"
+    ).status_code == 200
+
+    stats = process_payment_events(db, env.box, env.settings(), client=fake)
+    assert stats.review == 1
+    current = client.get(f"{ORDER_BASE}/{charged['id']}").json()
+    assert current["status"] == "review"
+    assert current["paid_at"] is None
+    assert current["settled_at"] is None
