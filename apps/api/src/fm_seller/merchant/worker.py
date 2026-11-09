@@ -1,7 +1,7 @@
 """Payment webhook reconciliation: authenticate fast, verify on provider server-side.
 
 No webhook body alone can mark an order paid. Each event is durable, leased
-and reconciled via the merchant's own Asaas API key before state transition.
+and reconciled via the merchant's own provider API before state transition.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def process_payment_events(
     for _ in range(max(0, min(limit, 100))):
         with db.tx(system=True) as conn:
             row = conn.execute(
-                "SELECT id,tenant_id,provider_payment_id,attempts "
+                "SELECT id,tenant_id,provider,provider_payment_id,attempts "
                 "FROM merchant_payment_events "
                 "WHERE ((disposition='queued' AND (lease_until IS NULL OR lease_until<=now())) "
                 "OR (disposition='processing' AND lease_until<now())) "
@@ -57,10 +57,11 @@ def process_payment_events(
         result = "review"
         try:
             with db.tx(tenant_id=row["tenant_id"]) as conn:
-                account, keys = service._account(conn, row["tenant_id"])
+                account, keys = service._account(conn, row["tenant_id"], row["provider"])
                 # Never perform a network request while holding a DB transaction.
                 mode, token = account["mode"], str(keys["access_token"])
-            actual = provider.get_charge(mode, token, row["provider_payment_id"])
+            gateway = service._client(account["provider"])
+            actual = gateway.get_charge(mode, token, row["provider_payment_id"])
             result = service.apply_status(row["tenant_id"], actual)
         except Exception as exc:
             # Fail closed. Avoid PII, API tokens and raw provider responses in logs.
