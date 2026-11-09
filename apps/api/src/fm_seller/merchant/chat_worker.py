@@ -98,7 +98,9 @@ def process_chat_charge_jobs(
                     if row["status"] == "paid"
                     else "Seu pedido está registrado. Pague somente neste link seguro:\n"
                     + str(row["invoice_url"])
-                    + "\nAguardaremos a confirmação do " + LABELS.get(str(row["provider"]), "provedor") + "."
+                    + "\nAguardaremos a confirmação do "
+                    + LABELS.get(str(row["provider"]), "provedor")
+                    + "."
                 )
                 status = "done"
             elif row is not None and row["status"] == "pending":
@@ -132,7 +134,9 @@ def process_chat_charge_jobs(
                             if charged["status"] == "paid"
                             else "Seu pedido está registrado. Pague somente neste link seguro:\n"
                             + str(charged["invoice_url"])
-                            + "\nAguardaremos a confirmação do " + LABELS.get(str(charged["provider"]), "provedor") + "."
+                            + "\nAguardaremos a confirmação do "
+                            + LABELS.get(str(charged["provider"]), "provedor")
+                            + "."
                         )
                         status = "done"
         except Exception as exc:
