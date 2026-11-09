@@ -218,6 +218,33 @@ def test_conversational_cart_safely_collects_and_sends_unique_link(
         "AND author='bot' AND body LIKE 'Seu pedido está registrado. Pague%%'",
         (tid, cid),
     ) == [(1,)]
+    # A verified provider GET (not a webhook assertion alone) closes the payment.
+    from fm_seller.merchant.worker import process_payment_events
+    from tests.test_merchant_orders import event
+
+    pay_id = next(iter(fake.payments))
+    fake.payments[pay_id]["status"] = "CONFIRMED"
+    configured = client.get("/v1/merchant/account").json()
+    response = event(client, configured, "evt_chat_paid_001", pay_id, "PAYMENT_CONFIRMED")
+    assert response.status_code == 200
+    result = process_payment_events(db, env.box, env.settings(), client=fake)
+    assert result.processed == 1
+    assert env.sql("SELECT status FROM merchant_orders WHERE tenant_id=%s", (tid,)) == [("paid",)]
+    assert env.sql(
+        "SELECT count(*) FROM messages WHERE tenant_id=%s AND conversation_id=%s "
+        "AND author='bot' AND body LIKE 'Pagamento confirmado pelo Asaas%%'",
+        (tid, cid),
+    ) == [(1,)]
+    # Replayed webhook is idempotent; exactly one receipt must remain.
+    assert event(client, configured, "evt_chat_paid_001", pay_id, "PAYMENT_CONFIRMED").json() == {
+        "status": "duplicate"
+    }
+    process_payment_events(db, env.box, env.settings(), client=fake)
+    assert env.sql(
+        "SELECT count(*) FROM messages WHERE tenant_id=%s AND conversation_id=%s "
+        "AND author='bot' AND body LIKE 'Pagamento confirmado pelo Asaas%%'",
+        (tid, cid),
+    ) == [(1,)]
 
 
 def test_chat_rejects_unsupported_postal_and_ambiguous_products(

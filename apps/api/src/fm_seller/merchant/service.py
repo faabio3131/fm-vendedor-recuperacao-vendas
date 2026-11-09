@@ -16,6 +16,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from fm_seller.channels.outbound import enqueue_text
+from fm_seller.channels.reply_policy import connected_whatsapp_provider, window_open
 from fm_seller.config import Settings
 from fm_seller.db import Conn, Database
 from fm_seller.errors import AppError, bad_request, forbidden, not_found
@@ -161,6 +163,39 @@ def _close_recovery_after_paid(
             ),
             now=now,
         )
+
+
+def _notify_paid_for_chat(conn: Conn, tenant: uuid.UUID, oid: uuid.UUID) -> None:
+    """One receipt of provider-confirmed payment, only in an eligible open session."""
+    row = conn.execute(
+        "SELECT c.conversation_id,cv.status,cv.last_inbound_at,ct.phone "
+        "FROM merchant_conversation_carts c "
+        "JOIN conversations cv ON cv.id=c.conversation_id "
+        "AND cv.tenant_id=c.tenant_id "
+        "JOIN contacts ct ON ct.id=cv.contact_id AND ct.tenant_id=cv.tenant_id "
+        "WHERE c.tenant_id=%s AND c.order_id=%s",
+        (tenant, oid),
+    ).fetchone()
+    if not row or row["status"] != "bot":
+        return
+    if not window_open(row["last_inbound_at"], datetime.now(UTC)):
+        return
+    if connected_whatsapp_provider(conn, tenant) is None:
+        return
+    if conn.execute(
+        "SELECT 1 FROM suppressions WHERE tenant_id=%s AND identity=%s",
+        (tenant, row["phone"]),
+    ).fetchone():
+        return
+    # No price or additional content comes from an LLM or webhook payload.
+    enqueue_text(
+        conn,
+        tenant,
+        row["conversation_id"],
+        "bot",
+        "Pagamento confirmado pelo Asaas. Seu pedido foi registrado como pago. "
+        "O estabelecimento dará continuidade ao atendimento. Obrigado!",
+    )
 
 
 class MerchantService:
@@ -659,6 +694,7 @@ class MerchantService:
             )
             if target == "paid" and previous != "paid":
                 _close_recovery_after_paid(conn, tenant_id, charge["order_id"], datetime.now(UTC))
+                _notify_paid_for_chat(conn, tenant_id, charge["order_id"])
             if target != previous:
                 audit(
                     conn,

@@ -196,6 +196,20 @@ def handle_cart(
         and any(word in phrase.split() for word in BUY)
         and bool(_matches(text, offers))
     )
+    if (
+        row is not None
+        and row["order_id"] is not None
+        and (fresh_request or row["expires_at"] < datetime.now(UTC))
+    ):
+        previous = conn.execute(
+            "SELECT status FROM merchant_orders WHERE tenant_id=%s AND id=%s",
+            (tenant, row["order_id"]),
+        ).fetchone()
+        if previous and previous["status"] not in ("paid", "refunded", "canceled"):
+            return (
+                "Já existe um pedido ou cobrança pendente de confirmação. "
+                "Consulte a equipe antes de iniciar outro."
+            )
     if row is not None and (
         (row["expires_at"] < datetime.now(UTC) and row["stage"] != "queued") or fresh_request
     ):
@@ -348,6 +362,10 @@ def handle_cart(
                 "tenant_id=%s AND conversation_id=%s",
                 (oid, tenant, conv_id),
             )
+            # Address and line items are now frozen in the order. Drop the
+            # conversational copy immediately (the order retains its RLS data).
+            draft = {}
+            items = []
             stage = "tax_id"
     elif stage == "tax_id":
         # Sanitize the raw incoming message even if encryption/provider is unavailable.

@@ -91,7 +91,7 @@ def process_chat_charge_jobs(
                 )
             ):
                 message = (
-                    "Pagamento confirmado pelo Asaas. Obrigado!"
+                    None
                     if row["status"] == "paid"
                     else "Seu pedido está registrado. Pague somente neste link seguro:\n"
                     + str(row["invoice_url"])
@@ -125,7 +125,7 @@ def process_chat_charge_jobs(
                         )
                     ):
                         message = (
-                            "Pagamento confirmado pelo Asaas. Obrigado!"
+                            None
                             if charged["status"] == "paid"
                             else "Seu pedido está registrado. Pague somente neste link seguro:\n"
                             + str(charged["invoice_url"])
@@ -149,9 +149,11 @@ def process_chat_charge_jobs(
                 continue
             if status == "done" and message is not None:
                 enqueue_text(conn, tenant, cid, "bot", message)
+            if status in ("done", "review", "canceled"):
                 conn.execute(
                     "UPDATE merchant_conversation_carts "
-                    "SET stage='finished',updated_at=now() "
+                    "SET stage='finished',draft='{}'::jsonb,items='[]'::jsonb,"
+                    "updated_at=now() "
                     "WHERE tenant_id=%s AND conversation_id=%s AND order_id=%s",
                     (tenant, cid, oid),
                 )
@@ -168,12 +170,15 @@ def process_chat_charge_jobs(
             result["review"] += 1
     with db.tx(system=True) as conn:
         conn.execute(
-            "DELETE FROM merchant_conversation_carts "
-            "WHERE expires_at<now() AND stage NOT IN ('queued')"
-        )
-        conn.execute(
             "UPDATE merchant_chat_charge_jobs SET tax_id_encrypted=NULL,"
             "state='canceled',lease_until=NULL "
             "WHERE state IN ('queued','processing') AND expires_at<now()"
+        )
+        conn.execute(
+            "DELETE FROM merchant_conversation_carts c "
+            "WHERE c.expires_at<now() AND NOT EXISTS "
+            "(SELECT 1 FROM merchant_chat_charge_jobs j "
+            "WHERE j.tenant_id=c.tenant_id AND j.order_id=c.order_id "
+            "AND j.state IN ('queued','processing'))"
         )
     return result
