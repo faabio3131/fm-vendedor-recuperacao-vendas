@@ -32,7 +32,7 @@ from fm_seller.events import compare as event_compare
 from fm_seller.events.ingest import reprocess_failed
 from fm_seller.logging_setup import setup_logging
 from fm_seller.merchant.chat_worker import process_chat_charge_jobs
-from fm_seller.merchant.worker import process_payment_events
+from fm_seller.merchant.worker import process_payment_events, reconcile_open_charges
 from fm_seller.migrate import apply_migrations
 from fm_seller.ops.health import check as ops_check
 from fm_seller.ops.health import exit_code, pending_migrations
@@ -276,6 +276,9 @@ def _cycle(
     # Durable authenticated merchant events: verify via provider GET, never trust
     # webhook alone to mark paid; account credentials are tenant-bound encrypted.
     merchant_payments = process_payment_events(db, box, settings) if settings is not None else None
+    merchant_reconciliation = (
+        reconcile_open_charges(db, box, settings) if settings is not None else {}
+    )
     evolution_confirmed = reconcile_uncertain_sends(db, settings) if settings is not None else 0
     if getattr(sender, "pilot_only", False):
         pilot_id = getattr(sender, "pilot_tenant_id", None)
@@ -323,6 +326,7 @@ def _cycle(
                 "reprocessados": redone,
                 "compras": redone_platform,
                 "pagamentos_lojas": merchant_payments.__dict__ if merchant_payments else None,
+                "conciliacao_financeira": merchant_reconciliation,
                 "carrinhos_financeiros": merchant_chat,
                 "conversas_frias": cold,
                 "links_checkout_acompanhados": checkout_links,
