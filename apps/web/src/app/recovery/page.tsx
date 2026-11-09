@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Shell, useMe } from "@/components/Shell";
+import { RecoveryFollowups } from "@/components/RecoveryFollowups";
 import {
   api,
   brl,
@@ -730,11 +731,18 @@ function Recovery() {
       </p>
       {summary && <Readiness s={summary} />}
       {summary && <Summary s={summary} />}
+      {summary && summary.manual_followups_pending > 0 && (
+        <p className="muted">
+          {summary.manual_followups_pending} acompanhamentos precisam de análise humana.{" "}
+          <a href="#acompanhamentos">Ver pendências</a>
+        </p>
+      )}
       <Opportunities onChange={refresh} />
       <Settings canEdit={canEdit} onSaved={loadSummary} />
       <Sequences canEdit={canEdit} />
       <Templates canEdit={canEdit} onChange={loadSummary} />
       <Blocklist canEdit={canEdit} />
+      <RecoveryFollowups version={version} onChange={refresh} canEdit={canEdit} />
       <Cases version={version} onChange={refresh} />
     </>
   );

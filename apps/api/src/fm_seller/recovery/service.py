@@ -77,7 +77,10 @@ class RecoveryService:
             approved = conn.execute(
                 "SELECT count(*) AS c FROM message_templates WHERE meta_status = 'approved'"
             ).fetchone()
-        assert sent is not None and approved is not None
+            pending = conn.execute(
+                "SELECT count(*) AS c FROM recovery_followups WHERE status='pending'"
+            ).fetchone()
+        assert sent is not None and approved is not None and pending is not None
         settings = self.get_settings(p, guard=False)
         status = {r["status"]: r["c"] for r in cases}
         connected = {r["provider"] for r in conns if r["status"] == "connected"}
@@ -87,6 +90,7 @@ class RecoveryService:
             "cases_by_status": {s: status.get(s, 0) for s in CASE_STATUSES},
             "recovered_cents": sum(int(r["cents"]) for r in cases),
             "messages_sent": sent["c"],
+            "manual_followups_pending": pending["c"],
             "skipped_reasons": [{"reason": r["detail"], "count": r["c"]} for r in skipped],
             "readiness": {
                 "whatsapp_connected": "whatsapp_cloud" in connected,
@@ -134,6 +138,89 @@ class RecoveryService:
             }
             for r in rows
         ]
+
+    # ---- acompanhamentos de longo prazo: tarefas humanas, NUNCA disparos
+    def followups(self, p: Principal, status: str, limit: int) -> list[dict[str, Any]]:
+        self._guard(p)
+        if status not in ("pending", "reviewed", "dismissed", "canceled"):
+            raise bad_request("invalid_status", "Situação inválida.")
+        with self._tx(p) as conn:
+            rows = conn.execute(
+                "SELECT f.id, f.case_id, f.reason, f.status, f.created_at, f.closed_at, "
+                "rc.status AS case_status, rc.product_name, rc.amount_cents, "
+                "rc.trigger_kind, ct.name, ct.phone, ct.email, "
+                "s.template_key FROM recovery_followups f "
+                "JOIN recovery_cases rc ON rc.id=f.case_id AND rc.tenant_id=f.tenant_id "
+                "JOIN contacts ct ON ct.id=rc.contact_id AND ct.tenant_id=f.tenant_id "
+                "JOIN recovery_steps s ON s.id=f.step_id AND s.tenant_id=f.tenant_id "
+                "WHERE f.status=%s AND NOT EXISTS "
+                "(SELECT 1 FROM suppressions sup WHERE sup.tenant_id=f.tenant_id "
+                "AND (sup.identity=ct.phone OR sup.identity=lower(ct.email))) "
+                "ORDER BY f.created_at DESC LIMIT %s",
+                (status, max(1, min(limit, 100))),
+            ).fetchall()
+        return [
+            {
+                "id": str(x["id"]),
+                "case_id": str(x["case_id"]),
+                "reason": x["reason"],
+                "status": x["status"],
+                "case_status": x["case_status"],
+                "trigger": x["trigger_kind"],
+                "product": x["product_name"],
+                "amount_cents": x["amount_cents"],
+                "template_key": x["template_key"],
+                "contact": {
+                    "name": x["name"],
+                    "phone": mask_phone(x["phone"]),
+                    "email": mask_email(x["email"]),
+                },
+                "created_at": x["created_at"],
+                "closed_at": x["closed_at"],
+            }
+            for x in rows
+        ]
+
+    def resolve_followup(self, p: Principal, followup_id: Any, action: str) -> dict[str, str]:
+        self._guard(p, edit=True)
+        if action not in ("reviewed", "dismissed"):
+            raise bad_request("invalid_action", "Marque como revisado ou dispensado.")
+        with self._tx(p) as conn:
+            row = conn.execute(
+                "SELECT f.status, f.case_id, rc.status AS case_status, "
+                "ct.phone, ct.email FROM recovery_followups f "
+                "JOIN recovery_cases rc ON rc.id=f.case_id AND rc.tenant_id=f.tenant_id "
+                "JOIN contacts ct ON ct.id=rc.contact_id AND ct.tenant_id=f.tenant_id "
+                "WHERE f.id=%s FOR UPDATE OF f",
+                (followup_id,),
+            ).fetchone()
+            if row is None:
+                raise not_found("Acompanhamento não encontrado.")
+            if row["status"] != "pending":
+                raise AppError(409, "followup_closed", "Este acompanhamento já foi encerrado.")
+            if row["case_status"] not in ("open", "exhausted"):
+                raise AppError(409, "case_closed", "A negociação já foi encerrada.")
+            suppressed = conn.execute(
+                "SELECT 1 FROM suppressions WHERE tenant_id=%s "
+                "AND (identity=%s OR identity=lower(%s))",
+                (p.tenant_id, row["phone"], row["email"]),
+            ).fetchone()
+            if suppressed:
+                raise AppError(409, "contact_suppressed", "Contato não pode ser abordado.")
+            conn.execute(
+                "UPDATE recovery_followups SET status=%s, closed_at=now(), closed_by=%s "
+                "WHERE id=%s",
+                (action, p.user_id, followup_id),
+            )
+            audit(
+                conn,
+                tenant_id=p.tenant_id,
+                actor=p.user_id,
+                action="recovery.followup_review",
+                target=str(followup_id),
+                detail={"status": action},
+            )
+        return {"id": str(followup_id), "status": action}
 
     # ---- ajustes
     def get_settings(self, p: Principal, *, guard: bool = True) -> dict[str, Any]:
