@@ -24,6 +24,7 @@ from fm_seller.api.routes import (
     evolution_webhook,
     health,
     me,
+    merchant,
     onboarding,
     plan,
     platform,
@@ -42,6 +43,7 @@ from fm_seller.db import Database
 from fm_seller.errors import AppError
 from fm_seller.events.ingest import EventHandler
 from fm_seller.logging_setup import setup_logging
+from fm_seller.merchant.asaas import AsaasClient
 from fm_seller.providers.evolution_pairing import EvolutionPairingService
 from fm_seller.providers.testers import ConnectionTester, build_tester
 from fm_seller.recovery.engine import handle_event
@@ -97,6 +99,7 @@ def create_app(
     app.state.connections = ConnectionService(database, cfg, secret_box, conn_tester)
     app.state.evolution_pairing = EvolutionPairingService(database, secret_box, cfg)
     app.state.box = secret_box
+    app.state.merchant_provider = AsaasClient()
     app.state.event_handler = event_handler or handle_event
     app.state.templates = templates or build_template_gateway(cfg)
     app.state.ai_model = ai_model or build_ai_model(cfg)
@@ -183,6 +186,8 @@ def create_app(
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(platform.router, prefix="/v1")
     app.include_router(recovery.router, prefix="/v1")
+    app.include_router(merchant.router, prefix="/v1")
+    app.include_router(merchant.webhook_router, prefix="/v1")
     app.include_router(reports.router, prefix="/v1")
     app.include_router(seller.router, prefix="/v1")
     return app

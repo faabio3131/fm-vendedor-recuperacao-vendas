@@ -36,10 +36,12 @@ from fm_seller.channels.pilot_greeting import (
 from fm_seller.channels.social import identity_of
 from fm_seller.config import Settings
 from fm_seller.db import Conn, Database
+from fm_seller.merchant.chat import handle_cart
 from fm_seller.money import format_brl
 from fm_seller.provisioning import trial
 from fm_seller.provisioning.lifecycle import blocks_service
 from fm_seller.recovery.optout import normalize
+from fm_seller.security.crypto import SecretBox
 from fm_seller.seller.photos import photo_reply
 
 log = logging.getLogger("fm_seller.seller")
@@ -934,6 +936,7 @@ def run_ai_replies(
     now: datetime | None = None,
     limit: int = 50,
     pilot_settings: Settings | None = None,
+    box: SecretBox | None = None,
 ) -> SellerStats:
     now = now or datetime.now(UTC)
     stats = SellerStats()
@@ -954,6 +957,7 @@ def run_ai_replies(
                     row["conversation_id"],
                     now,
                     pilot_settings=pilot_settings,
+                    box=box,
                 )
         except Exception:
             log.exception(
@@ -973,6 +977,7 @@ def _handle_conversation(
     now: datetime,
     *,
     pilot_settings: Settings | None = None,
+    box: SecretBox | None = None,
 ) -> str:
     locked = conn.execute(
         "SELECT cv.status, cv.contact_id, cv.channel, ct.name, ct.phone, cc.external_id "
@@ -1107,6 +1112,29 @@ def _handle_conversation(
     if not offer_rows and not pilot:
         _handoff(conn, tenant_id, conv_id, "sem_ofertas", notify=True)
         return "handoffs"
+    # Persistent merchant cart. Deterministic prices, explicit delivery address
+    # and authorization; no network or payment-side mutation in this transaction.
+    # The FM demo and other social channels remain on their existing paths.
+    if not demo and not pilot and locked["channel"] == "whatsapp":
+        last_cart_reply: str | None = None
+        for message in inbound:
+            reply = handle_cart(
+                conn,
+                tenant_id,
+                conv_id,
+                locked["name"] or "",
+                locked["phone"] or "",
+                message["body"],
+                message["id"],
+                offer_rows,
+                box,
+            )
+            if reply is not None:
+                last_cart_reply = reply
+        if last_cart_reply is not None:
+            enqueue_text(conn, tenant_id, conv_id, "bot", last_cart_reply)
+            conn.execute("UPDATE conversations SET last_message_at=now() WHERE id=%s", (conv_id,))
+            return "replied"
     # Authorized pilot only: a greeting must never depend on a free-form model
     # response, and recent inbound messages can be batched after manual resume.
     # Use the latest question without discarding the preceding messages from
