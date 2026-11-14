@@ -47,9 +47,7 @@ class WebChatSetup:
         )
 
     def client(self) -> TestClient:
-        app = create_app(
-            self.settings(), db=self.db, box=self.env.box, ai_model=SimulatedAiModel()
-        )
+        app = create_app(self.settings(), db=self.db, box=self.env.box, ai_model=SimulatedAiModel())
         return TestClient(app)
 
 
@@ -62,7 +60,11 @@ def test_reply_comes_from_registered_offer_not_from_the_model(s: WebChatSetup) -
     with s.client() as c:
         res = c.post(
             "/v1/web/chat",
-            json={"site": SITE, "session_id": "sess-abc-1", "message": "Quanto custa o Plano Site?"},
+            json={
+                "site": SITE,
+                "session_id": "sess-abc-1",
+                "message": "Quanto custa o Plano Site?",
+            },
             headers={"Origin": ORIGIN},
         )
     assert res.status_code == 200, res.text

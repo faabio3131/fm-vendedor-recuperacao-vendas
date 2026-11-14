@@ -256,9 +256,7 @@ class Settings(BaseSettings):
         if not self.web_chat_enabled:
             return self
         if not self.web_chat_tenants or not self.web_chat_origins:
-            raise ValueError(
-                "FM_WEB_CHAT_ENABLED exige FM_WEB_CHAT_TENANTS e FM_WEB_CHAT_ORIGINS"
-            )
+            raise ValueError("FM_WEB_CHAT_ENABLED exige FM_WEB_CHAT_TENANTS e FM_WEB_CHAT_ORIGINS")
         parse_web_chat_tenants(self.web_chat_tenants)
         parse_web_chat_origins(self.web_chat_origins)
         if self.is_production_like and not self.ai_api_key.get_secret_value():
