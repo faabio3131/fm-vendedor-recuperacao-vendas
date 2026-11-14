@@ -13,6 +13,44 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 MIN_WEBHOOK_SECRET_CHARS = 32
 
 
+def parse_web_chat_tenants(raw: str) -> dict[str, str]:
+    """`site:uuid,site2:uuid2` -> {site: uuid}. `site` é um identificador simples do widget
+    (não é segredo); o valor precisa ser um UUID de tenant canônico."""
+    import uuid as _uuid
+
+    out: dict[str, str] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        site, sep, tenant_id = part.partition(":")
+        if not sep or not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", site):
+            raise ValueError("FM_WEB_CHAT_TENANTS: use site:uuid (identificador simples)")
+        try:
+            parsed = _uuid.UUID(tenant_id)
+        except ValueError:
+            raise ValueError(f"FM_WEB_CHAT_TENANTS: tenant inválido para '{site}'") from None
+        if str(parsed) != tenant_id:
+            raise ValueError(f"FM_WEB_CHAT_TENANTS: use o UUID canônico para '{site}'")
+        if site in out:
+            raise ValueError("FM_WEB_CHAT_TENANTS: site repetido")
+        out[site] = tenant_id
+    return out
+
+
+def parse_web_chat_origins(raw: str) -> tuple[str, ...]:
+    out: list[str] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        parsed = urlsplit(part)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.path not in ("", "/"):
+            raise ValueError(f"FM_WEB_CHAT_ORIGINS: origem inválida '{part}' (use https://dominio)")
+        out.append(part.rstrip("/"))
+    return tuple(out)
+
+
 def parse_webhook_secrets(raw: str) -> dict[str, str]:
     """`kid:segredo,kid2:segredo2` -> {kid: segredo}. Cada segredo precisa de 32+ caracteres."""
     out: dict[str, str] = {}
@@ -127,6 +165,17 @@ class Settings(BaseSettings):
     # Se preenchido, precisa ter ao menos 32 caracteres; valor aleatório próprio, nunca no git.
     fmcc_control_plane_token: str = ""
 
+    # Canal "web": widget de chat embutido em site, mesma IA/ofertas/conhecimento do tenant.
+    # Desligado por padrão. Cada site vira um tenant comum (ex: uso interno da própria FM nos
+    # seus sites institucionais); nada de autenticação de usuário final, só origem (CORS) e
+    # limite de taxa. "site:uuid,site2:uuid2" mapeia o identificador do widget para o tenant.
+    web_chat_enabled: bool = False
+    web_chat_tenants: str = ""
+    # Origens https exatas autorizadas a chamar o widget (vírgula). Vazio com o canal ligado
+    # bloqueia por padrão (fail-closed), não libera geral.
+    web_chat_origins: str = ""
+    web_chat_rate_per_min: int = Field(default=20, ge=1, le=600)
+
     # Billing Central do FM Command (ADR-0005, contrato fmcc.license.v1). TUDO desligado por padrão:
     # `off` não recebe nem consulta nada; `shadow` valida e registra sem alterar licença real;
     # `enforce` aplica a licença do Command (só depois da aprovação humana registrada).
@@ -201,6 +250,31 @@ class Settings(BaseSettings):
         if parsed.int == 0 or str(parsed) != self.pilot_greeting_tenant_id:
             raise ValueError("FM_PILOT_GREETING_TENANT_ID precisa ser UUID canônico")
         return self
+
+    @model_validator(mode="after")
+    def _web_chat_config_is_safe(self) -> Settings:
+        if not self.web_chat_enabled:
+            return self
+        if not self.web_chat_tenants or not self.web_chat_origins:
+            raise ValueError(
+                "FM_WEB_CHAT_ENABLED exige FM_WEB_CHAT_TENANTS e FM_WEB_CHAT_ORIGINS"
+            )
+        parse_web_chat_tenants(self.web_chat_tenants)
+        parse_web_chat_origins(self.web_chat_origins)
+        if self.is_production_like and not self.ai_api_key.get_secret_value():
+            raise ValueError(
+                "FM_WEB_CHAT_ENABLED em staging/produção exige FM_AI_API_KEY "
+                "(sem IA real a conversa só serve para transferir para uma pessoa)"
+            )
+        return self
+
+    @property
+    def web_chat_tenant_map(self) -> dict[str, str]:
+        return parse_web_chat_tenants(self.web_chat_tenants) if self.web_chat_tenants else {}
+
+    @property
+    def web_chat_allowed_origins(self) -> tuple[str, ...]:
+        return parse_web_chat_origins(self.web_chat_origins) if self.web_chat_origins else ()
 
     @model_validator(mode="after")
     def _control_plane_token_is_strong(self) -> Settings:

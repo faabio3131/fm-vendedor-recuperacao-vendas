@@ -969,6 +969,23 @@ def run_ai_replies(
     return stats
 
 
+def handle_conversation_now(
+    db: Database,
+    model: AiModel,
+    tenant_id: uuid.UUID,
+    conv_id: uuid.UUID,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Processa UMA conversa já na hora, fora do ciclo do worker: usada pelo canal "web", que
+    precisa devolver a resposta na própria requisição HTTP, não por fila. Mesma trava de linha
+    (`FOR UPDATE SKIP LOCKED`) da `_handle_conversation`, então não corre com o worker nem com
+    outra chamada concorrente desta função para a mesma conversa; se outro processo já pegou a
+    linha, devolve "ignored" em vez de esperar."""
+    with db.tx(tenant_id=tenant_id) as conn:
+        return _handle_conversation(conn, model, tenant_id, conv_id, now or datetime.now(UTC))
+
+
 def _handle_conversation(
     conn: Conn,
     model: AiModel,

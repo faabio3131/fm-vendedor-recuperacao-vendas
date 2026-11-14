@@ -141,6 +141,12 @@ class Guards:
             ok, wait = lim.check("evoqr:" + _account_key(request, ip), 8, 60)
             if not ok:
                 return self.too_many(wait)
+        if path == WEB_CHAT_PATH and request.method == "POST":
+            # Sem cookie de conta: cada chamada real ao modelo tem custo, então o teto é por
+            # IP e bem mais apertado que o limite genérico da API abaixo.
+            ok, wait = lim.check(f"webchat:{ip}", cfg.web_chat_rate_per_min, 60)
+            if not ok:
+                return self.too_many(wait)
         if is_sensitive(request):
             ok, wait = lim.check(
                 "sens:" + _account_key(request, ip), cfg.rate_sensitive_per_10min, 600
@@ -235,3 +241,48 @@ class BodyLimitMiddleware:
         headers += [(k.lower().encode(), v.encode()) for k, v in security_headers(self.cfg).items()]
         await send({"type": "http.response.start", "status": 413, "headers": headers})
         await send({"type": "http.response.body", "body": body})
+
+
+WEB_CHAT_PATH = "/v1/web/chat"
+
+
+class WebChatCorsMiddleware:
+    """CORS só para `/v1/web/chat`: não alarga o CORS global (que é o da origem única do
+    painel). Fail-closed: sem origem autorizada, nenhum cabeçalho de CORS é adicionado e o
+    navegador do visitante bloqueia a leitura da resposta sozinho."""
+
+    def __init__(
+        self, app: Callable[..., Awaitable[None]], allowed_origins: tuple[str, ...]
+    ) -> None:
+        self.app = app
+        self.allowed = set(allowed_origins)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("path") != WEB_CHAT_PATH:
+            await self.app(scope, receive, send)
+            return
+        headers = dict(scope.get("headers") or [])
+        origin = (headers.get(b"origin") or b"").decode()
+        allowed = origin in self.allowed
+
+        if scope["method"] == "OPTIONS":
+            resp_headers = [(b"content-length", b"0")]
+            if allowed:
+                resp_headers += [
+                    (b"access-control-allow-origin", origin.encode()),
+                    (b"access-control-allow-methods", b"POST, OPTIONS"),
+                    (b"access-control-allow-headers", b"content-type"),
+                    (b"access-control-max-age", b"600"),
+                    (b"vary", b"Origin"),
+                ]
+            await send({"type": "http.response.start", "status": 204, "headers": resp_headers})
+            await send({"type": "http.response.body", "body": b""})
+            return
+
+        async def tagged(message: MutableMapping[str, Any]) -> None:
+            if message["type"] == "http.response.start" and allowed:
+                extra = [(b"access-control-allow-origin", origin.encode()), (b"vary", b"Origin")]
+                message["headers"] = [*list(message.get("headers") or []), *extra]
+            await send(message)
+
+        await self.app(scope, receive, tagged)
