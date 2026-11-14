@@ -13,7 +13,14 @@ from fastapi.responses import JSONResponse
 
 from fm_seller import __version__
 from fm_seller.ai.model import AiModel, build_ai_model
-from fm_seller.api.guards import BodyLimitMiddleware, Guards, request_id_for, security_headers
+from fm_seller.api.guards import (
+    WEB_CHAT_PATH,
+    BodyLimitMiddleware,
+    Guards,
+    WebChatCorsMiddleware,
+    request_id_for,
+    security_headers,
+)
 from fm_seller.api.routes import (
     admin,
     auth,
@@ -33,6 +40,7 @@ from fm_seller.api.routes import (
     reports,
     seller,
     social,
+    web_chat,
     webhooks,
     whatsapp,
 )
@@ -127,8 +135,10 @@ def create_app(
             for name, value in fixed_headers.items():
                 limited.headers[name] = value
             return limited
-        if request.method in UNSAFE and not request.url.path.startswith(
-            ("/v1/webhooks/", "/v1/platform/webhooks/")
+        if (
+            request.method in UNSAFE
+            and not request.url.path.startswith(("/v1/webhooks/", "/v1/platform/webhooks/"))
+            and request.url.path != WEB_CHAT_PATH
         ):
             origin = request.headers.get("origin")
             if origin != cfg.web_origin:
@@ -168,6 +178,7 @@ def create_app(
         )
 
     app.add_middleware(BodyLimitMiddleware, max_bytes=cfg.max_body_bytes, cfg=cfg)
+    app.add_middleware(WebChatCorsMiddleware, allowed_origins=cfg.web_chat_allowed_origins)
     app.include_router(health.router, prefix="/v1")
     app.include_router(auth.router, prefix="/v1")
     app.include_router(me.router, prefix="/v1")
@@ -190,4 +201,5 @@ def create_app(
     app.include_router(merchant.webhook_router, prefix="/v1")
     app.include_router(reports.router, prefix="/v1")
     app.include_router(seller.router, prefix="/v1")
+    app.include_router(web_chat.router, prefix="/v1")
     return app
