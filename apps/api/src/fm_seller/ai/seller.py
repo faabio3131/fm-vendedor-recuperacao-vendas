@@ -50,7 +50,51 @@ MAX_BOT_REPLIES_PER_HOUR = 10
 # exchange. General SaaS tenants retain the original strict anti-abuse ceiling.
 MAX_PILOT_DEMO_REPLIES_PER_HOUR = 40
 HISTORY = 16  # preserve plan/link and recovery context across follow-up turns
-_HUMAN = ("atendente", "humano", "pessoa", "falar com alguem", "gerente", "responsavel")
+# Pedido explícito de falar com uma pessoa, não simples menção à palavra (ex.: "atendente"
+# aparece no próprio nome de produtos como "Atendente IA" da Kordena e não deve virar handoff).
+_HUMAN_PATTERNS = tuple(
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"\bfalar\s+com\s+(?:um[a]?\s+)?(?:atendente|humano|pessoa|gerente|responsavel)\b",
+        r"\b(?:quero|preciso|gostaria\s+de)\s+(?:falar\s+com\s+)?(?:um[a]?\s+)?"
+        r"(?:atendente|humano|gerente|responsavel)\b",
+        r"(?<!se )\bcham(?:a|ar|e)\s+(?:um[a]?\s+)?(?:atendente|humano|gerente|responsavel)\b",
+        r"\bpassar\s+(?:para|pra)\s+(?:um[a]?\s+)?(?:atendente|humano|gerente|responsavel)\b",
+        r"\bfalar\s+com\s+algu[ae]m\b",
+        r"\btem\s+algu[ae]m\s+(?:ai|aqui)\b",
+        r"\bnao\s+quero\s+falar\s+com\s+(?:robo|bot|ia)\b",
+    )
+)
+# Quando a IA não consegue mesmo resolver (sem oferta cadastrada, erro do modelo, limite do
+# plano, ou o próprio modelo pediu ajuda), em vez de já virar "human" sem contexto, oferece um
+# menu por assunto: a conversa continua em status='bot' (handoff_reason guarda o estado
+# transitório "menu_enviado:<causa original>") até a próxima mensagem, que é lida como a
+# escolha do menu - nunca mandada para o modelo. A causa original fica no motivo final
+# ("menu_<escolha>:<causa>") para não perder o diagnóstico de por que a IA não resolveu.
+# Pedido explícito de humano (asks_for_human) pula o menu e vai direto, para não acrescentar
+# fricção a quem já disse o que quer.
+MENU_PENDING_PREFIX = "menu_enviado:"
+MENU_MESSAGE = (
+    "Para eu te direcionar certo, escolha uma opção (só o número):\n"
+    "1 - Suporte (dúvidas de uso, problema técnico)\n"
+    "2 - Financeiro (pagamento, fatura, cancelamento)\n"
+    "3 - Falar com um atendente"
+)
+_MENU_CHOICES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("suporte", re.compile(r"\b1\b|\bsuporte\b|\btecnico\b|\bbug\b|\berro\b", re.IGNORECASE)),
+    (
+        "financeiro",
+        re.compile(
+            r"\b2\b|\bfinanceiro\b|\bpagamento\b|\bfatura\b|\bcobranca\b|\breembolso\b"
+            r"|\bcancelamento\b|\bcancelar\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "atendente",
+        re.compile(r"\b3\b|\batendente\b|\bhumano\b|\bpessoa\b", re.IGNORECASE),
+    ),
+)
 MODEL_RETRY_MESSAGE = "Só um instante, já te respondo."
 _FORBIDDEN = re.compile(r"https?://|www\.|r\$|\breais\b|\bpix\b.*\bchave\b", re.IGNORECASE)
 _PLACEHOLDER = re.compile(r"\{(oferta|preco|link)\}")
@@ -75,7 +119,16 @@ class SellerStats:
 
 def asks_for_human(text: str) -> bool:
     norm = normalize(text)
-    return any(k in norm for k in _HUMAN)
+    return any(p.search(norm) for p in _HUMAN_PATTERNS)
+
+
+def classify_menu_choice(text: str) -> str | None:
+    """Número (1/2/3) ou palavra-chave da resposta ao MENU_MESSAGE. None se não reconhecer."""
+    norm = normalize(text)
+    for choice, pattern in _MENU_CHOICES:
+        if pattern.search(norm):
+            return choice
+    return None
 
 
 _STOP = frozenset(
@@ -929,6 +982,18 @@ def _handoff(
         enqueue_text(conn, tenant_id, conv_id, "bot", HANDOFF_MESSAGE)
 
 
+def _offer_menu(conn: Conn, tenant_id: uuid.UUID, conv_id: uuid.UUID, cause: str) -> None:
+    """A IA não conseguiu resolver (motivo original em `cause`): oferece o menu por assunto
+    em vez de já virar 'human' sem contexto. Fica em status='bot' - a próxima mensagem é lida
+    como escolha, não enviada ao modelo (ver o checkpoint de MENU_PENDING_PREFIX em
+    _handle_conversation), e o motivo original não se perde: vai para o motivo final."""
+    conn.execute(
+        "UPDATE conversations SET handoff_reason = %s WHERE id = %s",
+        (MENU_PENDING_PREFIX + cause, conv_id),
+    )
+    enqueue_text(conn, tenant_id, conv_id, "bot", MENU_MESSAGE)
+
+
 def run_ai_replies(
     db: Database,
     model: AiModel,
@@ -997,7 +1062,8 @@ def _handle_conversation(
     box: SecretBox | None = None,
 ) -> str:
     locked = conn.execute(
-        "SELECT cv.status, cv.contact_id, cv.channel, ct.name, ct.phone, cc.external_id "
+        "SELECT cv.status, cv.handoff_reason, cv.contact_id, cv.channel, ct.name, ct.phone, "
+        "cc.external_id "
         "FROM conversations cv JOIN contacts ct ON ct.id = cv.contact_id "
         "LEFT JOIN contact_channels cc ON cc.contact_id = ct.id AND cc.channel = cv.channel "
         "WHERE cv.id = %s FOR UPDATE OF cv SKIP LOCKED",
@@ -1024,6 +1090,13 @@ def _handle_conversation(
     # as abreviações expandidas. A mensagem original segue guardada e é a que o modelo lê.
     for message in inbound:
         message["body"] = expand_abbreviations(message["body"])
+    pending = locked["handoff_reason"] or ""
+    if pending.startswith(MENU_PENDING_PREFIX):
+        cause = pending[len(MENU_PENDING_PREFIX) :]
+        choice = classify_menu_choice(inbound[-1]["body"])
+        reason = f"menu_{choice}:{cause}" if choice else f"menu_nao_reconhecido:{cause}"
+        _handoff(conn, tenant_id, conv_id, reason, notify=True)
+        return "handoffs"
     pilot = locked["channel"] == "whatsapp" and pilot_contact(
         pilot_settings, tenant_id, locked["phone"]
     )
@@ -1127,7 +1200,7 @@ def _handle_conversation(
             (tenant_id,),
         ).fetchall()
     if not offer_rows and not pilot:
-        _handoff(conn, tenant_id, conv_id, "sem_ofertas", notify=True)
+        _offer_menu(conn, tenant_id, conv_id, "sem_ofertas")
         return "handoffs"
     # Persistent merchant cart. Deterministic prices, explicit delivery address
     # and authorization; no network or payment-side mutation in this transaction.
@@ -1444,7 +1517,7 @@ def _handle_conversation(
     tz = settings["timezone"]
     limit = usage.monthly_limit(conn, tenant_id)
     if limit is None or usage.month_usage(conn, tenant_id, tz)["calls"] >= limit:
-        _handoff(conn, tenant_id, conv_id, "limite_do_plano", notify=True)
+        _offer_menu(conn, tenant_id, conv_id, "limite_do_plano")
         return "handoffs"
 
     registry = {
@@ -1493,7 +1566,7 @@ def _handle_conversation(
         ).fetchone()
         assert waits is not None
         if waits["c"] >= 2:
-            _handoff(conn, tenant_id, conv_id, "erro_do_modelo", notify=True)
+            _offer_menu(conn, tenant_id, conv_id, "erro_do_modelo")
             return "handoffs"
         enqueue_text(conn, tenant_id, conv_id, "bot", MODEL_RETRY_MESSAGE)
         conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
@@ -1508,7 +1581,7 @@ def _handle_conversation(
         conn.execute("UPDATE conversations SET last_message_at = now() WHERE id = %s", (conv_id,))
         return "replied"
     if proposal.kind == "handoff":
-        _handoff(conn, tenant_id, conv_id, proposal.reason or "modelo_pediu", notify=True)
+        _offer_menu(conn, tenant_id, conv_id, proposal.reason or "modelo_pediu")
         return "handoffs"
     text = proposal.text
     enqueue_text(conn, tenant_id, conv_id, "bot", text)

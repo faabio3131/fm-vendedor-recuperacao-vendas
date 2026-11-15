@@ -236,6 +236,8 @@ Em ordem de verificação em `_handle_conversation` (`apps/api/src/fm_seller/ai/
 | `trial_limit_or_expired` | Trial expirado/bloqueado | Verificar status do trial |
 | `pediu_atendente` | O próprio visitante pediu para falar com humano | Comportamento esperado, não é erro |
 | `limite_de_respostas` | Teto de respostas por hora atingido | Esperado sob volume alto; ajustar limite se necessário |
+| `menu_enviado:<causa>` | Menu por assunto enviado, aguardando a escolha do cliente — ver seção 8.2 | Transitório; vira `menu_<escolha>:<causa>` na próxima mensagem |
+| `menu_suporte\|financeiro\|atendente\|nao_reconhecido:<causa>` | Cliente já escolheu uma opção do menu (seção 8.2) | Ler a `<causa>` original só para diagnóstico técnico; o painel já agrupa por escolha |
 
 Se `handoff_reason` estiver vazio/nulo e ainda assim vier a mensagem genérica
 ("Desculpe, não consegui responder agora..."), o erro está em `latest_reply` retornando
@@ -247,6 +249,71 @@ Outros pontos de falha já encontrados neste procedimento:
 - **CORS:** se o domínio do site não estiver em `FM_WEB_CHAT_ORIGINS`, o navegador bloqueia a
   chamada antes mesmo de chegar na API (erro de CORS no console do navegador, não no widget).
 - **Nginx sobrescrito:** ver seção 6.
+
+### 8.1 Atendimento humano: número de WhatsApp compartilhado entre os 4 sites
+
+Hoje, o botão "Continuar no WhatsApp" do widget (`fm-chat-widget.js`, aparece quando a resposta
+vem com `handoff:true`) leva, nos 4 sites (Iron Fit, NFCore, Kordena, FM), para o **mesmo número**:
+`whatsappNumber:"5511978350851"` no `window.FM_CHAT_CONFIG` de cada HTML. Isso é intencional
+(decisão do Fábio, 2026-11-15): por enquanto a FM centraliza o atendimento humano de todos os
+produtos nesse número, em vez de cada produto ter o seu.
+
+**Persona do tenant `fm` (decisão do Fábio, 2026-11-15):** esse número roda a IA do AtendeVendeIA,
+mas configurada como atendimento da **FM Tecnologia como empresa** (que fala dos 4 produtos —
+Iron Fit, NFCore, Kordena, AtendeVendeIA — usando o conhecimento real de cada um, já cadastrado em
+`knowledge_items` para o tenant `fm`), e não como vendedora exclusiva da AtendeVendeIA. Por isso,
+quando um visitante do Iron Fit/NFCore/Kordena clica no botão do widget e chega nesse WhatsApp com
+"Vim pelo site do/da `<produto>` e quero tirar uma dúvida", a IA **responde normalmente** sobre o
+produto certo — não há nenhum desvio especial que pule a IA para esse caso. Só vira handoff para
+humano pelo motivo de sempre (`pediu_atendente`, se o visitante pedir explicitamente por uma
+pessoa) ou pelos outros motivos já existentes (sem oferta cadastrada, IA desligada etc. — seção 8).
+
+Se a persona/ofertas do tenant `fm` forem alteradas de volta para vender só a AtendeVendeIA, esse
+problema (IA tentando vender o produto errado para quem veio de outro site) volta a existir — nesse
+caso, considerar de novo algum desvio automático baseado no prefill "vim pelo site" antes de chamar
+o modelo.
+
+**Como a equipe é avisada:** o número `5511978350851` é um WhatsApp real, pareado via
+Evolution/Baileys (QR Code), que o Fábio acompanha direto no próprio app/celular — então o aviso
+já é a notificação nativa do WhatsApp quando a mensagem chega, igual qualquer conversa. Não existe
+hoje nenhum canal adicional de alerta (e-mail, Slack, push separado) para handoff — não havia
+necessidade, já que o WhatsApp em si já cumpre esse papel. Se um dia esse número deixar de ser
+acompanhado ativamente por uma pessoa, será preciso implementar um canal de notificação à parte
+(não existe infraestrutura de e-mail/webhook de alerta neste repositório hoje).
+
+### 8.2 Menu por assunto quando a IA não resolve (2026-11-15)
+
+Pedido do Fábio: em vez de a conversa virar "human" direto, sem contexto, sempre que a IA
+genuinamente não consegue resolver, ela primeiro oferece um menu numerado:
+
+```
+Para eu te direcionar certo, escolha uma opção (só o número):
+1 - Suporte (dúvidas de uso, problema técnico)
+2 - Financeiro (pagamento, fatura, cancelamento)
+3 - Falar com um atendente
+```
+
+Implementado em `apps/api/src/fm_seller/ai/seller.py`:
+- `MENU_MESSAGE` é o texto acima; `_offer_menu()` manda essa mensagem e marca
+  `handoff_reason = "menu_enviado:<causa>"`, mas **mantém `status = 'bot'`** — a conversa
+  não vira humana ainda.
+- Dispara em 4 situações (antes iam direto para `_handoff(..., notify=True)`): sem oferta
+  ativa cadastrada (`sem_ofertas`), erro do modelo repetido (`erro_do_modelo`), limite mensal
+  do plano atingido (`limite_do_plano`), e o próprio modelo pedindo ajuda (`modelo_pediu` ou
+  o motivo que ele mesmo escreveu).
+- Na próxima mensagem do cliente, `_handle_conversation` detecta o prefixo `menu_enviado:` e
+  **não chama o modelo** — `classify_menu_choice()` lê a resposta (número ou palavra-chave:
+  "suporte"/"técnico"/"bug"/"erro", "financeiro"/"pagamento"/"fatura"/"cobrança"/"reembolso"/
+  "cancelar", "atendente"/"humano"/"pessoa") e já faz o handoff real, com motivo final
+  `menu_<escolha>:<causa original>` (ex.: `menu_financeiro:sem_ofertas`). Se não reconhecer a
+  resposta, vira `menu_nao_reconhecido:<causa>` mesmo assim — não fica esperando para sempre.
+- Pedido explícito de humano (`asks_for_human`, ex.: "quero falar com um atendente") continua
+  pulando o menu e indo direto para `pediu_atendente` — menos fricção para quem já disse o que
+  quer.
+- No painel (`/v1/seller/handoffs` e caixa de conversas), `handoff_group_key()` (backend) e
+  `reasonLabel()` (frontend, `apps/web/src/app/inbox/page.tsx`) agrupam/exibem pela escolha do
+  cliente (ex.: "Escolheu Financeiro no menu"), não pela causa técnica depois dos dois-pontos —
+  a causa fica só no banco, para quem precisar investigar via seção 8.
 
 ## 9. Testando um site já configurado (smoke test rápido)
 
@@ -269,6 +336,10 @@ esperada sempre com `"handoff":false` e um preço/informação real, nunca gené
 | 2026-11-15 | `fm-site-novo` | `7c98a9c` | Widget wiring no `src/build.mjs` (institucional, cor `#128C7E`), preservando o checkout Cakto do Iron Fit já aprovado |
 | 2026-11-15 | infra (servidor) | — | `docker network connect saas-network fm-atendevendeia-api-1`; edição manual de `2.conf` (seção 6) |
 | 2026-11-15 | banco de dados | — | Seeds de `tenant_settings`/`offers`/`knowledge_items` para `ironfit`, `nfcore`, `kordena`, `fm` |
+| 2026-11-15 | `fm-vendedor-recuperacao-vendas` | PR #150 | `asks_for_human()` passa a exigir frase, não substring (corrige falso positivo em "atendente") |
+| 2026-11-15 | `site-ironfit-core` | `ef756fe` | Corrige `whatsappPrefill` do Iron Fit, que citava "FM Tecnologia IA" em vez do Iron Fit |
+| 2026-11-15 | config/dashboard | — | Persona do tenant `fm` passa a representar a FM como empresa (fala dos 4 produtos), não só vender a AtendeVendeIA (seção 8.1) |
+| 2026-11-15 | `fm-vendedor-recuperacao-vendas` | PR #150 | Menu por assunto (Suporte/Financeiro/Atendente) quando a IA não resolve, antes de virar "human" (seção 8.2) |
 
 ---
 *Este documento deve ser atualizado sempre que: um novo site/produto ganhar o chat, a rota

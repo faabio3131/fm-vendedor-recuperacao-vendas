@@ -158,7 +158,7 @@ def test_fraudulent_model_price_is_handed_to_human(
     assert env.sql(
         "SELECT status,handoff_reason FROM conversations WHERE tenant_id=%s",
         (tenant,),
-    ) == [("human", "resposta_invalida")]
+    ) == [("bot", "menu_enviado:resposta_invalida")]
     messages = env.sql(
         "SELECT body FROM messages WHERE tenant_id=%s AND direction='out'", (tenant,)
     )
