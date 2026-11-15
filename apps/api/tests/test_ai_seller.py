@@ -11,7 +11,6 @@ from fm_seller.ai.model import AiReply, SimulatedAiModel, UnavailableAiModel
 from fm_seller.ai.seller import (
     MAX_BOT_REPLIES_PER_HOUR,
     asks_for_human,
-    came_from_site_widget,
     render_reply,
     run_ai_replies,
 )
@@ -376,20 +375,3 @@ def test_asks_for_human_matches_real_requests(text: str) -> None:
 )
 def test_asks_for_human_ignores_bare_mentions(text: str) -> None:
     assert asks_for_human(text) is False
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Olá! Vim pelo site do Iron Fit Core e quero tirar uma dúvida.",
-        "Olá! Vim pelo site do NFCore e quero tirar uma dúvida.",
-        "Olá! Vim pelo site do Kordena e quero tirar uma dúvida.",
-        "Olá! Vim pelo site da FM Tecnologia IA e quero tirar uma dúvida.",
-    ],
-)
-def test_came_from_site_widget_matches_prefill(text: str) -> None:
-    assert came_from_site_widget(text) is True
-
-
-def test_came_from_site_widget_ignores_unrelated_messages() -> None:
-    assert came_from_site_widget("Quanto custa o plano mensal?") is False
