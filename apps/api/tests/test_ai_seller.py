@@ -8,7 +8,12 @@ from datetime import UTC, datetime
 import pytest
 
 from fm_seller.ai.model import AiReply, SimulatedAiModel, UnavailableAiModel
-from fm_seller.ai.seller import MAX_BOT_REPLIES_PER_HOUR, render_reply, run_ai_replies
+from fm_seller.ai.seller import (
+    MAX_BOT_REPLIES_PER_HOUR,
+    asks_for_human,
+    render_reply,
+    run_ai_replies,
+)
 from fm_seller.channels.whatsapp import upsert_conversation
 from fm_seller.db import Database
 from tests.conftest import Env, unique_email
@@ -339,3 +344,34 @@ def test_link_marker_inside_a_question_is_refused() -> None:
     assert render_reply(AiReply("Quer que eu envie o {link} para aproveitar?", "x"), offers) is None
     ok = render_reply(AiReply("Perfeito! Pague por aqui: {link}", "x"), offers)
     assert ok == "Perfeito! Pague por aqui:\nhttps://a.example"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Quero falar com um atendente",
+        "Quero falar com uma atendente",
+        "Pode me passar para um atendente?",
+        "Preciso falar com humano",
+        "Chama um responsavel ai",
+        "Quero falar com alguem da equipe",
+        "Não quero falar com robô, quero uma pessoa",
+        "Tem alguém aí para me ajudar?",
+    ],
+)
+def test_asks_for_human_matches_real_requests(text: str) -> None:
+    assert asks_for_human(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "A atendente da Kordena é só um chatbot de menu?",
+        "Quantas pessoas vocês atendem por dia?",
+        "Quem é o gerente do produto NFCore?",
+        "Sou o responsavel pela compra, qual o preço?",
+        "A IA do Kordena se chama Atendente IA, certo?",
+    ],
+)
+def test_asks_for_human_ignores_bare_mentions(text: str) -> None:
+    assert asks_for_human(text) is False

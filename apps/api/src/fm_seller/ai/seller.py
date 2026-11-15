@@ -50,7 +50,21 @@ MAX_BOT_REPLIES_PER_HOUR = 10
 # exchange. General SaaS tenants retain the original strict anti-abuse ceiling.
 MAX_PILOT_DEMO_REPLIES_PER_HOUR = 40
 HISTORY = 16  # preserve plan/link and recovery context across follow-up turns
-_HUMAN = ("atendente", "humano", "pessoa", "falar com alguem", "gerente", "responsavel")
+# Pedido explícito de falar com uma pessoa, não simples menção à palavra (ex.: "atendente"
+# aparece no próprio nome de produtos como "Atendente IA" da Kordena e não deve virar handoff).
+_HUMAN_PATTERNS = tuple(
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"\bfalar\s+com\s+(?:um[a]?\s+)?(?:atendente|humano|pessoa|gerente|responsavel)\b",
+        r"\b(?:quero|preciso|gostaria\s+de)\s+(?:falar\s+com\s+)?(?:um[a]?\s+)?"
+        r"(?:atendente|humano|gerente|responsavel)\b",
+        r"(?<!se )\bcham(?:a|ar|e)\s+(?:um[a]?\s+)?(?:atendente|humano|gerente|responsavel)\b",
+        r"\bpassar\s+(?:para|pra)\s+(?:um[a]?\s+)?(?:atendente|humano|gerente|responsavel)\b",
+        r"\bfalar\s+com\s+algu[ae]m\b",
+        r"\btem\s+algu[ae]m\s+(?:ai|aqui)\b",
+        r"\bnao\s+quero\s+falar\s+com\s+(?:robo|bot|ia)\b",
+    )
+)
 MODEL_RETRY_MESSAGE = "Só um instante, já te respondo."
 _FORBIDDEN = re.compile(r"https?://|www\.|r\$|\breais\b|\bpix\b.*\bchave\b", re.IGNORECASE)
 _PLACEHOLDER = re.compile(r"\{(oferta|preco|link)\}")
@@ -75,7 +89,7 @@ class SellerStats:
 
 def asks_for_human(text: str) -> bool:
     norm = normalize(text)
-    return any(k in norm for k in _HUMAN)
+    return any(p.search(norm) for p in _HUMAN_PATTERNS)
 
 
 _STOP = frozenset(
