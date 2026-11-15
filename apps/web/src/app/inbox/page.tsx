@@ -20,6 +20,7 @@ const REASON: Record<string, string> = {
   resposta_invalida: "Resposta da IA recusada pelas regras",
   limite_de_respostas: "Limite de respostas por hora",
   assinatura_inativa: "Assinatura inativa: vendedor IA pausado",
+  veio_do_widget_site: "Lead veio do widget de um site",
 };
 const AUTHOR: Record<string, string> = {
   customer: "Cliente",

@@ -65,6 +65,12 @@ _HUMAN_PATTERNS = tuple(
         r"\bnao\s+quero\s+falar\s+com\s+(?:robo|bot|ia)\b",
     )
 )
+# Prefill do botão "Continuar no WhatsApp" dos widgets dos sites (fm-chat-widget.js): quem clica
+# chega com "Vim pelo site do/da <produto> e quero...". Essa mensagem não é uma pergunta de venda
+# sobre o produto deste número (hoje o zap humano compartilhado roda a IA do AtendeVendeIA vendendo
+# a si mesma) - é um pedido de atendimento humano vindo de outro site e deve ir direto para a fila,
+# sem a IA tentar responder sobre o produto errado.
+_SITE_WIDGET_REFERRAL = re.compile(r"\bvim\s+pelo\s+site\b", re.IGNORECASE)
 MODEL_RETRY_MESSAGE = "Só um instante, já te respondo."
 _FORBIDDEN = re.compile(r"https?://|www\.|r\$|\breais\b|\bpix\b.*\bchave\b", re.IGNORECASE)
 _PLACEHOLDER = re.compile(r"\{(oferta|preco|link)\}")
@@ -90,6 +96,10 @@ class SellerStats:
 def asks_for_human(text: str) -> bool:
     norm = normalize(text)
     return any(p.search(norm) for p in _HUMAN_PATTERNS)
+
+
+def came_from_site_widget(text: str) -> bool:
+    return bool(_SITE_WIDGET_REFERRAL.search(normalize(text)))
 
 
 _STOP = frozenset(
@@ -1074,6 +1084,9 @@ def _handle_conversation(
     ).fetchone()
     if settings is None or (not settings["ai_enabled"] and not pilot):
         _handoff(conn, tenant_id, conv_id, "ia_desligada", notify=False)
+        return "handoffs"
+    if any(came_from_site_widget(r["body"]) for r in inbound):
+        _handoff(conn, tenant_id, conv_id, "veio_do_widget_site", notify=True)
         return "handoffs"
     if any(asks_for_human(r["body"]) for r in inbound):
         _handoff(conn, tenant_id, conv_id, "pediu_atendente", notify=True)

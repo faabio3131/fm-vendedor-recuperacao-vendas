@@ -52,6 +52,11 @@ HANDOFF_REASONS: dict[str, tuple[str, str]] = {
     "limite_de_respostas": ("Muitas respostas seguidas", "Uma pessoa deve assumir a conversa."),
     "assinatura_inativa": ("Assinatura inativa", "Regularize em Meu plano."),
     "modelo_pediu": ("A IA pediu ajuda de uma pessoa", "Leia a conversa e continue de onde parou."),
+    "veio_do_widget_site": (
+        "Lead veio do widget de um site (Iron Fit/NFCore/Kordena/FM)",
+        "A IA não respondeu de propósito, para não vender o produto errado. Veja de qual "
+        "site veio no início da conversa e responda sobre o produto certo.",
+    ),
 }
 OTHER = ("Outro motivo", "")
 

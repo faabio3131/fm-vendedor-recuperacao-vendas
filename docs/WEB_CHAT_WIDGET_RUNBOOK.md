@@ -235,6 +235,7 @@ Em ordem de verificação em `_handle_conversation` (`apps/api/src/fm_seller/ai/
 | `assinatura_inativa` | `tenant_plans.status` bloqueia o serviço | Verificar plano/assinatura do tenant |
 | `trial_limit_or_expired` | Trial expirado/bloqueado | Verificar status do trial |
 | `pediu_atendente` | O próprio visitante pediu para falar com humano | Comportamento esperado, não é erro |
+| `veio_do_widget_site` | Mensagem bate com o prefill "Vim pelo site do/da..." dos widgets | Comportamento esperado — ver seção 8.1 |
 | `limite_de_respostas` | Teto de respostas por hora atingido | Esperado sob volume alto; ajustar limite se necessário |
 
 Se `handoff_reason` estiver vazio/nulo e ainda assim vier a mensagem genérica
@@ -248,6 +249,35 @@ Outros pontos de falha já encontrados neste procedimento:
   chamada antes mesmo de chegar na API (erro de CORS no console do navegador, não no widget).
 - **Nginx sobrescrito:** ver seção 6.
 
+### 8.1 Atendimento humano: número de WhatsApp compartilhado entre os 4 sites
+
+Hoje, o botão "Continuar no WhatsApp" do widget (`fm-chat-widget.js`, aparece quando a resposta
+vem com `handoff:true`) leva, nos 4 sites (Iron Fit, NFCore, Kordena, FM), para o **mesmo número**:
+`whatsappNumber:"5511978350851"` no `window.FM_CHAT_CONFIG` de cada HTML. Isso é intencional
+(decisão do Fábio, 2026-11-15): por enquanto a FM centraliza o atendimento humano de todos os
+produtos nesse número, em vez de cada produto ter o seu.
+
+Esse mesmo número já roda a IA do AtendeVendeIA vendendo o próprio AtendeVendeIA (tenant `fm`).
+Isso criava um problema: um visitante do Iron Fit/NFCore/Kordena que clicasse nesse botão chegava
+nesse WhatsApp com a mensagem pré-preenchida "Vim pelo site do/da `<produto>` e quero tirar uma
+dúvida" — e a IA do AtendeVendeIA tentaria responder sobre **AtendeVendeIA**, não sobre o produto
+de origem real do visitante.
+
+**Correção (PR fix/asks-for-human-false-positive, 2026-11-15):** `came_from_site_widget()` em
+`apps/api/src/fm_seller/ai/seller.py` detecta a frase "vim pelo site" (normalizada, sem acento) em
+qualquer mensagem de entrada e força `handoff_reason = 'veio_do_widget_site'` **antes** de chamar o
+modelo — a IA nunca tenta responder, e a conversa já entra na caixa (`status = 'human'`) com a
+mensagem de cortesia padrão ("Certo! Vou chamar uma pessoa da equipe..."). O nome do produto de
+origem fica visível na própria primeira mensagem da conversa.
+
+**Como a equipe é avisada:** o número `5511978350851` é um WhatsApp real, pareado via
+Evolution/Baileys (QR Code), que o Fábio acompanha direto no próprio app/celular — então o aviso
+já é a notificação nativa do WhatsApp quando a mensagem chega, igual qualquer conversa. Não existe
+hoje nenhum canal adicional de alerta (e-mail, Slack, push separado) para handoff — não havia
+necessidade, já que o WhatsApp em si já cumpre esse papel. Se um dia esse número deixar de ser
+acompanhado ativamente por uma pessoa, será preciso implementar um canal de notificação à parte
+(não existe infraestrutura de e-mail/webhook de alerta neste repositório hoje).
+
 ## 9. Testando um site já configurado (smoke test rápido)
 
 ```bash
@@ -259,6 +289,12 @@ curl -s -X POST https://app.atendevendeia.com.br/web/chat \
 Trocar `Origin`, `site` e a pergunta para testar `nfcore`, `kordena` ou `fm`. Resposta
 esperada sempre com `"handoff":false` e um preço/informação real, nunca genérica.
 
+Para testar o handoff direto de quem vem do botão "Continuar no WhatsApp" (sem a IA tentar
+responder sobre o produto errado), simular a mensagem exata do prefill direto no canal de
+WhatsApp do tenant `fm` (não dá para reproduzir pelo `/web/chat`, que é outro fluxo):
+mensagem "Vim pelo site do Iron Fit Core e quero tirar uma dúvida" → deve virar
+`handoff_reason = 'veio_do_widget_site'` sem nenhuma resposta automática sobre AtendeVendeIA.
+
 ## 10. Histórico de mudanças relevantes (commits)
 
 | Data | Repo | Commit | O que mudou |
@@ -269,6 +305,9 @@ esperada sempre com `"handoff":false` e um preço/informação real, nunca gené
 | 2026-11-15 | `fm-site-novo` | `7c98a9c` | Widget wiring no `src/build.mjs` (institucional, cor `#128C7E`), preservando o checkout Cakto do Iron Fit já aprovado |
 | 2026-11-15 | infra (servidor) | — | `docker network connect saas-network fm-atendevendeia-api-1`; edição manual de `2.conf` (seção 6) |
 | 2026-11-15 | banco de dados | — | Seeds de `tenant_settings`/`offers`/`knowledge_items` para `ironfit`, `nfcore`, `kordena`, `fm` |
+| 2026-11-15 | `fm-vendedor-recuperacao-vendas` | PR #150 | `asks_for_human()` passa a exigir frase, não substring (corrige falso positivo em "atendente") |
+| 2026-11-15 | `fm-vendedor-recuperacao-vendas` | PR #150 | `came_from_site_widget()` detecta prefill "vim pelo site" e pula a IA, handoff direto (seção 8.1) |
+| 2026-11-15 | `site-ironfit-core` | `ef756fe` | Corrige `whatsappPrefill` do Iron Fit, que citava "FM Tecnologia IA" em vez do Iron Fit |
 
 ---
 *Este documento deve ser atualizado sempre que: um novo site/produto ganhar o chat, a rota
