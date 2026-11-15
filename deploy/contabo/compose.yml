@@ -26,6 +26,11 @@ x-app-env: &app-env
   FM_VOICE_TRANSCRIPTION: ${FM_VOICE_TRANSCRIPTION:-false}
   FM_VOICE_MAX_BYTES: ${FM_VOICE_MAX_BYTES:-2000000}
   FM_FMCOMMAND_MODE: ${FM_FMCOMMAND_MODE:-off}
+  # Widget de chat nos sites institucionais da FM (canal "web"). Fail-closed por padrão.
+  FM_WEB_CHAT_ENABLED: ${FM_WEB_CHAT_ENABLED:-false}
+  FM_WEB_CHAT_TENANTS: ${FM_WEB_CHAT_TENANTS:-}
+  FM_WEB_CHAT_ORIGINS: ${FM_WEB_CHAT_ORIGINS:-}
+  FM_WEB_CHAT_RATE_PER_MIN: ${FM_WEB_CHAT_RATE_PER_MIN:-20}
   # Meta remains separate and disabled by default.
   FM_WHATSAPP_LIVE: "false"
   # Approved multi-tenant conversational rollout; per-tenant authenticated connections,
