@@ -10,7 +10,9 @@ import pytest
 from fm_seller.ai.model import AiReply, SimulatedAiModel, UnavailableAiModel
 from fm_seller.ai.seller import (
     MAX_BOT_REPLIES_PER_HOUR,
+    MENU_MESSAGE,
     asks_for_human,
+    classify_menu_choice,
     render_reply,
     run_ai_replies,
 )
@@ -149,15 +151,16 @@ def test_context_has_no_credentials_and_includes_history(s: Setup, db: Database)
         "Use {preco} sem oferta {foo}",
     ],
 )
-def test_invented_price_or_link_is_refused_and_handed_to_a_person(
+def test_invented_price_or_link_is_refused_and_offers_subject_menu(
     s: Setup, db: Database, text: str
 ) -> None:
     s.say("oi")
     run_ai_replies(db, SimulatedAiModel(forced=AiReply(text, offer_id=None)))
-    assert s.conv_state() == ("human", "resposta_invalida")
-    assert [b for _, b, _ in s.outbound()] == [
-        "Certo! Vou chamar uma pessoa da equipe para continuar com você."
-    ]
+    assert s.conv_state() == ("bot", "menu_enviado:resposta_invalida")
+    assert [b for _, b, _ in s.outbound()] == [MENU_MESSAGE]
+    s.say("2")
+    run_ai_replies(db, SimulatedAiModel())
+    assert s.conv_state() == ("human", "menu_financeiro:resposta_invalida")
 
 
 def test_placeholder_with_unknown_offer_is_refused() -> None:
@@ -190,11 +193,24 @@ def test_ai_off_or_unavailable_sends_conversation_to_a_person_silently(
     assert s.conv_state() == ("human", "ia_indisponivel") and s.outbound() == []
 
 
-def test_no_active_offers_hands_off(s: Setup, db: Database) -> None:
+def test_no_active_offers_offers_subject_menu_first(s: Setup, db: Database) -> None:
     s.env.sql("UPDATE offers SET active = false WHERE tenant_id = %s", (s.tid,))
     s.say("oi")
     run_ai_replies(db, SimulatedAiModel())
-    assert s.conv_state() == ("human", "sem_ofertas")
+    assert s.conv_state() == ("bot", "menu_enviado:sem_ofertas")
+    assert [b for _, b, _ in s.outbound()] == [MENU_MESSAGE]
+    s.say("1 - suporte")
+    run_ai_replies(db, SimulatedAiModel())
+    assert s.conv_state() == ("human", "menu_suporte:sem_ofertas")
+
+
+def test_menu_choice_not_recognized_still_hands_off(s: Setup, db: Database) -> None:
+    s.env.sql("UPDATE offers SET active = false WHERE tenant_id = %s", (s.tid,))
+    s.say("oi")
+    run_ai_replies(db, SimulatedAiModel())
+    s.say("sei lá, qualquer coisa")
+    run_ai_replies(db, SimulatedAiModel())
+    assert s.conv_state() == ("human", "menu_nao_reconhecido:sem_ofertas")
 
 
 def test_suppressed_contact_gets_no_reply(s: Setup, db: Database) -> None:
@@ -375,3 +391,22 @@ def test_asks_for_human_matches_real_requests(text: str) -> None:
 )
 def test_asks_for_human_ignores_bare_mentions(text: str) -> None:
     assert asks_for_human(text) is False
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("1", "suporte"),
+        ("1 - suporte, por favor", "suporte"),
+        ("é um problema técnico, deu erro", "suporte"),
+        ("2", "financeiro"),
+        ("quero cancelar o plano", "financeiro"),
+        ("preciso de reembolso dessa fatura", "financeiro"),
+        ("3", "atendente"),
+        ("quero falar com um humano", "atendente"),
+        ("sei lá, qualquer coisa", None),
+        ("", None),
+    ],
+)
+def test_classify_menu_choice(text: str, expected: str | None) -> None:
+    assert classify_menu_choice(text) == expected

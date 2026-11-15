@@ -64,9 +64,9 @@ def test_plan_limit_hands_off_when_reached_and_keeps_counting_nothing_more(
     s.say("três")
     stats = run_ai_replies(db, model)
     assert stats.handoffs == 1 and len(model.calls) == 2  # o modelo nem foi chamado
-    assert s.conv_state() == ("human", "limite_do_plano")
+    assert s.conv_state() == ("bot", "menu_enviado:limite_do_plano")
     assert _usage(s)[0] == 2
-    assert s.outbound()[-1][1].startswith("Certo! Vou chamar uma pessoa")
+    assert s.outbound()[-1][1].startswith("Para eu te direcionar certo")
 
 
 def test_limit_zero_and_missing_limit_both_fail_closed(
@@ -77,7 +77,7 @@ def test_limit_zero_and_missing_limit_both_fail_closed(
     _use_plan(s, "teste-limite-0")
     s.say("oi")
     run_ai_replies(db, SimulatedAiModel(forced=OK))
-    assert s.conv_state() == ("human", "limite_do_plano")
+    assert s.conv_state() == ("bot", "menu_enviado:limite_do_plano")
     # Sem limite configurado, nunca conceder uso ilimitado involuntário.
     other = Setup(s.env, db)
     _plan(s.env, "teste-sem-limite", "{}")
@@ -86,7 +86,7 @@ def test_limit_zero_and_missing_limit_both_fail_closed(
     model = SimulatedAiModel(forced=OK)
     assert run_ai_replies(db, model).handoffs == 1
     assert model.calls == []
-    assert other.conv_state() == ("human", "limite_do_plano")
+    assert other.conv_state() == ("bot", "menu_enviado:limite_do_plano")
 
 
 def test_usage_from_last_month_does_not_count(s: Setup, db: Database) -> None:

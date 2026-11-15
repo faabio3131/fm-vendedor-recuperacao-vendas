@@ -20,7 +20,18 @@ const REASON: Record<string, string> = {
   resposta_invalida: "Resposta da IA recusada pelas regras",
   limite_de_respostas: "Limite de respostas por hora",
   assinatura_inativa: "Assinatura inativa: vendedor IA pausado",
+  menu_suporte: "Escolheu Suporte no menu",
+  menu_financeiro: "Escolheu Financeiro no menu",
+  menu_atendente: "Escolheu falar com atendente no menu",
+  menu_nao_reconhecido: "Respondeu o menu com algo não reconhecido",
 };
+
+// "menu_suporte:sem_ofertas" -> rótulo de "menu_suporte" (a causa original, depois do ":",
+// é só contexto técnico de por que a IA não resolveu - não aparece pro time no dia a dia).
+function reasonLabel(reason: string): string {
+  const key = reason.split(":", 1)[0];
+  return REASON[key] ?? REASON[reason] ?? reason;
+}
 const AUTHOR: Record<string, string> = {
   customer: "Cliente",
   bot: "Vendedor IA",
@@ -202,7 +213,7 @@ function Inbox() {
               <strong>{r.name || r.phone}</strong> <span className="badge">{CHANNEL[r.channel]}</span>{" "}
               <span className={`badge ${r.status === "human" ? "pending" : ""}`}>{STATUS[r.status]}</span>
               <div className="muted">
-                {r.handoff_reason && r.status === "human" ? `${REASON[r.handoff_reason] ?? r.handoff_reason} · ` : ""}
+                {r.handoff_reason && r.status === "human" ? `${reasonLabel(r.handoff_reason)} · ` : ""}
                 {r.preview}
                 {" · "}
                 <time dateTime={r.last_message_at} title="Última mensagem no horário local">

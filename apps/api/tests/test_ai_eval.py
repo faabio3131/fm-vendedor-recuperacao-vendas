@@ -293,6 +293,24 @@ def test_handoff_report_groups_by_reason_and_never_shows_free_model_text(
     assert client.get("/v1/seller/handoffs?days=366").status_code == 422
 
 
+def test_handoff_report_groups_menu_choices_by_subject_not_original_cause(
+    client: TestClient, env: Env, db: Database
+) -> None:
+    tid = _owner(client, env)
+    for i, reason in enumerate(
+        [
+            "menu_suporte:sem_ofertas",
+            "menu_suporte:erro_do_modelo",
+            "menu_financeiro:resposta_invalida",
+        ]
+    ):
+        _conversation(env, db, tid, f"551190001{i:04d}", reason)
+    body = client.get("/v1/seller/handoffs").json()
+    by_reason = {i["reason"]: i["count"] for i in body["items"]}
+    assert by_reason == {"menu_suporte": 2, "menu_financeiro": 1}
+    assert "sem_ofertas" not in by_reason and "erro_do_modelo" not in by_reason
+
+
 def test_handoff_report_is_per_client(client: TestClient, env: Env, db: Database) -> None:
     other = _owner(client, env, "Loja Outra")
     _conversation(env, db, other, "5511900001111", "sem_ofertas")

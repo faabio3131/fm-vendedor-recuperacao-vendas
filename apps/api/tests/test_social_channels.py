@@ -644,4 +644,4 @@ def test_messenger_and_instagram_share_the_same_tenant_ai_quota(
         "SELECT status,handoff_reason FROM conversations "
         "WHERE tenant_id=%s AND channel='instagram'",
         (soc.tid,),
-    ) == [("human", "limite_do_plano")]
+    ) == [("bot", "menu_enviado:limite_do_plano")]

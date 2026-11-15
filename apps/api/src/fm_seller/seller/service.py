@@ -52,8 +52,31 @@ HANDOFF_REASONS: dict[str, tuple[str, str]] = {
     "limite_de_respostas": ("Muitas respostas seguidas", "Uma pessoa deve assumir a conversa."),
     "assinatura_inativa": ("Assinatura inativa", "Regularize em Meu plano."),
     "modelo_pediu": ("A IA pediu ajuda de uma pessoa", "Leia a conversa e continue de onde parou."),
+    "menu_suporte": (
+        "Cliente escolheu Suporte no menu",
+        "A IA não conseguiu resolver e o cliente escolheu suporte técnico no menu.",
+    ),
+    "menu_financeiro": (
+        "Cliente escolheu Financeiro no menu",
+        "A IA não conseguiu resolver e o cliente escolheu financeiro no menu.",
+    ),
+    "menu_atendente": (
+        "Cliente escolheu falar com atendente no menu",
+        "A IA não conseguiu resolver e o cliente pediu atendente no menu.",
+    ),
+    "menu_nao_reconhecido": (
+        "Cliente respondeu o menu com algo não reconhecido",
+        "A IA não conseguiu resolver e a resposta ao menu não bateu com nenhuma opção.",
+    ),
 }
 OTHER = ("Outro motivo", "")
+
+
+def handoff_group_key(reason: str) -> str:
+    """'menu_suporte:sem_ofertas' -> 'menu_suporte'. A causa original (depois dos ':') é só
+    para diagnóstico (seção 8 do runbook); o agrupamento/rótulo usam a escolha do cliente."""
+    key = reason.split(":", 1)[0]
+    return key if key in HANDOFF_REASONS else reason
 
 
 def _valid_url(url: str) -> bool:
@@ -531,7 +554,8 @@ class SellerService:
             ).fetchall()
         grouped: dict[str, int] = {}
         for r in rows:
-            key = r["reason"] if r["reason"] in HANDOFF_REASONS else "outro"
+            key = handoff_group_key(r["reason"])
+            key = key if key in HANDOFF_REASONS else "outro"
             grouped[key] = grouped.get(key, 0) + int(r["c"])
         items = [
             {
